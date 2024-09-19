@@ -1,0 +1,64 @@
+[workspace]
+members = [
+    "crankshaft",
+    "crankshaft-config",
+    "crankshaft-docker",
+    "crankshaft-engine",
+]
+resolver = "2"
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+authors = ["The Rust WDL project developers"]
+homepage = "https://github.com/stjude-rust-labs/crankshaft"
+repository = "https://github.com/stjude-rust-labs/wdl"
+rust-version = "1.80.0"
+
+[workspace.dependencies]
+async-trait = "0.1.82"
+bollard = "0.17.1"
+clap = { version = "4.5.16", features = ["derive"] }
+clap-verbosity-flag = "2.2.1"
+color-eyre = "0.6.3"
+dirs = "5.0.1"
+eyre = "0.6.12"
+futures = "0.3.30"
+indexmap = { version = "2.5.0", features = ["serde"] }
+indicatif = "0.17.8"
+nonempty = "0.10.0"
+rand = "0.8.5"
+regex = "1.10.6"
+serde = { version = "1.0.209", features = ["derive"] }
+serde_yaml = "0.9"
+shlex = "1.3.0"
+ssh2 = "0.9.4"
+tar = "0.4.41"
+tempfile = "3.12.0"
+tes = { version = "0.2.0", features = ["client"] }
+tokio = { version = "1.40.0", features = ["full", "time"] }
+tokio-stream = "0.1.16"
+toml = "0.8.19"
+tracing = "0.1.40"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+url = "2.5.2"
+uuid = { version = "1.10.0", features = [
+    "v4",
+    "fast-rng",
+    "macro-diagnostics",
+] }
+whoami = "1.5.2"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+nonstandard-style = "warn"
+rust-2018-idioms = "warn"
+rust-2021-compatibility = "warn"
+rust-2024-compatibility = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "warn"
+
+[workspace.lints.clippy]
+missing_docs_in_private_items = "warn"

@@ -1,0 +1,21 @@
+[[backends]]
+name = "test"
+kind = "Generic"
+submit = "foo bar"
+monitor = "foo bar"
+kill = "foo bar"
+max-tasks = 10
+
+[[backends]]
+name = "quux"
+kind = "Generic"
+submit = "foo bar"
+monitor = "foo bar"
+kill = "foo bar"
+max-tasks = 10
+defaults = { cpu = 1, ram = 1 }
+
+[[backends]]
+name = "docker"
+kind = "Docker"
+max-tasks = 10

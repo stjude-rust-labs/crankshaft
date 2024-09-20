@@ -12,9 +12,10 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::StreamExt;
 use nonempty::NonEmpty;
-use rand::Rng;
 use tempfile::TempDir;
 
+use crate::service::name;
+use crate::service::name::Generator;
 use crate::service::runner::backend::TaskResult;
 use crate::Result;
 use crate::Task;
@@ -120,10 +121,12 @@ fn run(backend: &Backend, task: Task) -> BoxFuture<'static, TaskResult> {
         let mut outputs = Vec::new();
 
         for execution in task.executions() {
+            // NOTE: a name is required by Docker, so a name is generated
+            // automatically if a name isn't provided.
             let name = task
                 .name()
                 .map(|v| v.to_owned())
-                .unwrap_or_else(|| format!("job-{}", rand::thread_rng().gen_range(0..1000000)));
+                .unwrap_or_else(|| name::Alphanumeric::default().generate());
 
             // (1) Create the container.
             let mut builder = client

@@ -61,6 +61,8 @@ impl crate::Backend for Backend {
 
 /// Translates a [`Task`] to a [TES Task](tes::v1::types::Task) for submission.
 fn to_tes_task(task: Task) -> tes::v1::types::Task {
+    // NOTE: a name is not required by the TES specification, so it is kept as
+    // empty if no name is provided.
     let name = task.name().map(|v| v.to_owned());
     let description = task.description().map(|v| v.to_owned());
 

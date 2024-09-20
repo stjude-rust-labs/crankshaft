@@ -92,7 +92,6 @@ impl Runner {
         };
 
         self.tasks.push(Box::pin(fun));
-
         TaskHandle { callback: rx }
     }
 

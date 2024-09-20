@@ -7,6 +7,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::os::windows::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::process::Output;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crankshaft_config::backend::generic::driver::ssh;
@@ -60,7 +61,7 @@ pub enum Transport {
     Local,
 
     /// Command execution over an SSH session.
-    SSH(Session),
+    SSH(Arc<Session>),
 }
 
 impl std::fmt::Debug for Transport {
@@ -123,7 +124,9 @@ impl Driver {
 
         match &self.transport {
             Transport::Local => run_local_command(command, &self.config).await,
-            Transport::SSH(session) => run_ssh_command(session, &self.config, command).await,
+            Transport::SSH(session) => {
+                run_ssh_command(session.clone(), &self.config, command).await
+            }
         }
     }
 
@@ -272,7 +275,7 @@ async fn create_ssh_transport(host: &str, config: &ssh::Config) -> Result<Transp
 
     if sess.authenticated() {
         debug!("authentication successful");
-        Ok(Transport::SSH(sess))
+        Ok(Transport::SSH(Arc::new(sess)))
     } else {
         error!("authentication failed!");
         bail!("failed authentication")
@@ -324,13 +327,10 @@ fn channel_session_with_backoff(
 
 /// Runs a remote command over SSH.
 async fn run_ssh_command(
-    session: &ssh2::Session,
+    session: Arc<ssh2::Session>,
     config: &Config,
     command: String,
 ) -> Result<Output> {
-    // NOTE: this is a cheap clone because it's a wrapper around an
-    // inner [`Arc`].
-    let session = session.clone();
     let max_attempts = config.max_attempts();
 
     let f = move || {

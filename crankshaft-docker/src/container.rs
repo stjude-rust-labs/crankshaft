@@ -3,7 +3,10 @@
 mod builder;
 
 use std::io::Cursor;
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt as _;
 use std::process::ExitStatus;
 use std::process::Output;
 
@@ -168,11 +171,21 @@ impl Container {
             .exit_code
             .expect("exit code should be present at this point") as i32;
 
-        Ok(Output {
+        #[cfg(unix)]
+        let output = Output {
             status: ExitStatus::from_raw(status),
             stdout,
             stderr,
-        })
+        };
+
+        #[cfg(windows)]
+        let output = Output {
+            status: ExitStatus::from_raw(status as u32),
+            stdout,
+            stderr,
+        };
+
+        Ok(output)
     }
 
     /// Removes a container with the level of force specified.

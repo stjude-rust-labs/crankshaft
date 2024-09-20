@@ -28,7 +28,10 @@ jobs:
       - run: cargo clippy --all-features -- --deny warnings
 
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - name: Update Rust

@@ -4,7 +4,10 @@
 //!
 //! [tes]: https://www.ga4gh.org/product/task-execution-service-tes/
 
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::process::Output;
 use std::sync::Arc;
@@ -99,12 +102,24 @@ fn run(backend: &Backend, task: Task) -> BoxFuture<'static, TaskResult> {
                             .unwrap()
                             .into_iter()
                             .flat_map(|task| task.logs)
-                            .map(|log| Output {
-                                status: ExitStatus::from_raw(
-                                    log.exit_code.expect("exit code to be present") as i32,
-                                ),
-                                stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
-                                stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
+                            .map(|log| {
+                                let status = log.exit_code.expect("exit code to be present");
+
+                                #[cfg(unix)]
+                                let output = Output {
+                                    status: ExitStatus::from_raw(status as i32),
+                                    stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
+                                    stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
+                                };
+
+                                #[cfg(windows)]
+                                let output = Output {
+                                    status: ExitStatus::from_raw(status),
+                                    stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
+                                    stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
+                                };
+
+                                output
                             });
 
                         let mut executions = NonEmpty::new(results.next().unwrap());

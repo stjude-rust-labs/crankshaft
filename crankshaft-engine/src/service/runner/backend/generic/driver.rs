@@ -1,7 +1,10 @@
 //! Command drivers in a generic backend.
 
 use std::io::Read as _;
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::process::Output;
 use std::time::Duration;
@@ -391,11 +394,21 @@ async fn run_ssh_command(
             .map_err(Error::SSH2)
             .context("waiting for the SSH channel to be closed from the client's end")?;
 
-        eyre::Result::<Output>::Ok(Output {
+        #[cfg(unix)]
+        let output = Output {
             status: ExitStatus::from_raw(status),
             stdout,
             stderr,
-        })
+        };
+
+        #[cfg(windows)]
+        let output = Output {
+            status: ExitStatus::from_raw(status as u32),
+            stdout,
+            stderr,
+        };
+
+        eyre::Result::<Output>::Ok(output)
     };
 
     tokio::task::spawn_blocking(f)

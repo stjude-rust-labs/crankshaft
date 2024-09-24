@@ -1,6 +1,7 @@
 //! Task runner services.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
@@ -15,12 +16,17 @@ pub mod backend;
 
 pub use backend::Backend;
 
+use super::name::GeneratorIterator;
+use super::name::UniqueAlphanumeric;
 use crate::service::runner::backend::docker;
 use crate::service::runner::backend::generic;
 use crate::service::runner::backend::tes;
 use crate::service::runner::backend::TaskResult;
 use crate::Result;
 use crate::Task;
+
+/// The size of the name buffer.
+const NAME_BUFFER_LEN: usize = 4096;
 
 /// A submitted task handle.
 #[derive(Debug)]
@@ -40,6 +46,10 @@ pub struct Runner {
 
     /// The list of submitted tasks.
     pub tasks: FuturesUnordered<BoxFuture<'static, TaskResult>>,
+
+    /// The unique name generator for tasks without names being sent to backends
+    /// that may need names.
+    name_generator: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 }
 
 impl Runner {
@@ -61,20 +71,29 @@ impl Runner {
             Kind::TES(config) => Arc::new(tes::Backend::initialize(config)),
         };
 
+        let generator = UniqueAlphanumeric::default_with_expected_generations(max_tasks);
+
         Ok(Self {
             backend,
             lock: Arc::new(Semaphore::new(max_tasks)),
             tasks: Default::default(),
+            name_generator: Arc::new(Mutex::new(GeneratorIterator::new(generator, NAME_BUFFER_LEN))),
         })
     }
 
     /// Submits a task to be executed by the backend.
-    pub fn submit(&self, task: Task) -> TaskHandle {
+    pub fn submit(&self, mut task: Task) -> TaskHandle {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         let backend = self.backend.clone();
         let lock = self.lock.clone();
+
+        if backend.default_name() == "docker" && task.name().is_none() {
+            let mut generator = self.name_generator.lock().unwrap();
+            // SAFETY: this generator should _never_ run out of entries.
+            task.set_name(generator.next().unwrap());
+        }
 
         let fun = async move {
             let _permit = lock.acquire().await;

@@ -51,6 +51,11 @@ impl Task {
         self.name.as_deref()
     }
 
+    /// Sets a task's name regardless of if it previously existed or not
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name)
+    }
+
     /// Gets the description of the task (if it exists).
     pub fn description(&self) -> Option<&str> {
         self.description.as_deref()

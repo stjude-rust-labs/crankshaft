@@ -14,6 +14,7 @@ bollard.workspace = true
 crankshaft-config = { path = "../crankshaft-config", version = "0.1.0" }
 crankshaft-docker = { path = "../crankshaft-docker", version = "0.1.0" }
 eyre.workspace = true
+fastbloom.workspace = true
 futures.workspace = true
 indexmap.workspace = true
 indicatif.workspace = true

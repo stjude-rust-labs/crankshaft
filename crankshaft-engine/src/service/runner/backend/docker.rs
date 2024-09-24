@@ -14,8 +14,6 @@ use futures::StreamExt;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
 
-use crate::service::name;
-use crate::service::name::Generator;
 use crate::service::runner::backend::TaskResult;
 use crate::Result;
 use crate::Task;
@@ -28,7 +26,6 @@ pub const WORKDIR: &str = "/workdir";
 pub struct Backend {
     /// A handle to the inner docker client.
     client: Docker,
-
     /// Configuration for the backend.
     config: Config,
 }
@@ -121,13 +118,6 @@ fn run(backend: &Backend, task: Task) -> BoxFuture<'static, TaskResult> {
         let mut outputs = Vec::new();
 
         for execution in task.executions() {
-            // NOTE: a name is required by Docker, so a name is generated
-            // automatically if a name isn't provided.
-            let name = task
-                .name()
-                .map(|v| v.to_owned())
-                .unwrap_or_else(|| name::Alphanumeric::default().generate());
-
             // (1) Create the container.
             let mut builder = client
                 .container_builder()
@@ -149,7 +139,7 @@ fn run(backend: &Backend, task: Task) -> BoxFuture<'static, TaskResult> {
                 builder = builder.workdir(workdir.to_owned());
             }
 
-            let container = builder.try_create(name).await.unwrap();
+            let container = builder.try_create(&task.name().unwrap()).await.unwrap();
 
             // (2) Upload inputs to the container.
             //

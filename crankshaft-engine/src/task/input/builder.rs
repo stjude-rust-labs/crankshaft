@@ -1,8 +1,8 @@
 //! Builders for an [`Input`].
 
+use crate::task::Input;
 use crate::task::input::Contents;
 use crate::task::input::Type;
-use crate::task::Input;
 
 /// An error related to a [`Builder`].
 #[derive(Debug)]

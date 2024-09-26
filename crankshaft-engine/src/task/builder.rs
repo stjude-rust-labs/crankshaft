@@ -2,11 +2,11 @@
 
 use nonempty::NonEmpty;
 
+use crate::Task;
 use crate::task::Execution;
 use crate::task::Input;
 use crate::task::Output;
 use crate::task::Resources;
-use crate::Task;
 
 /// An error related to a [`Builder`].
 #[derive(Debug)]

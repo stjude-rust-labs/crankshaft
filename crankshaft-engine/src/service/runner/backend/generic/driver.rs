@@ -10,13 +10,13 @@ use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crankshaft_config::backend::generic::driver::ssh;
 use crankshaft_config::backend::generic::driver::Config;
 use crankshaft_config::backend::generic::driver::Locale;
 use crankshaft_config::backend::generic::driver::Shell;
-use eyre::bail;
+use crankshaft_config::backend::generic::driver::ssh;
 use eyre::Context as _;
 use eyre::Result;
+use eyre::bail;
 use rand::Rng as _;
 use ssh2::Channel;
 use ssh2::Session;

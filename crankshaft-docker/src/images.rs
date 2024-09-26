@@ -8,10 +8,10 @@ use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
 use futures::stream::FuturesUnordered;
 use tokio_stream::StreamExt as _;
+use tracing::Level;
 use tracing::debug;
 use tracing::enabled;
 use tracing::trace;
-use tracing::Level;
 
 use crate::Docker;
 use crate::Error;

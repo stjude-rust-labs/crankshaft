@@ -10,10 +10,10 @@ use clap::Parser;
 use crankshaft::config::backend::generic::driver::Config;
 use crankshaft::engine::service::runner::backend::generic::driver::Driver;
 use eyre::Result;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[allow(missing_docs)]

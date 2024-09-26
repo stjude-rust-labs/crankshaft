@@ -7,21 +7,21 @@
 use std::io::Write;
 
 use clap::Parser;
-use crankshaft::config::backend::docker::Config;
+use crankshaft::Engine;
 use crankshaft::config::backend::Kind;
-use crankshaft::engine::task::input;
+use crankshaft::config::backend::docker::Config;
+use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use crankshaft::engine::task::Input;
-use crankshaft::engine::Task;
-use crankshaft::Engine;
+use crankshaft::engine::task::input;
 use eyre::Context;
 use eyre::Result;
 use tempfile::NamedTempFile;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 #[allow(missing_docs)]

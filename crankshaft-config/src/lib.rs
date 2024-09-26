@@ -10,12 +10,12 @@
 
 use std::path::Path;
 
-use config::builder::DefaultState;
 use config::Config as ConfigCrate;
 use config::ConfigBuilder;
 use config::ConfigError as Error;
 use config::Environment;
 use config::File;
+use config::builder::DefaultState;
 use serde::Deserialize;
 use serde::Serialize;
 

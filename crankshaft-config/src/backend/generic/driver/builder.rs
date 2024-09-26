@@ -1,10 +1,10 @@
 //! Builders for [command driver configuration](Config).
 
-use crate::backend::generic::driver::ssh;
 use crate::backend::generic::driver::Config;
+use crate::backend::generic::driver::DEFAULT_MAX_ATTEMPTS;
 use crate::backend::generic::driver::Locale;
 use crate::backend::generic::driver::Shell;
-use crate::backend::generic::driver::DEFAULT_MAX_ATTEMPTS;
+use crate::backend::generic::driver::ssh;
 
 /// A builder for a [command driver configuration object](Config).
 pub struct Builder {

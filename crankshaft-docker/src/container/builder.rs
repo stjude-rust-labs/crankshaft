@@ -1,9 +1,9 @@
 //! Builders for containers.
 
+use bollard::Docker;
 use bollard::container::Config;
 use bollard::container::CreateContainerOptions;
 use bollard::secret::HostConfig;
-use bollard::Docker;
 use tracing::warn;
 
 use crate::Container;

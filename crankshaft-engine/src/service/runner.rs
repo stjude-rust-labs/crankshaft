@@ -5,11 +5,11 @@ use std::sync::Mutex;
 
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
-use futures::future::join_all;
 use futures::future::BoxFuture;
+use futures::future::join_all;
 use futures::stream::FuturesUnordered;
-use tokio::sync::oneshot::Receiver;
 use tokio::sync::Semaphore;
+use tokio::sync::oneshot::Receiver;
 use tracing::trace;
 
 pub mod backend;
@@ -18,12 +18,12 @@ pub use backend::Backend;
 
 use super::name::GeneratorIterator;
 use super::name::UniqueAlphanumeric;
+use crate::Result;
+use crate::Task;
+use crate::service::runner::backend::TaskResult;
 use crate::service::runner::backend::docker;
 use crate::service::runner::backend::generic;
 use crate::service::runner::backend::tes;
-use crate::service::runner::backend::TaskResult;
-use crate::Result;
-use crate::Task;
 
 /// The size of the name buffer.
 const NAME_BUFFER_LEN: usize = 4096;
@@ -77,7 +77,10 @@ impl Runner {
             backend,
             lock: Arc::new(Semaphore::new(max_tasks)),
             tasks: Default::default(),
-            name_generator: Arc::new(Mutex::new(GeneratorIterator::new(generator, NAME_BUFFER_LEN))),
+            name_generator: Arc::new(Mutex::new(GeneratorIterator::new(
+                generator,
+                NAME_BUFFER_LEN,
+            ))),
         })
     }
 

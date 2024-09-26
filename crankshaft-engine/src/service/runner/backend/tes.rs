@@ -15,14 +15,14 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
-use futures::future::BoxFuture;
 use futures::FutureExt as _;
+use futures::future::BoxFuture;
 use nonempty::NonEmpty;
-use tes::v1::client::tasks::View;
 use tes::v1::Client;
+use tes::v1::client::tasks::View;
 
-use crate::service::runner::backend::TaskResult;
 use crate::Task;
+use crate::service::runner::backend::TaskResult;
 
 /// A backend driven by the Task Execution Service (TES) schema.
 #[derive(Debug)]

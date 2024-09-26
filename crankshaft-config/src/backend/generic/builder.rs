@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use crate::backend::generic::driver;
 use crate::backend::generic::Config;
+use crate::backend::generic::driver;
 
 /// An error related to a [`Builder`].
 #[derive(Debug)]

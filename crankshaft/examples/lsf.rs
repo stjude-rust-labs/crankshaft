@@ -5,18 +5,18 @@
 //! `cargo run --release --example lsf`
 
 use clap::Parser;
-use crankshaft::engine::task::Execution;
-use crankshaft::engine::Task;
 use crankshaft::Config;
 use crankshaft::Engine;
+use crankshaft::engine::Task;
+use crankshaft::engine::task::Execution;
 use eyre::Context as _;
 use eyre::ContextCompat as _;
 use eyre::Result;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 #[allow(missing_docs)]

@@ -2,8 +2,8 @@
 
 use url::Url;
 
-use crate::backend::tes::http;
 use crate::backend::tes::Config;
+use crate::backend::tes::http;
 
 /// An error related to a [`Builder`].
 #[derive(Debug)]

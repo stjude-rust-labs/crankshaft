@@ -1,8 +1,8 @@
 //! Name generation services.
 
 use fastbloom::BloomFilter;
-use rand::rngs::ThreadRng;
 use rand::Rng;
+use rand::rngs::ThreadRng;
 
 /// A name generator.
 pub trait Generator {

@@ -10,20 +10,20 @@ use std::os::windows::process::ExitStatusExt as _;
 use std::process::ExitStatus;
 use std::process::Output;
 
+use bollard::Docker;
 use bollard::container::AttachContainerOptions;
 use bollard::container::LogOutput;
 use bollard::container::RemoveContainerOptions;
 use bollard::container::StartContainerOptions;
 use bollard::container::UploadToContainerOptions;
 use bollard::container::WaitContainerOptions;
-use bollard::Docker;
 pub use builder::Builder;
 use futures::TryStreamExt as _;
 use tokio_stream::StreamExt as _;
+use tracing::Level;
 use tracing::debug;
 use tracing::enabled;
 use tracing::trace;
-use tracing::Level;
 
 use crate::Error;
 use crate::Result;

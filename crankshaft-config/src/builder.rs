@@ -1,7 +1,7 @@
 //! Builders for a [global configuration object for Crankshaft](Config).
 
-use crate::backend;
 use crate::Config;
+use crate::backend;
 
 /// A builder for a [global configuration object for Crankshaft](Config).
 #[derive(Default)]

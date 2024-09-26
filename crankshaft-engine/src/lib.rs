@@ -3,8 +3,8 @@
 use std::time::Duration;
 
 use crankshaft_config::backend::Config;
-use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
@@ -15,9 +15,9 @@ pub mod task;
 
 pub use task::Task;
 
+use crate::service::Runner;
 use crate::service::runner::Backend;
 use crate::service::runner::TaskHandle;
-use crate::service::Runner;
 
 /// The top-level result returned within the engine.
 ///

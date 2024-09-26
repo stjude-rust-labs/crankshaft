@@ -113,18 +113,12 @@ async fn run(args: &Args) -> Result<()> {
 
     match &args.command {
         Command::CreateContainer { image, name, tag } => {
-            create_container(
-                docker,
-                image,
-                tag,
-                name,
-                [
-                    String::from("/usr/bin/env"),
-                    String::from("bash"),
-                    String::from("-c"),
-                    String::from("echo 'hello, world!'"),
-                ],
-            )
+            create_container(docker, image, tag, name, [
+                String::from("/usr/bin/env"),
+                String::from("bash"),
+                String::from("-c"),
+                String::from("echo 'hello, world!'"),
+            ])
             .await?;
         }
         Command::RunContainer {

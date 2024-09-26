@@ -7,16 +7,16 @@ use bollard::secret::MountTypeEnum;
 use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Docker;
 use eyre::Context;
-use futures::future::BoxFuture;
-use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::StreamExt;
+use futures::future::BoxFuture;
+use futures::stream::FuturesUnordered;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
 
-use crate::service::runner::backend::TaskResult;
 use crate::Result;
 use crate::Task;
+use crate::service::runner::backend::TaskResult;
 
 /// The working dir name inside the docker container
 pub const WORKDIR: &str = "/workdir";

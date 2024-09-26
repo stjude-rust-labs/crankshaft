@@ -2,8 +2,8 @@
 
 use url::Url;
 
-use crate::task::output::Type;
 use crate::task::Output;
+use crate::task::output::Type;
 
 /// An error related to a [`Builder`].
 #[derive(Debug)]

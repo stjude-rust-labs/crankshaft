@@ -6,20 +6,20 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crankshaft_config::backend::generic::Config;
 use crankshaft_config::backend::Defaults;
+use crankshaft_config::backend::generic::Config;
 use eyre::Context as _;
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use regex::Regex;
 use tracing::warn;
 
-use crate::service::runner::backend::generic::driver::Driver;
-use crate::service::runner::backend::TaskResult;
-use crate::task::Resources;
 use crate::Result;
 use crate::Task;
+use crate::service::runner::backend::TaskResult;
+use crate::service::runner::backend::generic::driver::Driver;
+use crate::task::Resources;
 
 pub mod driver;
 

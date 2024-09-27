@@ -16,10 +16,10 @@ pub mod backend;
 
 pub use backend::Backend;
 
-use super::name::GeneratorIterator;
-use super::name::UniqueAlphanumeric;
 use crate::Result;
 use crate::Task;
+use crate::service::name::GeneratorIterator;
+use crate::service::name::UniqueAlphanumeric;
 use crate::service::runner::backend::TaskResult;
 use crate::service::runner::backend::docker;
 use crate::service::runner::backend::generic;
@@ -95,7 +95,7 @@ impl Runner {
         if backend.default_name() == "docker" && task.name().is_none() {
             let mut generator = self.name_generator.lock().unwrap();
             // SAFETY: this generator should _never_ run out of entries.
-            task.set_name(generator.next().unwrap());
+            task.override_name(generator.next().unwrap());
         }
 
         let fun = async move {

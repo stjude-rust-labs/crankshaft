@@ -51,8 +51,8 @@ impl Task {
         self.name.as_deref()
     }
 
-    /// Sets a task's name regardless of if it previously existed or not
-    pub fn set_name(&mut self, name: String) {
+    /// Overrides a task's name (regardless of if it previously existed or not).
+    pub fn override_name(&mut self, name: String) {
         self.name = Some(name)
     }
 

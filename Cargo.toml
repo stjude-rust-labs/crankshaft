@@ -37,7 +37,8 @@ ssh2 = "0.9.4"
 tar = "0.4.41"
 tempfile = "3.12.0"
 tes = { version = "0.2.0", features = ["client"] }
-tokio = { version = "1.40.0", features = ["full", "time"] }
+tokio = { version = "1.40.0", features = ["full", "time", "tracing"] }
+tokio-metrics = "0.3.1"
 tokio-stream = "0.1.16"
 toml = "0.8.19"
 tracing = "0.1.40"
@@ -57,6 +58,7 @@ nonstandard-style = "warn"
 rust-2018-idioms = "warn"
 rust-2021-compatibility = "warn"
 rust-2024-compatibility = "warn"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
 
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "warn"

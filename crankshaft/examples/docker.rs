@@ -4,19 +4,14 @@
 //!
 //! `cargo run --release --example docker`
 
-use std::io::Write;
-
 use clap::Parser;
 use crankshaft::Engine;
 use crankshaft::config::backend::Kind;
 use crankshaft::config::backend::docker::Config;
 use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
-use crankshaft::engine::task::Input;
-use crankshaft::engine::task::input;
 use eyre::Context;
 use eyre::Result;
-use tempfile::NamedTempFile;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
@@ -39,7 +34,7 @@ pub struct Args {
 async fn run(args: Args) -> Result<()> {
     let config = crankshaft::config::backend::Config::builder()
         .name("docker")
-        .kind(Kind::Docker(Config::builder().cleanup(true).build()))
+        .kind(Kind::Docker(Config::builder().cleanup(false).build()))
         .max_tasks(args.max_tasks)
         .try_build()
         .context("building backend configuration")?;
@@ -49,37 +44,17 @@ async fn run(args: Args) -> Result<()> {
         .await
         .context("initializing Docker backend")?;
 
-    let mut temp_file = NamedTempFile::new().unwrap();
-    writeln!(temp_file, "Hello, world from an input").unwrap();
-
-    // Get the path to the temp file
-    let temp_path = temp_file.path().to_path_buf();
-    let input = Input::builder()
-        .contents(temp_path)
-        .path("/volA/test_input.txt")
-        .r#type(input::Type::File)
-        .try_build()
-        .unwrap();
-
     let task = Task::builder()
-        .extend_inputs([input])
-        .extend_executions([
+        .name("my-example-task")
+        .description("a longer description")
+        .extend_executions(vec![
             Execution::builder()
+                .working_directory(".")
                 .image("ubuntu")
-                .args(&[
-                    String::from("bash"),
-                    String::from("-c"),
-                    String::from("ls /volA"),
-                ])
-                .try_build()
-                .unwrap(),
-            Execution::builder()
-                .image("ubuntu")
-                .args(&[String::from("cat"), String::from("/volA/test_input.txt")])
+                .args(&[String::from("echo"), String::from("'hello, world!'")])
                 .try_build()
                 .unwrap(),
         ])
-        .extend_volumes([String::from("/volA"), String::from("/volB")])
         .try_build()
         .unwrap();
 

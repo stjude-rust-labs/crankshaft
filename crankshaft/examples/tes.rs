@@ -70,6 +70,7 @@ async fn run(args: Args) -> Result<()> {
         .description("a longer description")
         .extend_executions(vec![
             Execution::builder()
+                .working_directory(".")
                 .image("ubuntu")
                 .args(&[String::from("echo"), String::from("'hello, world!'")])
                 .try_build()
@@ -81,6 +82,9 @@ async fn run(args: Args) -> Result<()> {
     let receivers = (0..args.n_jobs)
         .map(|_| engine.submit("tes", task.clone()).callback)
         .collect::<Vec<_>>();
+
+    #[cfg(tokio_unstable)]
+    Engine::start_instrument(3000);
 
     engine.run().await;
 

@@ -72,8 +72,6 @@ async fn run(args: Args) -> Result<()> {
                 .working_directory(".")
                 .image("ubuntu")
                 .args(&[String::from("echo"), String::from("'hello, world!'")])
-                .stdout("stdout.txt")
-                .stderr("stderr.txt")
                 .try_build()
                 .unwrap(),
         ])

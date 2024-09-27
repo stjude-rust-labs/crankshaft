@@ -90,6 +90,23 @@ impl Engine {
         backend.submit(task)
     }
 
+    /// Starts an instrumentation loop.
+    #[cfg(tokio_unstable)]
+    pub fn start_instrument(delay_ms: u64) {
+        use tokio_metrics::RuntimeMonitor;
+        use tracing::info;
+
+        let handle = tokio::runtime::Handle::current();
+        let monitor = RuntimeMonitor::new(&handle);
+
+        tokio::spawn(async move {
+            for interval in monitor.intervals() {
+                info!("{:?}", interval.total_park_count);
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            }
+        });
+    }
+
     /// Runs all of the tasks scheduled in the engine.
     pub async fn run(self) {
         let mut futures = FuturesUnordered::new();

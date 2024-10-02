@@ -4,6 +4,7 @@ members = [
     "crankshaft-config",
     "crankshaft-docker",
     "crankshaft-engine",
+    "examples",
 ]
 resolver = "2"
 

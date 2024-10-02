@@ -4,6 +4,8 @@
 //!
 //! `cargo run --release --example docker`
 
+use std::env::current_dir;
+
 use clap::Parser;
 use crankshaft::Engine;
 use crankshaft::config::backend::Kind;
@@ -45,11 +47,15 @@ async fn run(args: Args) -> Result<()> {
         .context("initializing Docker backend")?;
 
     let task = Task::builder()
-        .name("my-example-task")
         .description("a longer description")
         .extend_executions(vec![
             Execution::builder()
-                .working_directory(".")
+                .working_directory(
+                    current_dir()
+                        .expect("a current working directory")
+                        .display()
+                        .to_string(),
+                )
                 .image("ubuntu")
                 .args(&[String::from("echo"), String::from("'hello, world!'")])
                 .try_build()

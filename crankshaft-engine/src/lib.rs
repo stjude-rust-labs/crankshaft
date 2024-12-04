@@ -49,20 +49,6 @@ impl Engine {
         Ok(self)
     }
 
-    // /// Adds a _default_ Docker backend to a [`Engine`] with the provided
-    // /// [`Config`](DockerConfig).
-    // pub async fn with_default_docker(self, config: DockerConfig) -> Result<Self>
-    // {     let backend = docker::Backend::initialize_default_with(config)?;
-    //     Ok(self.with(backend.default_name(), backend))
-    // }
-
-    // /// Adds a _default_ Docker backend to a [`Engine`] with the default
-    // /// [`Config`](DockerConfig).
-    // pub fn with_default_docker_and_config(self) -> Result<Self> {
-    //     let backend = docker::Backend::initialize_default()?;
-    //     Ok(self.with(backend.default_name(), backend))
-    // }
-
     /// Gets the names of the runners.
     pub fn runners(&self) -> impl Iterator<Item = &str> {
         self.runners.keys().map(|key| key.as_ref())

@@ -90,15 +90,14 @@ impl Builder {
                 zones.extend(values);
                 Some(zones)
             }
-            None => {
-                if let Some(zone) = values.next() {
+            None => match values.next() {
+                Some(zone) => {
                     let mut zones = NonEmpty::new(zone);
                     zones.extend(values);
                     Some(zones)
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
         };
 
         self

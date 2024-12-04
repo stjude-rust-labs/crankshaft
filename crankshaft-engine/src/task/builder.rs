@@ -96,15 +96,14 @@ impl Builder {
                 inputs.extend(new);
                 Some(inputs)
             }
-            None => {
-                if let Some(input) = new.next() {
+            None => match new.next() {
+                Some(input) => {
                     let mut inputs = NonEmpty::new(input);
                     inputs.extend(new);
                     Some(inputs)
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
         };
 
         self
@@ -122,15 +121,14 @@ impl Builder {
                 outputs.extend(new);
                 Some(outputs)
             }
-            None => {
-                if let Some(output) = new.next() {
+            None => match new.next() {
+                Some(output) => {
                     let mut outputs = NonEmpty::new(output);
                     outputs.extend(new);
                     Some(outputs)
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
         };
 
         self
@@ -159,15 +157,14 @@ impl Builder {
                 executors.extend(new);
                 Some(executors)
             }
-            None => {
-                if let Some(executor) = new.next() {
+            None => match new.next() {
+                Some(executor) => {
                     let mut executors = NonEmpty::new(executor);
                     executors.extend(new);
                     Some(executors)
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
         };
 
         self
@@ -185,15 +182,14 @@ impl Builder {
                 volumes.extend(new);
                 Some(volumes)
             }
-            None => {
-                if let Some(volume) = new.next() {
+            None => match new.next() {
+                Some(volume) => {
                     let mut volumes: NonEmpty<_> = NonEmpty::new(volume);
                     volumes.extend(new);
                     Some(volumes)
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
         };
 
         self

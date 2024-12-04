@@ -23,7 +23,7 @@ pub enum Shell {
 impl Shell {
     /// Gets a series of args that can be passed through to a driver for
     /// commands.
-    pub fn args<I, S>(&self, args: I) -> impl Iterator<Item = OsString>
+    pub fn args<I, S>(&self, args: I) -> impl Iterator<Item = OsString> + use<I, S>
     where
         I: IntoIterator<Item = OsString>,
     {

@@ -152,38 +152,41 @@ impl crate::Backend for Backend {
                 let output = driver.run(submit).await.unwrap();
 
                 // (2) Monitoring the output.
-                if let Some(ref regex) = job_id_regex {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let captures = regex.captures_iter(&stdout).next().unwrap_or_else(|| {
-                        panic!(
-                            "could not match the job id regex within stdout: `{}`",
-                            stdout
-                        )
-                    });
+                match job_id_regex {
+                    Some(ref regex) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let captures = regex.captures_iter(&stdout).next().unwrap_or_else(|| {
+                            panic!(
+                                "could not match the job id regex within stdout: `{}`",
+                                stdout
+                            )
+                        });
 
-                    // SAFETY: this will always unwrap, as the group is
-                    // _required_ for the pattern to match.
-                    let id = captures.get(1).map(|c| String::from(c.as_str())).unwrap();
-                    subtitutions.insert(String::from("job_id"), id);
+                        // SAFETY: this will always unwrap, as the group is
+                        // _required_ for the pattern to match.
+                        let id = captures.get(1).map(|c| String::from(c.as_str())).unwrap();
+                        subtitutions.insert(String::from("job_id"), id);
 
-                    loop {
-                        let monitor = config.resolve_monitor(&subtitutions).unwrap();
-                        let output = driver.run(monitor).await.unwrap();
+                        loop {
+                            let monitor = config.resolve_monitor(&subtitutions).unwrap();
+                            let output = driver.run(monitor).await.unwrap();
 
-                        if !output.status.success() {
-                            outputs.push(output);
-                            break;
+                            if !output.status.success() {
+                                outputs.push(output);
+                                break;
+                            }
+
+                            tokio::time::sleep(Duration::from_secs(
+                                config
+                                    .monitor_frequency()
+                                    .unwrap_or(DEFAULT_MONITOR_FREQUENCY),
+                            ))
+                            .await;
                         }
-
-                        tokio::time::sleep(Duration::from_secs(
-                            config
-                                .monitor_frequency()
-                                .unwrap_or(DEFAULT_MONITOR_FREQUENCY),
-                        ))
-                        .await;
                     }
-                } else {
-                    outputs.push(output);
+                    _ => {
+                        outputs.push(output);
+                    }
                 }
             }
 

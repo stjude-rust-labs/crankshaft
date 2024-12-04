@@ -89,15 +89,14 @@ impl Builder {
                 args.extend(values);
                 Some(args)
             }
-            None => {
-                if let Some(arg) = values.next() {
+            None => match values.next() {
+                Some(arg) => {
                     let mut args = NonEmpty::new(arg);
                     args.extend(values);
                     Some(args)
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
         };
 
         self

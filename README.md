@@ -67,8 +67,7 @@ cargo add crankshaft
 ```
 
 Once you've added `crankshaft` to your dependencies, you should head over to the
-[`/examples`](https://github.com/stjude-rust-labs/crankshaft/tree/main/crankshaft/examples)
-to see how you can use the library in your projects.
+[`examples`](./examples) to see how you can use the library in your projects.
 
 ## 🖥️ Development
 

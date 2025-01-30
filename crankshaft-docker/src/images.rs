@@ -146,11 +146,11 @@ pub(crate) async fn ensure_image(
 }
 
 /// Removes an image from the Docker daemon.
-pub(crate) async fn remove_image(
+pub(crate) async fn remove_image<T: AsRef<str>, U: AsRef<str>>(
     docker: &Docker,
-    name: impl AsRef<str>,
-    tag: impl AsRef<str>,
-) -> Result<impl IntoIterator<Item = ImageDeleteResponseItem>> {
+    name: T,
+    tag: U,
+) -> Result<impl IntoIterator<Item = ImageDeleteResponseItem> + use<T, U>> {
     let name = name.as_ref();
     let tag = tag.as_ref();
 

@@ -37,7 +37,7 @@ shlex = "1.3.0"
 ssh2 = "0.9.4"
 tar = "0.4.41"
 tempfile = "3.12.0"
-tes = { version = "0.2.0", features = ["client"] }
+tes = { version = "0.3.0", features = ["client", "serde"] }
 tokio = { version = "1.40.0", features = ["full", "time", "tracing"] }
 tokio-metrics = "0.3.1"
 tokio-stream = "0.1.16"

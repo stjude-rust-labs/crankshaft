@@ -82,11 +82,11 @@ impl Docker {
     }
 
     /// Removes an image from the Docker daemon.
-    pub async fn remove_image(
+    pub async fn remove_image<T: AsRef<str>, U: AsRef<str>>(
         &self,
-        name: impl AsRef<str>,
-        tag: impl AsRef<str>,
-    ) -> Result<impl IntoIterator<Item = ImageDeleteResponseItem>> {
+        name: T,
+        tag: U,
+    ) -> Result<impl IntoIterator<Item = ImageDeleteResponseItem> + use<T, U>> {
         remove_image(self, name, tag).await
     }
 

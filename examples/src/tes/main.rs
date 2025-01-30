@@ -2,12 +2,15 @@
 //! remote URL.
 //!
 //! You can run this command with the following command:
+//! ```bash
+//! export USER="<USER>"
+//! export PASSWORD="<PASSWORD>"
 //!
-//! `cargo run --release --example tes <URL>`
-//!
-//! If needed, you can also set the `BASIC_AUTH_TOKEN` to add a basic auth
-//! header with that token.
+//! cargo run --release --example tes <URL>
+//! ```
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use clap::Parser;
 use crankshaft::Engine;
 use crankshaft::config::backend::Kind;
@@ -24,6 +27,12 @@ use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 use url::Url;
 
+/// The environment variable for a basic auth username.
+const USER_ENV: &str = "USER";
+
+/// The environment variable for a basic auth password.
+const PASSWORD_ENV: &str = "PASSWORD";
+
 #[derive(Debug, Parser)]
 #[allow(missing_docs)]
 pub struct Args {
@@ -39,16 +48,23 @@ pub struct Args {
     n_jobs: usize,
 }
 
-/// The environment variable name for the basic auth token.
-const TOKEN_ENV_NAME: &str = "BASIC_AUTH_TOKEN";
-
 /// Starting point for task execution.
 async fn run(args: Args) -> Result<()> {
     let mut config = Config::builder()
         .url(args.url)
         .http(http::Config::default());
 
-    if let Ok(token) = std::env::var(TOKEN_ENV_NAME) {
+    let username = std::env::var(USER_ENV).ok();
+    let password = std::env::var(PASSWORD_ENV).ok();
+
+    if (username.is_some() && password.is_none()) || (username.is_none() && password.is_some()) {
+        panic!("both username and password must be provided for authentication");
+    }
+
+    // If username and password are available, add them to the config.
+    if let (Some(username), Some(password)) = (username, password) {
+        let credentials = format!("{}:{}", username, password);
+        let token = STANDARD.encode(credentials);
         config = config.basic_auth_token(token);
     }
 

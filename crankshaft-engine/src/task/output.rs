@@ -35,6 +35,11 @@ pub struct Output {
 }
 
 impl Output {
+    /// Gets a new builder for an output.
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
     /// The name of the output (if it exists).
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()

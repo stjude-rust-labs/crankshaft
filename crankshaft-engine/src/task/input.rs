@@ -56,7 +56,7 @@ pub struct Input {
 }
 
 impl Input {
-    /// Gets a new builder for an [`Input`].
+    /// Gets a new builder for an input.
     pub fn builder() -> Builder {
         Builder::default()
     }

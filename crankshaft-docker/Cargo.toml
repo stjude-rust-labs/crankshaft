@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 bollard.workspace = true
+bon.workspace = true
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
 eyre = { workspace = true, optional = true }

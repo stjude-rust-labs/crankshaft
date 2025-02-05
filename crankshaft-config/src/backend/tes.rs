@@ -1,30 +1,27 @@
 //! Configuration related to the _TES_ execution backend.
 
-mod builder;
 pub mod http;
 
-pub use builder::Builder;
+use bon::Builder;
 use serde::Deserialize;
 use serde::Serialize;
 use url::Url;
 
 /// A configuration object for a TES execution backend.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Builder, Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[builder(builder_type = Builder)]
 pub struct Config {
     /// The URL to reach the TES service at.
+    #[builder(into)]
     url: Url,
 
     /// More nuanced, HTTP-related configuration.
+    #[builder(into)]
     http: http::Config,
 }
 
 impl Config {
-    /// Gets a builder for [`Config`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Gets the URL of the TES server.
     pub fn url(&self) -> &Url {
         &self.url

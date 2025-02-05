@@ -1,7 +1,5 @@
 //! Containers.
 
-mod builder;
-
 use std::io::Cursor;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
@@ -17,7 +15,6 @@ use bollard::container::RemoveContainerOptions;
 use bollard::container::StartContainerOptions;
 use bollard::container::UploadToContainerOptions;
 use bollard::container::WaitContainerOptions;
-pub use builder::Builder;
 use futures::TryStreamExt as _;
 use tokio_stream::StreamExt as _;
 use tracing::Level;
@@ -27,6 +24,10 @@ use tracing::trace;
 
 use crate::Error;
 use crate::Result;
+
+mod builder;
+
+pub use builder::Builder;
 
 /// The default capacity of bytes for a TAR being built.
 ///
@@ -49,11 +50,6 @@ pub struct Container {
 }
 
 impl Container {
-    /// Gets a new creator for a [`Container`].
-    pub fn builder(client: Docker) -> Builder {
-        Builder::new(client)
-    }
-
     /// Creates a new [`Container`] if you already know the name of a container.
     ///
     /// You should typically use [`Self::builder()`] unless you receive the

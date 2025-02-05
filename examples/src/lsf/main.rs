@@ -12,6 +12,7 @@ use crankshaft::engine::task::Execution;
 use eyre::Context as _;
 use eyre::ContextCompat as _;
 use eyre::Result;
+use nonempty::NonEmpty;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
@@ -64,19 +65,19 @@ async fn run(args: Args) -> Result<()> {
 
     let engine = Engine::default().with(config).await?;
 
+    let executions = NonEmpty::new(
+        Execution::builder()
+            .workdir(".")
+            .image("ubuntu")
+            .args((String::from("echo"), vec![String::from("'hello, world!'")]))
+            .build(),
+    );
+
     let task = Task::builder()
         .name("my-example-task")
         .description("a longer description")
-        .extend_executions(vec![
-            Execution::builder()
-                .working_directory(".")
-                .image("ubuntu")
-                .args(&[String::from("echo"), String::from("'hello, world!'")])
-                .try_build()
-                .unwrap(),
-        ])
-        .try_build()
-        .unwrap();
+        .executions(executions)
+        .build();
 
     let receivers = (0..args.n_jobs)
         .map(|_| engine.submit("lsf", task.clone()).callback)

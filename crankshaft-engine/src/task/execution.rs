@@ -1,47 +1,48 @@
 //! A unit of executable work.
 
-mod builder;
-
 use std::hash::RandomState;
 
-pub use builder::Builder;
+use bon::Builder;
 use indexmap::IndexMap;
 use nonempty::NonEmpty;
 
 /// An execution.
-#[derive(Clone, Debug)]
+#[derive(Builder, Clone, Debug)]
+#[builder(builder_type = Builder)]
 pub struct Execution {
     /// The container image.
+    #[builder(into)]
     image: String,
 
     /// The command arguments to execute.
+    #[builder(into)]
     args: NonEmpty<String>,
 
     /// The working directory, if configured.
+    #[builder(into)]
     workdir: Option<String>,
 
     /// The path inside the container to a file whose contents will be piped to
     /// the standard input, if configured.
+    #[builder(into)]
     stdin: Option<String>,
 
     /// The path inside the container to a file where the contents of the
     /// standard output stream will be written, if configured.
+    #[builder(into)]
     stdout: Option<String>,
 
     /// The path inside the container to a file where the contents of the
     /// standard error stream will be written, if configured.
+    #[builder(into)]
     stderr: Option<String>,
 
     /// A map of environment variables, if configured.
+    #[builder(into)]
     env: Option<IndexMap<String, String>>,
 }
 
 impl Execution {
-    /// Gets a new builder for an [`Execution`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// The image for the execution to run within.
     pub fn image(&self) -> &str {
         &self.image

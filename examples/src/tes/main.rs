@@ -18,8 +18,8 @@ use crankshaft::config::backend::tes::Config;
 use crankshaft::config::backend::tes::http;
 use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
-use eyre::Context;
 use eyre::Result;
+use nonempty::NonEmpty;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
@@ -50,9 +50,7 @@ pub struct Args {
 
 /// Starting point for task execution.
 async fn run(args: Args) -> Result<()> {
-    let mut config = Config::builder()
-        .url(args.url)
-        .http(http::Config::default());
+    let config = Config::builder().url(args.url);
 
     let username = std::env::var(USER_ENV).ok();
     let password = std::env::var(PASSWORD_ENV).ok();
@@ -61,39 +59,36 @@ async fn run(args: Args) -> Result<()> {
         panic!("both username and password must be provided for authentication");
     }
 
+    let mut http_config = http::Config::default();
+
     // If username and password are available, add them to the config.
     if let (Some(username), Some(password)) = (username, password) {
         let credentials = format!("{}:{}", username, password);
         let token = STANDARD.encode(credentials);
-        config = config.basic_auth_token(token);
+        http_config.basic_auth_token = Some(token);
     }
 
     let config = crankshaft::config::backend::Config::builder()
         .name("tes")
-        .kind(Kind::TES(
-            config
-                .try_build()
-                .context("building TES backend configuration")?,
-        ))
+        .kind(Kind::TES(config.http(http_config).build()))
         .max_tasks(args.max_tasks)
-        .try_build()
-        .context("building backend configuration")?;
+        .build();
 
     let engine = Engine::default().with(config).await?;
+
+    let executions = NonEmpty::new(
+        Execution::builder()
+            .workdir(".")
+            .image("ubuntu")
+            .args((String::from("echo"), vec![String::from("'hello, world!'")]))
+            .build(),
+    );
 
     let task = Task::builder()
         .name("my-example-task")
         .description("a longer description")
-        .extend_executions(vec![
-            Execution::builder()
-                .working_directory(".")
-                .image("ubuntu")
-                .args(&[String::from("echo"), String::from("'hello, world!'")])
-                .try_build()
-                .unwrap(),
-        ])
-        .try_build()
-        .unwrap();
+        .executions(executions)
+        .build();
 
     let receivers = (0..args.n_jobs)
         .map(|_| engine.submit("tes", task.clone()).callback)

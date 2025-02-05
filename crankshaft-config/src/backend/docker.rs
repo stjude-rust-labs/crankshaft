@@ -1,8 +1,7 @@
 //! Configuration related to the _Docker_ execution backend.
 
-mod builder;
-
-pub use builder::Builder;
+use bon::Builder;
+use bon::builder;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -15,21 +14,18 @@ fn default_cleanup() -> bool {
 }
 
 /// A configuration object for a Docker execution backend.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Builder, Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[builder(builder_type = Builder)]
 pub struct Config {
     /// Whether or not to remove the containers after completion of the tasks
     /// (regardless of whether the job was a success or failure).
     #[serde(default = "default_cleanup")]
+    #[builder(default = DEFAULT_CLEANUP)]
     cleanup: bool,
 }
 
 impl Config {
-    /// Gets a builder for [`Config`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Gets whether the backend is configured to remove the containers after
     /// completion of the tasks (regardless of whether the job was a success or
     /// failure).

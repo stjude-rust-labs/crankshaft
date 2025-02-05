@@ -1,43 +1,42 @@
 //! Configuration related to execution backends.
 
+use bon::Builder;
 use serde::Deserialize;
 use serde::Serialize;
 
-mod builder;
 mod defaults;
 pub mod docker;
 pub mod generic;
 mod kind;
 pub mod tes;
 
-pub use builder::Builder;
 pub use defaults::Defaults;
 pub use kind::Kind;
 
 /// A configuration object for an execution backend.
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Builder, Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
+#[builder(builder_type = Builder)]
 pub struct Config {
     /// The name.
+    #[builder(into)]
     name: String,
 
     /// The type.
     #[serde(flatten)]
+    #[builder(into)]
     kind: Kind,
 
     /// The maximum number of concurrent tasks that can run.
+    #[builder(into)]
     max_tasks: usize,
 
     /// The execution defaults.
+    #[builder(into)]
     defaults: Option<Defaults>,
 }
 
 impl Config {
-    /// Gets a default [`Builder`] for a [`Config`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Gets the name of the backend.
     pub fn name(&self) -> &str {
         &self.name

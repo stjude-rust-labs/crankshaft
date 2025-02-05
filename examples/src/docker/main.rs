@@ -14,6 +14,7 @@ use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use eyre::Context;
 use eyre::Result;
+use nonempty::NonEmpty;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
@@ -38,31 +39,30 @@ async fn run(args: Args) -> Result<()> {
         .name("docker")
         .kind(Kind::Docker(Config::builder().cleanup(false).build()))
         .max_tasks(args.max_tasks)
-        .try_build()
-        .context("building backend configuration")?;
+        .build();
 
     let engine = Engine::default()
         .with(config)
         .await
         .context("initializing Docker backend")?;
 
+    let executions = NonEmpty::new(
+        Execution::builder()
+            .workdir(
+                current_dir()
+                    .expect("a current working directory")
+                    .display()
+                    .to_string(),
+            )
+            .image("ubuntu")
+            .args((String::from("echo"), vec![String::from("'hello, world!'")]))
+            .build(),
+    );
+
     let task = Task::builder()
         .description("a longer description")
-        .extend_executions(vec![
-            Execution::builder()
-                .working_directory(
-                    current_dir()
-                        .expect("a current working directory")
-                        .display()
-                        .to_string(),
-                )
-                .image("ubuntu")
-                .args(&[String::from("echo"), String::from("'hello, world!'")])
-                .try_build()
-                .unwrap(),
-        ])
-        .try_build()
-        .unwrap();
+        .executions(executions)
+        .build();
 
     let receivers = (0..args.n_jobs)
         .map(|_| engine.submit("docker", task.clone()).callback)

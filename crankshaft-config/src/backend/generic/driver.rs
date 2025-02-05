@@ -1,12 +1,11 @@
 //! Configuration related to _the command driver_ within a generic execution
 //! backend.
 
-pub mod builder;
 pub mod locale;
 pub mod shell;
 pub mod ssh;
 
-pub use builder::Builder;
+use bon::Builder;
 pub use locale::Locale;
 use serde::Deserialize;
 use serde::Serialize;
@@ -18,25 +17,24 @@ const DEFAULT_MAX_ATTEMPTS: u32 = 4;
 
 /// A configuration object for a command driver within a generic execution
 /// backend.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Builder, Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[builder(builder_type = Builder)]
 pub struct Config {
     /// The locale within which to run commands.
+    #[builder(into)]
     locale: Option<Locale>,
 
     /// The shell to execute within.
+    #[builder(into)]
     shell: Option<Shell>,
 
     /// The maximum number of attempts to try a command execution.
+    #[builder(into)]
     max_attempts: Option<u32>,
 }
 
 impl Config {
-    /// Creates a new builder for a [`Config`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Gets the locale.
     pub fn locale(&self) -> Option<&Locale> {
         self.locale.as_ref()

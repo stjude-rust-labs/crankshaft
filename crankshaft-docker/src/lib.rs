@@ -103,7 +103,7 @@ impl Docker {
     ///
     /// This is the typical way you will create containers.
     pub fn container_builder(&self) -> container::Builder {
-        Container::builder(self.0.clone())
+        container::Builder::new(self.0.clone())
     }
 
     /// Creates a container from a known id.

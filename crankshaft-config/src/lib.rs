@@ -10,6 +10,7 @@
 
 use std::path::Path;
 
+use bon::Builder;
 use config::Config as ConfigCrate;
 use config::ConfigBuilder;
 use config::ConfigError as Error;
@@ -20,9 +21,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub mod backend;
-mod builder;
-
-pub use builder::Builder;
 
 /// The prefix for any environment variables that influence the configuration of
 /// Crankshaft.
@@ -45,19 +43,16 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// * `<CONFIG DIR>/crankshaft/Crankshaft.toml`.
 /// * `<CWD>/Crankshaft.toml`.
 /// * Environment variables starting with `CRANKSHAFT_`.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Builder, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "kebab-case")]
+#[builder(builder_type = Builder)]
 pub struct Config {
     /// All registered backends.
+    #[builder(into)]
     backends: Vec<backend::Config>,
 }
 
 impl Config {
-    /// Gets a default [`Builder`] for a [`Config`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Gets the configured backends.
     pub fn backends(&self) -> &[backend::Config] {
         self.backends.as_slice()

@@ -10,7 +10,7 @@ use serde::Serialize;
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     /// If needed, the basic auth token to provide to the service.
-    pub(crate) basic_auth_token: Option<String>,
+    pub basic_auth_token: Option<String>,
 }
 
 impl Config {

@@ -1,39 +1,38 @@
 //! Task resource specifications.
 
-mod builder;
-
 use std::collections::HashMap;
 
 use bollard::secret::HostConfig;
-pub use builder::Builder;
+use bon::Builder;
 use crankshaft_config::backend::Defaults;
 use nonempty::NonEmpty;
 
 /// A set of requested resources.
-#[derive(Clone, Debug)]
+#[derive(Builder, Clone, Debug)]
+#[builder(builder_type = Builder)]
 pub struct Resources {
     /// The number of CPU cores requested.
+    #[builder(into)]
     cpu: Option<usize>,
 
     /// Whether or not the task may use preemptible resources.
+    #[builder(into)]
     preemptible: Option<bool>,
 
     /// The requested random access memory size in gigabytes.
+    #[builder(into)]
     ram: Option<f64>,
 
     /// The requested disk size in gigabytes.
+    #[builder(into)]
     disk: Option<f64>,
 
     /// The associated compute zones.
+    #[builder(into)]
     zones: Option<NonEmpty<String>>,
 }
 
 impl Resources {
-    /// Gets a new resources builder.
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// A number of CPU cores.
     pub fn cpu(&self) -> Option<usize> {
         self.cpu

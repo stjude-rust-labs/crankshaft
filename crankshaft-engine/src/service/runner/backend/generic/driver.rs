@@ -247,7 +247,7 @@ async fn create_ssh_transport(host: &str, config: &ssh::Config) -> Result<Transp
     // Authenticate the SSH session.
     debug!("authenticating SSH session");
 
-    if let Some(ref username) = config.username {
+    if let Some(ref username) = config.username() {
         agent
             .userauth(username, key)
             .map_err(Error::SSH2)

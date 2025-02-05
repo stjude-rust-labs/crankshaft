@@ -1,51 +1,52 @@
 //! Tasks that can be run by execution runners.
 
+use bon::Builder;
 use nonempty::NonEmpty;
 
-mod builder;
 pub mod execution;
 pub mod input;
 pub mod output;
 pub mod resources;
 
-pub use builder::Builder;
 pub use execution::Execution;
 pub use input::Input;
 pub use output::Output;
 pub use resources::Resources;
 
 /// A task intended for execution.
-#[derive(Clone, Debug)]
-
+#[derive(Builder, Clone, Debug)]
+#[builder(builder_type = Builder)]
 pub struct Task {
     /// An optional name.
+    #[builder(into)]
     name: Option<String>,
 
     /// An optional description.
+    #[builder(into)]
     description: Option<String>,
 
     /// An optional list of [`Input`]s.
+    #[builder(into)]
     inputs: Option<NonEmpty<Input>>,
 
     /// An optional list of [`Output`]s.
+    #[builder(into)]
     outputs: Option<NonEmpty<Output>>,
 
     /// An optional set of requested [`Resources`].
+    #[builder(into)]
     resources: Option<Resources>,
 
     /// The list of [`Execution`]s.
+    #[builder(into)]
     executions: NonEmpty<Execution>,
 
     /// The list of volumes shared across executions in the task.
+    #[builder(into)]
     shared_volumes: Option<NonEmpty<String>>,
 }
 
 impl Task {
-    /// Gets a new task builder.
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Gets the name of the task (if it exists).
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()

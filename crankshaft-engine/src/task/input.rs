@@ -1,10 +1,9 @@
 //! Task inputs.
 
-pub use builder::Builder;
+use bon::Builder;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
-mod builder;
 mod contents;
 
 pub use contents::Contents;
@@ -20,30 +19,31 @@ pub enum Type {
 }
 
 /// An input to a task.
-#[derive(Clone, Debug)]
+#[derive(Builder, Clone, Debug)]
+#[builder(builder_type = Builder)]
 pub struct Input {
     /// A name.
+    #[builder(into)]
     name: Option<String>,
 
     /// A description.
+    #[builder(into)]
     description: Option<String>,
 
     /// The contents.
+    #[builder(into)]
     contents: Contents,
 
     /// The path to map the input to within the container.
+    #[builder(into)]
     path: String,
 
     /// The type of the input.
+    #[builder(into)]
     r#type: Type,
 }
 
 impl Input {
-    /// Gets a new builder for an input.
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// The name of the input (if it exists).
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()

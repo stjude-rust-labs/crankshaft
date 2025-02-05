@@ -1,8 +1,6 @@
 //! Task outputs.
 
-mod builder;
-
-pub use builder::Builder;
+use bon::Builder;
 use url::Url;
 
 /// A type of task output.
@@ -16,30 +14,31 @@ pub enum Type {
 }
 
 /// A task output.
-#[derive(Clone, Debug)]
+#[derive(Builder, Clone, Debug)]
+#[builder(builder_type = Builder)]
 pub struct Output {
     /// An optional name.
+    #[builder(into)]
     name: Option<String>,
 
     /// An optional description.
+    #[builder(into)]
     description: Option<String>,
 
     /// The URL to copy the output to when complete.
+    #[builder(into)]
     url: Url,
 
     /// The path to map the output to within the container.
+    #[builder(into)]
     path: String,
 
     /// The type of the output.
+    #[builder(into)]
     r#type: Type,
 }
 
 impl Output {
-    /// Gets a new builder for an output.
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// The name of the output (if it exists).
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()

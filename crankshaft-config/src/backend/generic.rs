@@ -3,15 +3,14 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use bon::Builder;
+use bon::builder;
 use regex::Captures;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 
-mod builder;
 pub mod driver;
-
-pub use builder::Builder;
 
 /// An error related to unexpected remaining substitution tokens in a (otherwise
 /// presumed to be fully resolved) command.
@@ -62,38 +61,41 @@ pub fn substitute(input: &str, replacements: &HashMap<String, String>) -> String
 }
 
 /// A configuration object for a generic execution backend.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Builder, Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[builder(builder_type = Builder)]
 pub struct Config {
     /// Configuration related to the command driver.
     #[serde(flatten)]
+    #[builder(into)]
     driver: driver::Config,
 
     /// The script used for job submission.
+    #[builder(into)]
     submit: String,
 
     /// A regex used to extract the job id from standard out.
+    #[builder(into)]
     job_id_regex: Option<String>,
 
     /// The script used to monitor a submitted job.
+    #[builder(into)]
     monitor: String,
 
     /// The frequency in seconds that the job status will be queried.
+    #[builder(into)]
     monitor_frequency: Option<u64>,
 
     /// The script used to kill a job.
+    #[builder(into)]
     kill: String,
 
     /// The runtime attributes.
+    #[builder(into)]
     attributes: Option<HashMap<String, String>>,
 }
 
 impl Config {
-    /// Gets a default [`Builder`] for a [`Config`].
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// A utility method to perform the substitutions on a particular command at
     /// runtime.
     ///

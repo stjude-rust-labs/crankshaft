@@ -29,6 +29,11 @@ pub struct Resources {
 }
 
 impl Resources {
+    /// Gets a new resources builder.
+    pub fn builder() -> Builder {
+        Builder::default()
+    }
+
     /// A number of CPU cores.
     pub fn cpu(&self) -> Option<usize> {
         self.cpu

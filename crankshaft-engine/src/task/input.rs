@@ -1,13 +1,13 @@
 //! Task inputs.
 
-mod builder;
-
-use std::path::PathBuf;
-
 pub use builder::Builder;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use url::Url;
+
+mod builder;
+mod contents;
+
+pub use contents::Contents;
 
 /// A type of input.
 #[derive(Clone, Debug)]
@@ -17,23 +17,6 @@ pub enum Type {
 
     /// A directory.
     Directory,
-}
-
-/// The source of an input.
-#[derive(Clone, Debug)]
-pub enum Contents {
-    /// Contents sourced from a URL.
-    URL(Url),
-
-    /// Contents provided as a string literal.
-    Literal(String),
-}
-
-impl From<PathBuf> for Contents {
-    fn from(value: PathBuf) -> Self {
-        let url = Url::from_file_path(value).unwrap_or_else(|_| panic!("Invalid path"));
-        Contents::URL(url)
-    }
 }
 
 /// An input to a task.
@@ -90,7 +73,7 @@ impl Input {
     pub async fn fetch(&self) -> Vec<u8> {
         match &self.contents {
             Contents::Literal(content) => content.as_bytes().to_vec(),
-            Contents::URL(url) => match url.scheme() {
+            Contents::Url(url) => match url.scheme() {
                 "file" => {
                     // SAFETY: we just checked to ensure this is a file, so
                     // getting the file path should always unwrap.

@@ -105,7 +105,6 @@ impl Config {
     /// entire runtime attributes HashMap each time a substitution was
     /// performed, we first do substitution of the script followed by
     /// substitution of the runtime attributes.
-    // TODO(clay): could this be used with `Cow<'a, str>`?
     #[inline]
     fn resolve(
         &self,

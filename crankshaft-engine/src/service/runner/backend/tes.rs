@@ -67,15 +67,15 @@ impl crate::Backend for Backend {
                 debug!("looping on {task_id}");
                 match client.get_task(&task_id, View::Full).await {
                     Ok(task) => {
-                        debug!("Got response for {task_id}: {task:?}");
+                        debug!("got response for {task_id}: {task:?}");
                         // SAFETY: `get_task` called with `View::Full` will always
                         // return a full [`Task`], so this will always unwrap.
                         let task = task.into_task().unwrap();
 
                         if let Some(ref state) = task.state {
-                            debug!("State was found for {task_id}");
+                            debug!("state was found for {task_id}");
                             if !state.is_executing() {
-                                debug!("Task is completed for {task_id}");
+                                debug!("task is completed for {task_id}");
                                 // let mut results = task
                                 //     .logs
                                 //     .unwrap()
@@ -128,10 +128,10 @@ impl crate::Backend for Backend {
 
                                 return Ok(outputs);
                             } else {
-                                debug!("Task was NOT completed for {task_id}. Looping...");
+                                debug!("task was NOT completed for {task_id}; looping...");
                             }
                         } else {
-                            debug!("State was NOT set for {task_id}. Looping...");
+                            debug!("state was NOT set for {task_id}; looping...");
                         }
 
                         tokio::time::sleep(Duration::from_millis(200)).await;

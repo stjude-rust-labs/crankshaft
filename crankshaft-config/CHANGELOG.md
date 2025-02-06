@@ -10,3 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Adds the initial version of the crate.
+
+### Changed
+
+* Use `thiserror` for custom error types ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).

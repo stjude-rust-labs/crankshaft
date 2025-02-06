@@ -35,7 +35,7 @@ pub struct Output {
 
     /// The type of the output.
     #[builder(into)]
-    r#type: Type,
+    ty: Type,
 }
 
 impl Output {
@@ -60,7 +60,7 @@ impl Output {
     }
 
     /// The type of the output.
-    pub fn r#type(&self) -> &Type {
-        &self.r#type
+    pub fn ty(&self) -> &Type {
+        &self.ty
     }
 }

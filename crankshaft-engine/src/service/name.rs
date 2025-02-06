@@ -1,6 +1,6 @@
 //! Name generation services.
 
-use fastbloom::BloomFilter;
+use growable_bloom_filter::GrowableBloom;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 
@@ -16,7 +16,7 @@ pub struct UniqueAlphanumeric {
     /// The length of the randomized portion of the name.
     length: usize,
     /// Bloom filter responsible for ensuring uniqueness of these names
-    bloom_filter: BloomFilter,
+    bloom_filter: GrowableBloom,
 }
 
 impl Generator for UniqueAlphanumeric {
@@ -28,8 +28,7 @@ impl Generator for UniqueAlphanumeric {
                 .map(char::from)
                 .collect();
 
-            if !self.bloom_filter.contains(&random) {
-                self.bloom_filter.insert(&random);
+            if self.bloom_filter.insert(&random) {
                 return random;
             }
         }
@@ -42,7 +41,7 @@ impl UniqueAlphanumeric {
     pub fn default_with_expected_generations(expected: usize) -> Self {
         Self {
             length: 12,
-            bloom_filter: BloomFilter::with_false_pos(0.001).expected_items(expected),
+            bloom_filter: GrowableBloom::new(0.001, expected),
         }
     }
 }

@@ -15,17 +15,18 @@ bon.workspace = true
 crankshaft-config = { path = "../crankshaft-config", version = "0.1.0" }
 crankshaft-docker = { path = "../crankshaft-docker", version = "0.1.0" }
 eyre.workspace = true
-fastbloom.workspace = true
 futures.workspace = true
+growable-bloom-filter.workspace = true
 indexmap.workspace = true
-indicatif.workspace = true
 nonempty.workspace = true
 rand.workspace = true
 regex.workspace = true
+shlex.workspace = true
 ssh2.workspace = true
 tar.workspace = true
 tempfile.workspace = true
 tes.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-metrics.workspace = true
 tracing.workspace = true

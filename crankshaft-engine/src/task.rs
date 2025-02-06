@@ -1,5 +1,7 @@
 //! Tasks that can be run by execution runners.
 
+use std::sync::Arc;
+
 use bon::Builder;
 use nonempty::NonEmpty;
 
@@ -26,12 +28,12 @@ pub struct Task {
     description: Option<String>,
 
     /// An optional list of [`Input`]s.
-    #[builder(into)]
-    inputs: Option<NonEmpty<Input>>,
+    #[builder(into, default)]
+    inputs: Vec<Arc<Input>>,
 
     /// An optional list of [`Output`]s.
-    #[builder(into)]
-    outputs: Option<NonEmpty<Output>>,
+    #[builder(into, default)]
+    outputs: Vec<Output>,
 
     /// An optional set of requested [`Resources`].
     #[builder(into)]
@@ -42,8 +44,8 @@ pub struct Task {
     executions: NonEmpty<Execution>,
 
     /// The list of volumes shared across executions in the task.
-    #[builder(into)]
-    shared_volumes: Option<NonEmpty<String>>,
+    #[builder(into, default)]
+    volumes: Vec<String>,
 }
 
 impl Task {
@@ -63,13 +65,13 @@ impl Task {
     }
 
     /// Gets the inputs for the task (if any exist).
-    pub fn inputs(&self) -> Option<impl Iterator<Item = &Input>> {
-        self.inputs.as_ref().map(|inputs| inputs.iter())
+    pub fn inputs(&self) -> impl Iterator<Item = &Arc<Input>> {
+        self.inputs.iter()
     }
 
     /// Gets the outputs for the task (if any exist).
-    pub fn outputs(&self) -> Option<impl Iterator<Item = &Output>> {
-        self.outputs.as_ref().map(|outputs| outputs.iter())
+    pub fn outputs(&self) -> impl Iterator<Item = &Output> {
+        self.outputs.iter()
     }
 
     /// Gets the requested resources for the task (if any are specified).
@@ -83,9 +85,7 @@ impl Task {
     }
 
     /// Gets the shared volumes across executions within this task.
-    pub fn shared_volumes(&self) -> Option<impl Iterator<Item = &str>> {
-        self.shared_volumes
-            .as_ref()
-            .map(|volumes| volumes.iter().map(|a| a.as_str()))
+    pub fn shared_volumes(&self) -> impl Iterator<Item = &str> {
+        self.volumes.iter().map(|v| v.as_str())
     }
 }

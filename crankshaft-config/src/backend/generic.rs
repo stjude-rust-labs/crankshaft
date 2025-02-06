@@ -1,5 +1,6 @@
 //! Configuration related to _generic_ execution backends.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
@@ -9,24 +10,18 @@ use regex::Captures;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
+use thiserror::Error;
 
 pub mod driver;
 
 /// An error related to unexpected remaining substitution tokens in a (otherwise
 /// presumed to be fully resolved) command.
-#[derive(Debug)]
+#[derive(Error, Debug)]
+#[error("unresolved substitutions in command `{command}`")]
 pub struct UnresolvedSubstitutionError {
     /// The command containing the unresolved substitutions.
     command: String,
 }
-
-impl std::fmt::Display for UnresolvedSubstitutionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unresolved substitutions in command: {}", self.command)
-    }
-}
-
-impl std::error::Error for UnresolvedSubstitutionError {}
 
 /// A result from substitutions that might contain a
 /// [`UnresolvedSubstitutionError`].
@@ -45,7 +40,7 @@ static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Replaces placeholders within a generic configuration value.
-pub fn substitute(input: &str, replacements: &HashMap<String, String>) -> String {
+pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, Cow<'_, str>>) -> String {
     PLACEHOLDER_REGEX
         .replace_all(input, |captures: &Captures<'_>| {
             // SAFETY: the `PLACEHOLDER_REGEX` above is hardcoded to ensure a group
@@ -54,8 +49,8 @@ pub fn substitute(input: &str, replacements: &HashMap<String, String>) -> String
 
             replacements
                 .get(key.as_str())
-                .unwrap_or(&format!("~{{{}}}", key.as_str()))
-                .to_string()
+                .map(|r| r.as_ref().to_string())
+                .unwrap_or_else(|| format!("~{{{key}}}", key = key.as_str()))
         })
         .to_string()
 }
@@ -91,8 +86,9 @@ pub struct Config {
     kill: String,
 
     /// The runtime attributes.
-    #[builder(into)]
-    attributes: Option<HashMap<String, String>>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[builder(into, default)]
+    attributes: HashMap<Cow<'static, str>, Cow<'static, str>>,
 }
 
 impl Config {
@@ -109,13 +105,16 @@ impl Config {
     /// entire runtime attributes HashMap each time a substitution was
     /// performed, we first do substitution of the script followed by
     /// substitution of the runtime attributes.
-    // TODO(clay): could this be used with `Cow<'a, str>`?
     #[inline]
-    fn resolve(&self, command: &str, substitutions: &HashMap<String, String>) -> ResolveResult {
+    fn resolve(
+        &self,
+        command: &str,
+        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+    ) -> ResolveResult {
         let mut result = substitute(command, substitutions);
 
-        if let Some(attrs) = self.attributes() {
-            result = substitute(&result, attrs);
+        if !self.attributes.is_empty() {
+            result = substitute(&result, &self.attributes);
         }
 
         // NOTE: this is just to help clean up some of the output. The intention
@@ -162,23 +161,32 @@ impl Config {
     }
 
     /// Gets the runtime attributes.
-    pub fn attributes(&self) -> Option<&HashMap<String, String>> {
-        self.attributes.as_ref()
+    pub fn attributes(&self) -> &HashMap<Cow<'static, str>, Cow<'static, str>> {
+        &self.attributes
     }
 
     /// Gets the submit command with all of the substitutions resolved.
-    pub fn resolve_submit(&self, substitutions: &HashMap<String, String>) -> ResolveResult {
+    pub fn resolve_submit(
+        &self,
+        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+    ) -> ResolveResult {
         self.resolve(&self.submit, substitutions)
     }
 
     /// Gets the monitor command with all of the substitutions resolved.
-    pub fn resolve_monitor(&self, substitutions: &HashMap<String, String>) -> ResolveResult {
+    pub fn resolve_monitor(
+        &self,
+        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+    ) -> ResolveResult {
         self.resolve(&self.monitor, substitutions)
     }
 
     /// Gets the kill command with all of the substitutions resolved.
-    pub fn resolve_kill(&self, substitutions: HashMap<String, String>) -> ResolveResult {
-        self.resolve(&self.kill, &substitutions)
+    pub fn resolve_kill(
+        &self,
+        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+    ) -> ResolveResult {
+        self.resolve(&self.kill, substitutions)
     }
 }
 
@@ -194,7 +202,7 @@ mod tests {
     #[test]
     fn replacement_works() -> Result<(), Box<dyn std::error::Error>> {
         let mut replacements = HashMap::new();
-        replacements.insert(String::from("foo"), String::from("bar"));
+        replacements.insert("foo".into(), "bar".into());
 
         assert_eq!(substitute("hello, ~{foo}", &replacements), "hello, bar");
 

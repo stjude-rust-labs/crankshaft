@@ -40,7 +40,7 @@ pub struct Input {
 
     /// The type of the input.
     #[builder(into)]
-    r#type: Type,
+    ty: Type,
 }
 
 impl Input {
@@ -65,8 +65,8 @@ impl Input {
     }
 
     /// The type of the container.
-    pub fn r#type(&self) -> &Type {
-        &self.r#type
+    pub fn ty(&self) -> &Type {
+        &self.ty
     }
 
     /// Fetches the file contents via an [`AsyncRead`]er.

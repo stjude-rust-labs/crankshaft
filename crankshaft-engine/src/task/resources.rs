@@ -1,11 +1,11 @@
 //! Task resource specifications.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use bollard::secret::HostConfig;
 use bon::Builder;
 use crankshaft_config::backend::Defaults;
-use nonempty::NonEmpty;
 
 /// A set of requested resources.
 #[derive(Builder, Clone, Debug)]
@@ -29,7 +29,7 @@ pub struct Resources {
 
     /// The associated compute zones.
     #[builder(into)]
-    zones: Option<NonEmpty<String>>,
+    zones: Vec<String>,
 }
 
 impl Resources {
@@ -54,8 +54,8 @@ impl Resources {
     }
 
     /// The set of requested zones.
-    pub fn zones(&self) -> Option<&NonEmpty<String>> {
-        self.zones.as_ref()
+    pub fn zones(&self) -> &[String] {
+        &self.zones
     }
 
     /// Applies any provided options in `other` to the [`Resources`].
@@ -76,10 +76,7 @@ impl Resources {
             self.disk = Some(disk);
         }
 
-        if let Some(zones) = &other.zones {
-            self.zones = Some(zones.clone());
-        }
-
+        self.zones = other.zones.clone();
         self
     }
 
@@ -93,31 +90,31 @@ impl Resources {
     //
     // Please do not deviate from this unless you have a really strong,
     // articulated reason that is agreed upon by the core developers.
-    pub fn to_hashmap(&self) -> Option<HashMap<String, String>> {
-        let mut hm = HashMap::new();
+    pub fn to_hashmap(&self) -> HashMap<Cow<'static, str>, Cow<'static, str>> {
+        let mut map = HashMap::new();
 
         if let Some(cores) = self.cpu {
-            hm.insert(String::from("cpu"), cores.to_string());
+            map.insert("cpu".into(), cores.to_string().into());
         }
 
         if let Some(preemptible) = self.preemptible {
-            hm.insert(String::from("preemptible"), preemptible.to_string());
+            map.insert("preemptible".into(), preemptible.to_string().into());
         }
 
         if let Some(ram) = self.ram {
-            hm.insert(String::from("ram"), ram.to_string());
+            map.insert("ram".into(), ram.to_string().into());
             // TODO(clay): improve this.
-            hm.insert(String::from("ram_mb"), (ram * 1024.0).to_string());
+            map.insert("ram_mb".into(), (ram * 1024.0).to_string().into());
         }
 
         if let Some(disk) = self.disk {
-            hm.insert(String::from("disk"), disk.to_string());
+            map.insert("disk".into(), disk.to_string().into());
             // TODO(clay): improve this.
-            hm.insert(String::from("disk_mb"), (disk * 1024.0).to_string());
+            map.insert("disk_mb".into(), (disk * 1024.0).to_string().into());
         }
 
         // Zones are explicitly not included.
-        if !hm.is_empty() { Some(hm) } else { None }
+        map
     }
 }
 

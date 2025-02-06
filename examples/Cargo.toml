@@ -25,6 +25,8 @@ toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
+indicatif.workspace = true
+futures.workspace = true
 
 [[bin]]
 name = "docker"

@@ -20,6 +20,7 @@ use eyre::bail;
 use rand::Rng as _;
 use ssh2::Channel;
 use ssh2::Session;
+use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio::process::Command;
 use tracing::debug;
@@ -27,29 +28,20 @@ use tracing::error;
 use tracing::trace;
 
 /// An error related to a [`Driver`].
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
     /// An i/o error.
+    #[error(transparent)]
     Io(std::io::Error),
 
     /// An error related to joining a [`tokio`] task.
+    #[error(transparent)]
     Join(tokio::task::JoinError),
 
     /// An [ssh error](ssh2::Error).
+    #[error(transparent)]
     SSH2(ssh2::Error),
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Io(err) => write!(f, "i/o error: {err}"),
-            Error::Join(err) => write!(f, "join error: {err}"),
-            Error::SSH2(err) => write!(f, "ssh2 error: {err}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// A command transport.
 ///
@@ -95,7 +87,7 @@ impl Driver {
     /// Initializes a new [`Driver`].
     ///
     /// This command requires an async runtime because, for some transports,
-    /// negotation is done via subprocesses or network calls to initialize the
+    /// negotiation is done via subprocesses or network calls to initialize the
     /// necessary state (e.g., establishing an SSH session with a remote host).
     ///
     /// **NOTE:** this method returns an [`eyre::Result`] because any errors
@@ -114,7 +106,7 @@ impl Driver {
         Ok(Self { transport, config })
     }
 
-    /// Runs a shell commmand within the configuration locale.
+    /// Runs a shell command within the configuration locale.
     ///
     /// **NOTE:** this method returns an [`eyre::Result`] because any errors
     /// are intended to be returned directly to the user in the calling binary

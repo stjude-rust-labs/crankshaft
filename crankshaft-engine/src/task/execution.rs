@@ -1,10 +1,7 @@
 //! A unit of executable work.
 
-use std::hash::RandomState;
-
 use bon::Builder;
 use indexmap::IndexMap;
-use nonempty::NonEmpty;
 
 /// An execution.
 #[derive(Builder, Clone, Debug)]
@@ -14,13 +11,17 @@ pub struct Execution {
     #[builder(into)]
     image: String,
 
-    /// The command arguments to execute.
+    /// The program to execute.
     #[builder(into)]
-    args: NonEmpty<String>,
+    program: String,
+
+    /// The arguments to the program.
+    #[builder(into, default)]
+    args: Vec<String>,
 
     /// The working directory, if configured.
     #[builder(into)]
-    workdir: Option<String>,
+    work_dir: Option<String>,
 
     /// The path inside the container to a file whose contents will be piped to
     /// the standard input, if configured.
@@ -38,8 +39,8 @@ pub struct Execution {
     stderr: Option<String>,
 
     /// A map of environment variables, if configured.
-    #[builder(into)]
-    env: Option<IndexMap<String, String>>,
+    #[builder(into, default)]
+    env: IndexMap<String, String>,
 }
 
 impl Execution {
@@ -48,33 +49,38 @@ impl Execution {
         &self.image
     }
 
+    /// The program to execute.
+    pub fn program(&self) -> &str {
+        &self.program
+    }
+
     /// The arguments to the execution.
-    pub fn args(&self) -> &NonEmpty<String> {
+    pub fn args(&self) -> &[String] {
         &self.args
     }
 
     /// The working directory.
-    pub fn workdir(&self) -> Option<&String> {
-        self.workdir.as_ref()
+    pub fn work_dir(&self) -> Option<&str> {
+        self.work_dir.as_deref()
     }
 
     /// The file to pipe the standard input stream from.
-    pub fn stdin(&self) -> Option<&String> {
-        self.stdin.as_ref()
+    pub fn stdin(&self) -> Option<&str> {
+        self.stdin.as_deref()
     }
 
     /// The file to pipe the standard output stream to.
-    pub fn stdout(&self) -> Option<&String> {
-        self.stdout.as_ref()
+    pub fn stdout(&self) -> Option<&str> {
+        self.stdout.as_deref()
     }
 
     /// The file to pipe the standard error stream to.
-    pub fn stderr(&self) -> Option<&String> {
-        self.stderr.as_ref()
+    pub fn stderr(&self) -> Option<&str> {
+        self.stderr.as_deref()
     }
 
     /// The environment variables for the execution.
-    pub fn env(&self) -> Option<&IndexMap<String, String, RandomState>> {
-        self.env.as_ref()
+    pub fn env(&self) -> &IndexMap<String, String> {
+        &self.env
     }
 }

@@ -1,8 +1,9 @@
 //! A generic backend.
 //!
-//! Generic backends are intended to be relatively maleable and configurable by
+//! Generic backends are intended to be relatively malleable and configurable by
 //! the end user without requiring the need to write Rust code.
 
+use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,7 +18,6 @@ use tracing::warn;
 
 use crate::Result;
 use crate::Task;
-use crate::service::runner::backend::TaskResult;
 use crate::service::runner::backend::generic::driver::Driver;
 use crate::task::Resources;
 
@@ -94,16 +94,16 @@ impl crate::Backend for Backend {
     }
 
     /// Runs a task in a backend.
-    fn run(&self, task: Task) -> BoxFuture<'static, TaskResult> {
+    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let driver = self.driver.clone();
         let config = self.config.clone();
 
         let default_substitutions = self
             .resolve_resources(task.resources())
-            .and_then(|resources| resources.to_hashmap())
+            .map(|resources| resources.to_hashmap())
             .unwrap_or_default();
 
-        async move {
+        Ok(async move {
             let mut outputs = Vec::new();
             let job_id_regex = config.job_id_regex().map(|pattern| {
                 Regex::new(pattern)
@@ -121,32 +121,31 @@ impl crate::Backend for Backend {
                     execution.image()
                 );
 
-                // TODO(clay): surely we can do better than a reallocation here.
-                let shell = execution
-                    .args()
-                    .into_iter()
-                    .map(String::from)
-                    .collect::<Vec<String>>()
-                    .join(" ");
+                let mut substitutions = default_substitutions.clone();
 
-                let mut subtitutions = default_substitutions.clone();
-
-                if subtitutions.insert(String::from("shell"), shell).is_some() {
-                    unreachable!("the `shell` key should not be present here");
+                if substitutions
+                    .insert(
+                        "command".into(),
+                        shlex::try_join(
+                            std::iter::once(execution.program())
+                                .chain(execution.args().iter().map(String::as_str)),
+                        )?
+                        .into(),
+                    )
+                    .is_some()
+                {
+                    unreachable!("the `command` key should not be present here");
                 };
 
-                if let Some(cwd) = execution.workdir() {
-                    if subtitutions
-                        .insert(String::from("cwd"), cwd.into())
-                        .is_some()
-                    {
+                if let Some(cwd) = execution.work_dir() {
+                    if substitutions.insert("cwd".into(), cwd.into()).is_some() {
                         unreachable!("the `cwd` key should not be present here");
                     };
                 }
 
                 // (1) Submitting the initial job.
                 // TODO(clay): we should probably handle this more gracefully.
-                let submit = config.resolve_submit(&subtitutions).unwrap();
+                let submit = config.resolve_submit(&substitutions).unwrap();
 
                 // TODO(clay): we should probably handle this more gracefully.
                 let output = driver.run(submit).await.unwrap();
@@ -164,11 +163,11 @@ impl crate::Backend for Backend {
 
                         // SAFETY: this will always unwrap, as the group is
                         // _required_ for the pattern to match.
-                        let id = captures.get(1).map(|c| String::from(c.as_str())).unwrap();
-                        subtitutions.insert(String::from("job_id"), id);
+                        let id = captures.get(1).map(|c| c.as_str()).unwrap();
+                        substitutions.insert("job_id".into(), id.into());
 
                         loop {
-                            let monitor = config.resolve_monitor(&subtitutions).unwrap();
+                            let monitor = config.resolve_monitor(&substitutions).unwrap();
                             let output = driver.run(monitor).await.unwrap();
 
                             if !output.status.success() {
@@ -190,15 +189,10 @@ impl crate::Backend for Backend {
                 }
             }
 
-            let mut outputs = outputs.into_iter();
-
             // SAFETY: each task _must_ have at least one execution, so at least one
             // execution result _must_ exist at this stage. Thus, this will always unwrap.
-            let mut executions = NonEmpty::new(outputs.next().unwrap());
-            executions.extend(outputs);
-
-            TaskResult { executions }
+            Ok(NonEmpty::from_vec(outputs).unwrap())
         }
-        .boxed()
+        .boxed())
     }
 }

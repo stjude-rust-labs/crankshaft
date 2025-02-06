@@ -4,6 +4,7 @@ use std::fmt::Debug;
 use std::process::Output;
 
 use async_trait::async_trait;
+use eyre::Result;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 
@@ -13,20 +14,6 @@ pub mod docker;
 pub mod generic;
 pub mod tes;
 
-/// A reply from a backend when a task is completed.
-#[derive(Clone, Debug)]
-pub struct TaskResult {
-    /// The results from each execution.
-    pub(crate) executions: NonEmpty<Output>,
-}
-
-impl TaskResult {
-    /// Gets the execution results.
-    pub fn executions(&self) -> &NonEmpty<Output> {
-        &self.executions
-    }
-}
-
 /// An execution backend.
 #[async_trait]
 pub trait Backend: Debug + Send + Sync + 'static {
@@ -34,5 +21,8 @@ pub trait Backend: Debug + Send + Sync + 'static {
     fn default_name(&self) -> &'static str;
 
     /// Runs a task in a backend.
-    fn run(&self, task: Task) -> BoxFuture<'static, TaskResult>;
+    // TODO: use a representation of task output that isn't based on
+    // `std::process::Output` that would allow us to write stdout/stderror to a file
+    // instead of buffering it all in memory
+    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>>;
 }

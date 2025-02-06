@@ -1,23 +1,15 @@
 //! Contents of an input.
 
+use thiserror::Error;
 use url::Url;
 
 /// An error related to an input's [`Contents`].
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
     /// An error parsing a [`Url`](url::Url).
+    #[error("invalid URL: {0}")]
     ParseUrl(url::ParseError),
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::ParseUrl(err) => write!(f, "parse url error: {err}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// A [`Result`](std::result::Result) with an [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;

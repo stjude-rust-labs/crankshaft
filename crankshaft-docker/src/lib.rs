@@ -6,25 +6,21 @@ use bollard::secret::ImageSummary;
 pub mod container;
 pub mod images;
 
+use thiserror::Error;
+
 pub use crate::container::Container;
 use crate::images::*;
 
 /// A global error within this crate.
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
     /// An error from [`bollard`].
+    #[error("docker error: {0}")]
     Docker(bollard::errors::Error),
+    /// A required value was missing for a builder field.
+    #[error("missing required builder field `{0}`")]
+    MissingBuilderField(&'static str),
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Docker(err) => write!(f, "docker error: {err}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// A [`Result`](std::result::Result) with an [`Error`].
 pub type Result<T> = std::result::Result<T, Error>;
@@ -111,8 +107,13 @@ impl Docker {
     /// You should typically use [`Self::container_builder()`] unless you
     /// receive the container name externally from a user (say, on the command
     /// line as an argument).
-    pub fn container_from_name(&self, id: impl Into<String>, attached: bool) -> Container {
-        Container::new(self.0.clone(), id.into(), attached)
+    pub fn container_from_name(
+        &self,
+        id: impl Into<String>,
+        attach_stdout: bool,
+        attach_stderr: bool,
+    ) -> Container {
+        Container::new(self.0.clone(), id.into(), attach_stdout, attach_stderr)
     }
 }
 

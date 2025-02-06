@@ -4,6 +4,7 @@ use bollard::Docker;
 use bollard::container::Config;
 use bollard::container::CreateContainerOptions;
 use bollard::secret::HostConfig;
+use indexmap::IndexMap;
 use tracing::warn;
 
 use crate::Container;
@@ -19,18 +20,23 @@ pub struct Builder {
     /// The image (e.g., `ubuntu:latest`).
     image: Option<String>,
 
-    /// The command to run.
-    command: Option<Vec<String>>,
+    /// The program to run.
+    program: Option<String>,
 
-    /// Whether or not the output streams (standard output and standard error)
-    /// are attached.
-    attached: Option<bool>,
+    /// The arguments to the command.
+    args: Vec<String>,
+
+    /// Whether or not the standard output is attached.
+    attach_stdout: bool,
+
+    /// Whether or not the standard error is attached.
+    attach_stderr: bool,
 
     /// Environment variables.
-    env: Option<Vec<String>>,
+    env: IndexMap<String, String>,
 
     /// The working directory.
-    workdir: Option<String>,
+    work_dir: Option<String>,
 
     /// Host configuration.
     host_config: Option<HostConfig>,
@@ -42,85 +48,75 @@ impl Builder {
         Self {
             client,
             image: Default::default(),
-            command: Default::default(),
-            attached: Default::default(),
+            program: Default::default(),
+            args: Default::default(),
+            attach_stdout: false,
+            attach_stderr: false,
             env: Default::default(),
-            workdir: Default::default(),
+            work_dir: Default::default(),
             host_config: Default::default(),
         }
     }
 
     /// Adds an image name.
-    ///
-    /// # Notes
-    ///
-    /// This will silently overwrite any previous image name(s) provided to the
-    /// builder.
     pub fn image(mut self, image: impl Into<String>) -> Self {
         self.image = Some(image.into());
         self
     }
 
-    /// Sets the command.
-    ///
-    /// # Notes
-    ///
-    /// This will silently overwrite any previous command(s) provided to the
-    /// builder.
-    pub fn command(mut self, command: impl Into<Vec<String>>) -> Self {
-        self.command = Some(command.into());
+    /// Sets the program to run.
+    pub fn program(mut self, program: impl Into<String>) -> Self {
+        self.program = Some(program.into());
         self
     }
 
-    /// Sets whether or not the standard output and standard error will be
-    /// attached.
-    ///
-    /// # Notes
-    ///
-    /// This will silently overwrite any previous attached values provided to
-    /// the builder.
-    pub fn attached(mut self, attached: bool) -> Self {
-        self.attached = Some(attached);
+    /// Sets an argument.
+    pub fn arg(mut self, arg: impl Into<String>) -> Self {
+        self.args.push(arg.into());
         self
     }
 
-    /// Adds a set of environment variables.
-    ///
-    /// # Notes
-    ///
-    /// This will silently overwrite any previous command(s) provided to the
-    /// builder.
-    pub fn extend_env(
+    /// Sets multiple arguments.
+    pub fn args(mut self, args: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.args.extend(args.into_iter().map(Into::into));
+        self
+    }
+
+    /// Sets stdout to be attached.
+    pub fn attach_stdout(mut self) -> Self {
+        self.attach_stdout = true;
+        self
+    }
+
+    /// Sets stderr to be attached.
+    pub fn attach_stderr(mut self) -> Self {
+        self.attach_stderr = true;
+        self
+    }
+
+    /// Sets an environment variable.
+    pub fn env(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.insert(name.into(), value.into());
+        self
+    }
+
+    /// Sets multiple environment variables.
+    pub fn envs(
         mut self,
         variables: impl Iterator<Item = (impl Into<String>, impl Into<String>)>,
     ) -> Self {
-        let mut env = self.env.unwrap_or_default();
-        env.extend(
-            variables
-                .into_iter()
-                .map(|(key, value)| format!("{}={}", key.into(), value.into())),
-        );
-        self.env = Some(env);
+        self.env
+            .extend(variables.into_iter().map(|(k, v)| (k.into(), v.into())));
         self
     }
 
     /// Sets the working directory.
-    ///
-    /// # Notes
-    ///
-    /// This will silently overwrite any previous working directory values
-    /// provided to the builder.
-    pub fn workdir(mut self, workdir: String) -> Self {
-        self.workdir = Some(workdir);
+    pub fn work_dir(mut self, work_dir: String) -> Self {
+        self.work_dir = Some(work_dir);
         self
     }
 
     /// Sets the host configuration.
-    ///
-    /// # Notes
-    ///
-    /// This will silently overwrite any previous host configuration values
-    /// provided to the builder.
     pub fn host_config(mut self, host_config: HostConfig) -> Self {
         self.host_config = Some(host_config);
         self
@@ -128,20 +124,20 @@ impl Builder {
 
     /// Consumes `self` and attempts to create a Docker container.
     ///
-    /// Note that the creation of a container does not indicate that it has
-    /// started.
-    pub async fn try_create(self, name: impl AsRef<str>) -> Result<Container> {
+    /// Note that the creation of a container does not start the container.
+    pub async fn try_build(self, name: impl AsRef<str>) -> Result<Container> {
         let name = name.as_ref();
 
         let image = self
             .image
-            .expect("the `image` field must be set for a container builder");
-        let command = self
-            .command
-            .expect("the `command` field must be set for a container builder");
-        let attached = self
-            .attached
-            .expect("the `attached` field must be set for a container builder");
+            .ok_or_else(|| Error::MissingBuilderField("image"))?;
+        let program = self
+            .program
+            .ok_or_else(|| Error::MissingBuilderField("program"))?;
+
+        let mut cmd = Vec::with_capacity(1 + self.args.len());
+        cmd.push(program);
+        cmd.extend(self.args);
 
         let response = self
             .client
@@ -154,14 +150,14 @@ impl Builder {
                     // NOTE: even though the following fields are optional, I
                     // want _this_ struct to require the explicit designation
                     // one way or the other and not rely on the default.
-                    cmd: Some(command),
+                    cmd: Some(cmd),
                     image: Some(image),
-                    attach_stdout: Some(attached),
-                    attach_stderr: Some(attached),
+                    attach_stdout: Some(self.attach_stdout),
+                    attach_stderr: Some(self.attach_stderr),
                     // END NOTE
-                    working_dir: self.workdir,
+                    working_dir: self.work_dir,
                     host_config: self.host_config,
-                    env: self.env,
+                    env: Some(self.env.iter().map(|(k, v)| format!("{k}={v}")).collect()),
                     ..Default::default()
                 },
             )
@@ -175,7 +171,8 @@ impl Builder {
         Ok(Container {
             client: self.client,
             name: response.id,
-            attached,
+            attach_stdout: self.attach_stdout,
+            attach_stderr: self.attach_stderr,
         })
     }
 }

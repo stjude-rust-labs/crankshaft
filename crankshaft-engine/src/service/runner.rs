@@ -1,13 +1,12 @@
 //! Task runner services.
 
+use std::process::Output;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
-use futures::future::BoxFuture;
-use futures::future::join_all;
-use futures::stream::FuturesUnordered;
+use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
 use tokio::sync::oneshot::Receiver;
 use tracing::trace;
@@ -20,7 +19,6 @@ use crate::Result;
 use crate::Task;
 use crate::service::name::GeneratorIterator;
 use crate::service::name::UniqueAlphanumeric;
-use crate::service::runner::backend::TaskResult;
 use crate::service::runner::backend::docker;
 use crate::service::runner::backend::generic;
 use crate::service::runner::backend::tes;
@@ -28,11 +26,17 @@ use crate::service::runner::backend::tes;
 /// The size of the name buffer.
 const NAME_BUFFER_LEN: usize = 4096;
 
-/// A submitted task handle.
+/// A spawned task handle.
 #[derive(Debug)]
-pub struct TaskHandle {
-    /// A callback that is executed when a task is completed.
-    pub callback: Receiver<TaskResult>,
+pub struct TaskHandle(Receiver<Result<NonEmpty<Output>>>);
+
+impl TaskHandle {
+    /// Consumes the task handle and waits for the task to complete.
+    ///
+    /// Returns the output of the task.
+    pub async fn wait(self) -> Result<NonEmpty<Output>> {
+        self.0.await?
+    }
 }
 
 /// A generic task runner.
@@ -43,9 +47,6 @@ pub struct Runner {
 
     /// The task lock.
     lock: Arc<tokio::sync::Semaphore>,
-
-    /// The list of submitted tasks.
-    pub tasks: FuturesUnordered<BoxFuture<'static, TaskResult>>,
 
     /// The unique name generator for tasks without names being sent to backends
     /// that may need names.
@@ -71,12 +72,11 @@ impl Runner {
             Kind::TES(config) => Arc::new(tes::Backend::initialize(config)),
         };
 
-        let generator = UniqueAlphanumeric::default_with_expected_generations(max_tasks);
+        let generator = UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN);
 
         Ok(Self {
             backend,
             lock: Arc::new(Semaphore::new(max_tasks)),
-            tasks: Default::default(),
             name_generator: Arc::new(Mutex::new(GeneratorIterator::new(
                 generator,
                 NAME_BUFFER_LEN,
@@ -84,8 +84,8 @@ impl Runner {
         })
     }
 
-    /// Submits a task to be executed by the backend.
-    pub fn submit(&self, mut task: Task) -> TaskHandle {
+    /// Spawns a task to be executed by the backend.
+    pub fn spawn(&self, mut task: Task) -> eyre::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -98,32 +98,20 @@ impl Runner {
             task.override_name(generator.next().unwrap());
         }
 
-        let fun = async move {
-            let _permit = lock.acquire().await;
-
-            let result = backend.clone().run(task).await;
+        tokio::spawn(async move {
+            let _permit = lock.acquire().await?;
+            let result = backend.clone().run(task)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard
             // practice if you don't specifically _want_ to keep a handle to the
             // returned result, so we ignore any errors related to that.
-            let _ = tx.send(result.clone());
+            let _ = tx.send(result);
             drop(_permit);
 
-            result
-        };
+            eyre::Ok(())
+        });
 
-        self.tasks.push(Box::pin(fun));
-        TaskHandle { callback: rx }
-    }
-
-    /// Gets the tasks from the runner.
-    pub fn tasks(self) -> impl Iterator<Item = BoxFuture<'static, TaskResult>> {
-        self.tasks.into_iter()
-    }
-
-    /// Runs all of the tasks scheduled in the [`Runner`].
-    pub async fn run(self) {
-        join_all(self.tasks).await;
+        Ok(TaskHandle(rx))
     }
 }

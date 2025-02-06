@@ -45,8 +45,11 @@ pub struct Container {
     /// The name of the container.
     name: String,
 
-    /// Whether or not standard output and standard error were attached.
-    attached: bool,
+    /// Whether or not standard output is attached.
+    attach_stdout: bool,
+
+    /// Whether or not standard output is attached.
+    attach_stderr: bool,
 }
 
 impl Container {
@@ -55,11 +58,12 @@ impl Container {
     /// You should typically use [`Self::builder()`] unless you receive the
     /// container name externally from a user (say, on the command line as an
     /// argument).
-    pub fn new(client: Docker, name: String, attached: bool) -> Self {
+    pub fn new(client: Docker, name: String, attach_stdout: bool, attach_stderr: bool) -> Self {
         Self {
             client,
             name,
-            attached,
+            attach_stdout,
+            attach_stderr,
         }
     }
 
@@ -99,8 +103,8 @@ impl Container {
             .attach_container(
                 &self.name,
                 Some(AttachContainerOptions::<String> {
-                    stdout: Some(self.attached),
-                    stderr: Some(self.attached),
+                    stdout: Some(self.attach_stdout),
+                    stderr: Some(self.attach_stderr),
                     stream: Some(true),
                     ..Default::default()
                 }),

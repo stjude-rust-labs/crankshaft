@@ -1,5 +1,8 @@
 //! A Docker backend.
 
+use std::process::Output;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use bollard::secret::HostConfig;
 use bollard::secret::Mount;
@@ -7,19 +10,14 @@ use bollard::secret::MountTypeEnum;
 use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Docker;
 use eyre::Context;
+use eyre::ContextCompat;
 use futures::FutureExt;
-use futures::StreamExt;
 use futures::future::BoxFuture;
-use futures::stream::FuturesUnordered;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
 
 use crate::Result;
 use crate::Task;
-use crate::service::runner::backend::TaskResult;
-
-/// The working dir name inside the docker container
-pub const WORKDIR: &str = "/workdir";
 
 /// A local execution backend.
 #[derive(Debug)]
@@ -61,131 +59,95 @@ impl crate::Backend for Backend {
         "docker"
     }
 
-    fn run(&self, task: Task) -> BoxFuture<'static, TaskResult> {
-        run(self, task)
+    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+        let client = self.client.clone();
+        let cleanup = self.config.cleanup();
+        let mounts = get_shared_mounts(task.shared_volumes())?;
+
+        Ok(async move {
+            let mut outputs = Vec::new();
+
+            for execution in task.executions() {
+                // (1) Create the container.
+                let mut builder = client
+                    .container_builder()
+                    .image(execution.image())
+                    .program(execution.program())
+                    .args(execution.args())
+                    .attach_stdout()
+                    .attach_stderr()
+                    .host_config(HostConfig {
+                        mounts: Some(mounts.clone()),
+                        ..task.resources().map(HostConfig::from).unwrap_or_default()
+                    });
+
+                if let Some(work_dir) = execution.work_dir() {
+                    builder = builder.work_dir(work_dir.to_owned());
+                }
+
+                let container = Arc::new(
+                    builder
+                        .try_build(
+                            &task
+                                .name()
+                                .context("task requires a name to run on the docker backend")?,
+                        )
+                        .await?,
+                );
+
+                // (2) Upload inputs to the container.
+                //
+                // TODO(clay): these could be cached.
+                for task in task.inputs().cloned().map(|i| {
+                    let container = container.clone();
+                    tokio::spawn(async move {
+                        let contents = i.fetch().await;
+                        container.upload_file(i.path(), contents).await
+                    })
+                }) {
+                    task.await??;
+                }
+
+                // (3) Start the container.
+                let output = container.run().await.wrap_err("failed to run container")?;
+
+                // (4) Cleanup the container (if desired).
+                if cleanup {
+                    container
+                        .remove()
+                        .await
+                        .wrap_err("failed to remove container")?
+                }
+
+                outputs.push(output);
+            }
+
+            // SAFETY: each task _must_ have at least one execution, so at least one
+            // execution result _must_ exist at this stage. Thus, this will always unwrap.
+            Ok(NonEmpty::from_vec(outputs).unwrap())
+        }
+        .boxed())
     }
 }
 
 /// Gets the shared mounts (if any exist) from the shared volumes in a [`Task`]
 /// (via [`Task::shared_volumes()`]).
-fn get_shared_mounts<'a>(volumes: Option<impl Iterator<Item = &'a str>>) -> Option<Vec<Mount>> {
-    volumes.map(|iter| {
-        iter.map(|inner_path| {
-            Mount {
-                target: Some(inner_path.to_owned()),
-                source: Some(
-                    TempDir::new()
-                        // SAFETY: for now, this is essentially a workaround to the fact
-                        // that we do not return a [`Result`] in the `run()` method. It's
-                        // certainly possible for this to fail, but I feel it's unlikely
-                        // enough to occur in early development that handling this properly
-                        // can be elided for now.
-                        //
-                        // TODO(clay): more properly handle this later.
-                        .expect("could not initialize tempdir")
-                        // NOTE: this is *required* because it causes the
-                        // temporary directory to no longer be dropped when the
-                        // [`TempDir`] goes out of scope. In other words, simply
-                        // referring to [`path()`] isn't sufficient (even though
-                        // it would suit our purposes from the perspective of
-                        // getting a [`str`] representation).
-                        .into_path()
-                        .to_str()
-                        // SAFETY: essentially the above reasoning—it's unlikely
-                        // that this will fail in early testing, but we should
-                        // come back to more properly handling this later.
-                        //
-                        // TODO(clay): more properly handle this later.
-                        .unwrap()
-                        .to_owned(),
-                ),
-                typ: Some(MountTypeEnum::BIND),
-                read_only: Some(false),
-                ..Default::default()
-            }
+fn get_shared_mounts<'a>(iter: impl Iterator<Item = &'a str>) -> Result<Vec<Mount>> {
+    iter.map(|inner_path| {
+        Ok(Mount {
+            target: Some(inner_path.to_owned()),
+            source: Some(
+                TempDir::new()
+                    .wrap_err("failed to create temporary directory")?
+                    .into_path()
+                    .to_str()
+                    .with_context(|| "temporary path contains non-UTF-8 characters")?
+                    .to_owned(),
+            ),
+            typ: Some(MountTypeEnum::BIND),
+            read_only: Some(false),
+            ..Default::default()
         })
-        .collect::<Vec<_>>()
     })
-}
-
-/// Runs a task using the Docker backend.
-fn run(backend: &Backend, task: Task) -> BoxFuture<'static, TaskResult> {
-    let client = backend.client.clone();
-    let cleanup = backend.config.cleanup();
-    let mounts = get_shared_mounts(task.shared_volumes());
-
-    async move {
-        let mut outputs = Vec::new();
-
-        for execution in task.executions() {
-            // (1) Create the container.
-            let mut builder = client
-                .container_builder()
-                .image(execution.image())
-                .command(
-                    execution
-                        .args()
-                        .into_iter()
-                        .map(|s| s.to_owned())
-                        .collect::<Vec<_>>(),
-                )
-                .attached(true)
-                .host_config(HostConfig {
-                    mounts: mounts.clone(),
-                    ..task.resources().map(HostConfig::from).unwrap_or_default()
-                });
-
-            if let Some(workdir) = execution.workdir() {
-                builder = builder.workdir(workdir.to_owned());
-            }
-
-            let container = builder.try_create(&task.name().unwrap()).await.unwrap();
-
-            // (2) Upload inputs to the container.
-            //
-            // TODO(clay): these could be cached.
-            if let Some(inputs) = task.inputs() {
-                let futures = inputs
-                    .map(|input| async {
-                        let contents = input.fetch().await;
-                        container.upload_file(input.path(), contents).await
-                    })
-                    .collect::<FuturesUnordered<_>>();
-
-                // NOTE: this is just an unfancy way to evaluate all of the
-                // above futures.
-                //
-                // TODO(clay): make this more elegant.
-                futures.for_each(|_| async {}).await;
-            };
-
-            // (3) Start the container.
-            let output = container.run().await.unwrap();
-
-            // (4) Cleanup the container (if desired).
-            if cleanup {
-                container
-                    .remove()
-                    .await
-                    // SAFETY: this should always unwrap for now, but we should
-                    // revisit this in the future to more elegantly handle the
-                    // situation.
-                    //
-                    // TODO(clay): more elegantly handle this situation.
-                    .unwrap();
-            }
-
-            outputs.push(output);
-        }
-
-        let mut outputs = outputs.into_iter();
-
-        // SAFETY: each task _must_ have at least one execution, so at least one
-        // execution result _must_ exist at this stage. Thus, this will always unwrap.
-        let mut executions = NonEmpty::new(outputs.next().unwrap());
-        executions.extend(outputs);
-
-        TaskResult { executions }
-    }
-    .boxed()
+    .collect::<Result<Vec<_>>>()
 }

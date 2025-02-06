@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
+use eyre::Result;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -24,7 +25,6 @@ use tracing::debug;
 use tracing::error;
 
 use crate::Task;
-use crate::service::runner::backend::TaskResult;
 
 /// A backend driven by the Task Execution Service (TES) schema.
 #[derive(Debug)]
@@ -56,8 +56,91 @@ impl crate::Backend for Backend {
     }
 
     /// Runs a task in a backend.
-    fn run(&self, task: Task) -> BoxFuture<'static, TaskResult> {
-        run(self, task)
+    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+        let client = self.client.clone();
+        let task = to_tes_task(task);
+
+        Ok(async move {
+            let task_id = client.create_task(task).await?.id;
+
+            loop {
+                debug!("looping on {task_id}");
+                match client.get_task(&task_id, View::Full).await {
+                    Ok(task) => {
+                        debug!("Got response for {task_id}: {task:?}");
+                        // SAFETY: `get_task` called with `View::Full` will always
+                        // return a full [`Task`], so this will always unwrap.
+                        let task = task.into_task().unwrap();
+
+                        if let Some(ref state) = task.state {
+                            debug!("State was found for {task_id}");
+                            if !state.is_executing() {
+                                debug!("Task is completed for {task_id}");
+                                // let mut results = task
+                                //     .logs
+                                //     .unwrap()
+                                //     .into_iter()
+                                //     .flat_map(|task| task.logs)
+                                //     .map(|log| {
+                                //         let status =
+                                //             log.exit_code.expect("exit code to be present");
+
+                                //         #[cfg(unix)]
+                                //         let output = Output {
+                                //             status: ExitStatus::from_raw(status as i32),
+                                //             stdout: log
+                                //                 .stdout
+                                //                 .unwrap_or_default()
+                                //                 .as_bytes()
+                                //                 .to_vec(),
+                                //             stderr: log
+                                //                 .stderr
+                                //                 .unwrap_or_default()
+                                //                 .as_bytes()
+                                //                 .to_vec(),
+                                //         };
+
+                                //         #[cfg(windows)]
+                                //         let output = Output {
+                                //             status: ExitStatus::from_raw(status),
+                                //             stdout: log
+                                //                 .stdout
+                                //                 .unwrap_or_default()
+                                //                 .as_bytes()
+                                //                 .to_vec(),
+                                //             stderr: log
+                                //                 .stderr
+                                //                 .unwrap_or_default()
+                                //                 .as_bytes()
+                                //                 .to_vec(),
+                                //         };
+
+                                //         output
+                                //     });
+
+                                // let mut outputs = NonEmpty::new(results.next().unwrap());
+                                // outputs.extend(results);
+                                let outputs = NonEmpty::new(Output {
+                                    status: ExitStatus::from_raw(0),
+                                    stdout: Vec::new(),
+                                    stderr: Vec::new(),
+                                });
+
+                                return Ok(outputs);
+                            } else {
+                                debug!("Task was NOT completed for {task_id}. Looping...");
+                            }
+                        } else {
+                            debug!("State was NOT set for {task_id}. Looping...");
+                        }
+
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                    }
+                    Err(err) => error!("error: {err}"),
+                }
+            }
+        }
+        .boxed())
     }
 }
 
@@ -70,10 +153,15 @@ fn to_tes_task(task: Task) -> tes::v1::types::Task {
 
     let executors = task
         .executions()
-        .map(|execution| tes::v1::types::task::Executor {
-            image: execution.image().to_owned(),
-            command: execution.args().into_iter().cloned().collect::<Vec<_>>(),
-            ..Default::default()
+        .map(|execution| {
+            let mut command = Vec::with_capacity(1 + execution.args().len());
+            command.push(execution.program().to_string());
+            command.extend(execution.args().iter().cloned());
+            tes::v1::types::task::Executor {
+                image: execution.image().to_owned(),
+                command,
+                ..Default::default()
+            }
         })
         .collect::<Vec<_>>();
 
@@ -83,79 +171,4 @@ fn to_tes_task(task: Task) -> tes::v1::types::Task {
         executors,
         ..Default::default()
     }
-}
-
-/// Runs a [`Task`] in the backend.
-fn run(backend: &Backend, task: Task) -> BoxFuture<'static, TaskResult> {
-    let client = backend.client.clone();
-    let task = to_tes_task(task);
-
-    async move {
-        let task_id = client.create_task(task).await.unwrap().id;
-
-        loop {
-            debug!("looping on {task_id}");
-            match client.get_task(&task_id, View::Full).await {
-                Ok(task) => {
-                    debug!("Got response for {task_id}: {task:?}");
-                    // SAFETY: `get_task` called with `View::Full` will always
-                    // return a full [`Task`], so this will always unwrap.
-                    let task = task.into_task().unwrap();
-
-                    if let Some(ref state) = task.state {
-                        debug!("State was found for {task_id}");
-                        if !state.is_executing() {
-                            debug!("Task is completed for {task_id}");
-                            // let mut results = task
-                            //     .logs
-                            //     .unwrap()
-                            //     .into_iter()
-                            //     .flat_map(|task| task.logs)
-                            //     .map(|log| {
-                            //         let status = log.exit_code.expect("exit code to be present");
-
-                            //         #[cfg(unix)]
-                            //         let output = Output {
-                            //             status: ExitStatus::from_raw(status as i32),
-                            //             stdout:
-                            // log.stdout.unwrap_or_default().as_bytes().to_vec(),
-                            //             stderr:
-                            // log.stderr.unwrap_or_default().as_bytes().to_vec(),
-                            //         };
-
-                            //         #[cfg(windows)]
-                            //         let output = Output {
-                            //             status: ExitStatus::from_raw(status),
-                            //             stdout:
-                            // log.stdout.unwrap_or_default().as_bytes().to_vec(),
-                            //             stderr:
-                            // log.stderr.unwrap_or_default().as_bytes().to_vec(),
-                            //         };
-
-                            //         output
-                            //     });
-
-                            // let mut executions = NonEmpty::new(results.next().unwrap());
-                            // executions.extend(results);
-                            let executions = NonEmpty::new(Output {
-                                status: ExitStatus::from_raw(0),
-                                stdout: Vec::new(),
-                                stderr: Vec::new(),
-                            });
-
-                            return TaskResult { executions };
-                        } else {
-                            debug!("Task was NOT completed for {task_id}. Looping...");
-                        }
-                    } else {
-                        debug!("State was NOT set for {task_id}. Looping...");
-                    }
-
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                }
-                Err(err) => error!("error: {err}"),
-            }
-        }
-    }
-    .boxed()
 }

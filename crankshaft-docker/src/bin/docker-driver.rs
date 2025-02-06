@@ -10,6 +10,7 @@ use clap_verbosity_flag::Verbosity;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
 use eyre::Result;
+use eyre::eyre;
 use tracing_log::AsTrace;
 use tracing_subscriber::EnvFilter;
 
@@ -93,37 +94,36 @@ async fn create_container(
     image: impl AsRef<str>,
     tag: impl AsRef<str>,
     name: impl AsRef<str>,
-    args: impl Into<Vec<String>>,
+    program: impl Into<String>,
+    args: impl IntoIterator<Item = impl Into<String>>,
 ) -> Result<Container> {
-    let image = image.as_ref();
-    let tag = tag.as_ref();
-    let name = name.as_ref();
-
     Ok(docker
         .container_builder()
-        .image(format!("{image}:{tag}"))
-        .command(args)
-        .attached(true)
-        .try_create(name)
+        .image(format!(
+            "{image}:{tag}",
+            image = image.as_ref(),
+            tag = tag.as_ref()
+        ))
+        .program(program)
+        .args(args)
+        .attach_stdout()
+        .attach_stderr()
+        .try_build(name)
         .await?)
 }
 
-async fn run(args: &Args) -> Result<()> {
+async fn run(args: Args) -> Result<()> {
     let docker = Docker::with_defaults().unwrap();
 
-    match &args.command {
+    match args.command {
         Command::CreateContainer { image, name, tag } => {
             create_container(
                 docker,
                 image,
                 tag,
                 name,
-                [
-                    String::from("/usr/bin/env"),
-                    String::from("bash"),
-                    String::from("-c"),
-                    String::from("echo 'hello, world!'"),
-                ],
+                "/usr/bin/env",
+                ["bash", "-c", "echo 'hello, world!'"],
             )
             .await?;
         }
@@ -133,9 +133,12 @@ async fn run(args: &Args) -> Result<()> {
             command,
             tag,
         } => {
-            let args = shlex::split(command).expect("command to be present");
+            let mut command =
+                shlex::split(&command).ok_or_else(|| eyre!("invalid command `{command}`"))?;
+            let args = command.split_off(1);
 
-            let container = create_container(docker, image, tag, name, args).await?;
+            let container =
+                create_container(docker, image, tag, name, command.remove(0), args).await?;
             let output = container.run().await?;
 
             println!("exit code: {}", output.status);
@@ -145,9 +148,9 @@ async fn run(args: &Args) -> Result<()> {
         Command::RemoveContainer { name, force } => {
             // NOTE: `attach` is hardcoded to `true` here, but that doesn't
             // matter, because the `attach` field is never used in this call.
-            let container = docker.container_from_name(name, true);
+            let container = docker.container_from_name(name, true, true);
 
-            if *force {
+            if force {
                 container.force_remove().await?;
             } else {
                 container.remove().await?;
@@ -186,5 +189,5 @@ pub fn main() -> Result<()> {
         .enable_all()
         .build()
         .unwrap()
-        .block_on(run(&args))
+        .block_on(run(args))
 }

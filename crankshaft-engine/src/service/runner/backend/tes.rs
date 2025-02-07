@@ -23,6 +23,7 @@ use tes::v1::Client;
 use tes::v1::client::tasks::View;
 use tracing::debug;
 use tracing::error;
+use tracing::trace;
 
 use crate::Task;
 
@@ -35,16 +36,34 @@ pub struct Backend {
 
 impl Backend {
     /// AttemptsCreates a new [`Backend`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crankshaft_config::backend::tes::Config;
+    /// use crankshaft_engine::service::runner::backend::tes::Backend;
+    /// use url::Url;
+    ///
+    /// let url = "http://localhost:8000".parse::<Url>()?;
+    /// let config = Config::builder().url(url).build();
+    ///
+    /// let backend = Backend::initialize(config);
+    ///
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn initialize(config: Config) -> Self {
-        let mut builder = Client::builder().url(config.url().to_owned());
+        let (url, config) = config.into_parts();
 
-        if let Some(token) = config.http().basic_auth_token() {
+        let mut builder = Client::builder().url(url);
+
+        if let Some(token) = config.basic_auth_token() {
             builder = builder.insert_header("Authorization", format!("Basic {}", token));
         }
 
         Self {
-            // SAFETY: this is manually constructed to always build.
-            client: Arc::new(builder.try_build().expect("client did not build")),
+            // SAFETY: the only required field of `builder` is the `url`, which
+            // we provided earlier.
+            client: Arc::new(builder.try_build().expect("client to build")),
         }
     }
 }
@@ -58,117 +77,87 @@ impl crate::Backend for Backend {
     /// Runs a task in a backend.
     fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();
-        let task = to_tes_task(task);
+        let task = tes::v1::types::Task::from(task);
 
         Ok(async move {
             let task_id = client.create_task(task).await?.id;
 
             loop {
-                debug!("looping on {task_id}");
                 match client.get_task(&task_id, View::Full).await {
                     Ok(task) => {
-                        debug!("got response for {task_id}: {task:?}");
+                        debug!("response for {task_id}: {task:?}");
                         // SAFETY: `get_task` called with `View::Full` will always
                         // return a full [`Task`], so this will always unwrap.
                         let task = task.into_task().unwrap();
 
                         if let Some(ref state) = task.state {
-                            debug!("state was found for {task_id}");
+                            debug!("state for task {task_id}: {state:?}");
                             if !state.is_executing() {
-                                debug!("task is completed for {task_id}");
-                                // let mut results = task
-                                //     .logs
-                                //     .unwrap()
-                                //     .into_iter()
-                                //     .flat_map(|task| task.logs)
-                                //     .map(|log| {
-                                //         let status =
-                                //             log.exit_code.expect("exit code to be present");
+                                debug!("  -> task is completed");
+                                let mut results = task
+                                    .logs
+                                    .unwrap()
+                                    .into_iter()
+                                    .flat_map(|task| task.logs)
+                                    .map(|log| {
+                                        let status =
+                                            log.exit_code.expect("exit code to be present");
 
-                                //         #[cfg(unix)]
-                                //         let output = Output {
-                                //             status: ExitStatus::from_raw(status as i32),
-                                //             stdout: log
-                                //                 .stdout
-                                //                 .unwrap_or_default()
-                                //                 .as_bytes()
-                                //                 .to_vec(),
-                                //             stderr: log
-                                //                 .stderr
-                                //                 .unwrap_or_default()
-                                //                 .as_bytes()
-                                //                 .to_vec(),
-                                //         };
+                                        #[cfg(unix)]
+                                        let output = Output {
+                                            status: ExitStatus::from_raw(status as i32),
+                                            stdout: log
+                                                .stdout
+                                                .unwrap_or_default()
+                                                .as_bytes()
+                                                .to_vec(),
+                                            stderr: log
+                                                .stderr
+                                                .unwrap_or_default()
+                                                .as_bytes()
+                                                .to_vec(),
+                                        };
 
-                                //         #[cfg(windows)]
-                                //         let output = Output {
-                                //             status: ExitStatus::from_raw(status),
-                                //             stdout: log
-                                //                 .stdout
-                                //                 .unwrap_or_default()
-                                //                 .as_bytes()
-                                //                 .to_vec(),
-                                //             stderr: log
-                                //                 .stderr
-                                //                 .unwrap_or_default()
-                                //                 .as_bytes()
-                                //                 .to_vec(),
-                                //         };
+                                        #[cfg(windows)]
+                                        let output = Output {
+                                            status: ExitStatus::from_raw(status),
+                                            stdout: log
+                                                .stdout
+                                                .unwrap_or_default()
+                                                .as_bytes()
+                                                .to_vec(),
+                                            stderr: log
+                                                .stderr
+                                                .unwrap_or_default()
+                                                .as_bytes()
+                                                .to_vec(),
+                                        };
 
-                                //         output
-                                //     });
+                                        output
+                                    });
 
-                                // let mut outputs = NonEmpty::new(results.next().unwrap());
-                                // outputs.extend(results);
-                                let outputs = NonEmpty::new(Output {
-                                    status: ExitStatus::from_raw(0),
-                                    stdout: Vec::new(),
-                                    stderr: Vec::new(),
-                                });
+                                // SAFETY: at least one set of logs is always
+                                // expected to be returned from the server.
+                                // TODO(clay): we should probably change this to a
+                                // recoverable error.
+                                let mut outputs = NonEmpty::new(results.next().unwrap());
+                                outputs.extend(results);
 
                                 return Ok(outputs);
                             } else {
-                                debug!("task was NOT completed for {task_id}; looping...");
+                                trace!("task was NOT completed for {task_id}; looping...");
                             }
                         } else {
-                            debug!("state was NOT set for {task_id}; looping...");
+                            trace!("state was NOT set for {task_id}; looping...");
                         }
 
+                        // TODO(clay): make this configurable.
                         tokio::time::sleep(Duration::from_millis(200)).await;
                     }
-                    Err(err) => error!("error: {err}"),
+                    Err(err) => error!("{err}"),
                 }
             }
         }
         .boxed())
-    }
-}
-
-/// Translates a [`Task`] to a [TES Task](tes::v1::types::Task) for submission.
-fn to_tes_task(task: Task) -> tes::v1::types::Task {
-    // NOTE: a name is not required by the TES specification, so it is kept as
-    // empty if no name is provided.
-    let name = task.name().map(|v| v.to_owned());
-    let description = task.description().map(|v| v.to_owned());
-
-    let executors = task
-        .executions()
-        .map(|execution| {
-            let mut command = Vec::with_capacity(1 + execution.args().len());
-            command.push(execution.program().to_string());
-            command.extend(execution.args().iter().cloned());
-            tes::v1::types::task::Executor {
-                image: execution.image().to_owned(),
-                command,
-                ..Default::default()
-            }
-        })
-        .collect::<Vec<_>>();
-
-    tes::v1::types::Task {
-        name,
-        description,
-        executors,
-        ..Default::default()
     }
 }

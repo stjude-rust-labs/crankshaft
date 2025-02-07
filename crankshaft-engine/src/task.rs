@@ -4,6 +4,10 @@ use std::sync::Arc;
 
 use bon::Builder;
 use nonempty::NonEmpty;
+use tes::v1::types::task::Executor;
+use tes::v1::types::task::Input as TesInput;
+use tes::v1::types::task::Output as TesOutput;
+use tes::v1::types::task::Resources as TesResources;
 
 pub mod execution;
 pub mod input;
@@ -65,8 +69,8 @@ impl Task {
     }
 
     /// Gets the inputs for the task (if any exist).
-    pub fn inputs(&self) -> impl Iterator<Item = &Arc<Input>> {
-        self.inputs.iter()
+    pub fn inputs(&self) -> impl Iterator<Item = Arc<Input>> + use<'_> {
+        self.inputs.iter().cloned()
     }
 
     /// Gets the outputs for the task (if any exist).
@@ -87,5 +91,79 @@ impl Task {
     /// Gets the shared volumes across executions within this task.
     pub fn shared_volumes(&self) -> impl Iterator<Item = &str> {
         self.volumes.iter().map(|v| v.as_str())
+    }
+}
+
+impl From<Task> for tes::v1::types::Task {
+    fn from(task: Task) -> Self {
+        let Task {
+            name,
+            description,
+            inputs,
+            outputs,
+            resources,
+            executions,
+            volumes,
+        } = task;
+
+        //========//
+        // Inputs //
+        //========//
+
+        let inputs = inputs
+            .into_iter()
+            .map(|input| TesInput::from((*input).clone()))
+            .collect::<Vec<TesInput>>();
+
+        let inputs = if inputs.is_empty() {
+            None
+        } else {
+            Some(inputs)
+        };
+
+        //=========//
+        // Outputs //
+        //=========//
+
+        let outputs = outputs
+            .into_iter()
+            .map(|output| TesOutput::from(output.clone()))
+            .collect::<Vec<TesOutput>>();
+
+        let outputs = if outputs.is_empty() {
+            None
+        } else {
+            Some(outputs)
+        };
+
+        //============//
+        // Executions //
+        //============//
+
+        let executors = executions.map(Executor::from).into_iter().collect();
+
+        //===========//
+        // Resources //
+        //===========//
+
+        let resources = resources.map(TesResources::from);
+
+        //=========//
+        // Volumes //
+        //=========//
+
+        if !volumes.is_empty() {
+            todo!("volumes are not yet supported within Crankshaft");
+        }
+
+        tes::v1::types::Task {
+            name,
+            description,
+            inputs,
+            outputs,
+            executors,
+            resources,
+            ..Default::default()
+        }
     }
 }

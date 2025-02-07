@@ -29,4 +29,17 @@ impl Contents {
     pub fn url_from_str(url: impl AsRef<str>) -> Result<Self> {
         url.as_ref().parse().map(Self::Url).map_err(Error::ParseUrl)
     }
+
+    /// Consumes `self` and one hot encodes the inner contents.
+    ///
+    /// * The first value is the [`Url`] if the type is [`Contents::Url`]. Else,
+    ///   the value is [`None`].
+    /// * The second value is the literal contents as a [`String`] if the type
+    ///   is [`Contents::Literal`]. Else, the value is [`None`].
+    pub fn one_hot(self) -> (Option<Url>, Option<String>) {
+        match self {
+            Contents::Url(url) => (Some(url), None),
+            Contents::Literal(value) => (None, Some(value)),
+        }
+    }
 }

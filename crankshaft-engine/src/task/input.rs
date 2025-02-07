@@ -90,3 +90,31 @@ impl Input {
         }
     }
 }
+
+impl From<Input> for tes::v1::types::task::Input {
+    fn from(input: Input) -> Self {
+        let Input {
+            name,
+            description,
+            contents,
+            path,
+            ty,
+        } = input;
+
+        let (url, content) = contents.one_hot();
+
+        let r#type = match ty {
+            Type::File => tes::v1::types::task::file::Type::File,
+            Type::Directory => tes::v1::types::task::file::Type::Directory,
+        };
+
+        tes::v1::types::task::Input {
+            name,
+            description,
+            url: url.map(|url| url.to_string()),
+            path,
+            r#type,
+            content,
+        }
+    }
+}

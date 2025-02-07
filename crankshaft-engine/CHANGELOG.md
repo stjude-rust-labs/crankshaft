@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
 * Adds `Resource::builder()` and `Output::builder()` to match the
   `Input::builder`.
+* Multiple revisions to the TES backend
+  ([#9](https://github.com/stjude-rust-labs/crankshaft/issues/9)).
 * Better handling for URL contents in inputs.
 * Swaps out most of the bespoke builders for `bon`.
 * Removes `#[builder(into)]` for numerical types

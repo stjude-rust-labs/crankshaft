@@ -1,5 +1,7 @@
 //! A unit of executable work.
 
+use std::collections::HashMap;
+
 use bon::Builder;
 use indexmap::IndexMap;
 
@@ -82,5 +84,26 @@ impl Execution {
     /// The environment variables for the execution.
     pub fn env(&self) -> &IndexMap<String, String> {
         &self.env
+    }
+}
+
+impl From<Execution> for tes::v1::types::task::Executor {
+    fn from(execution: Execution) -> Self {
+        let env = execution
+            .env
+            .into_iter()
+            .collect::<HashMap<String, String>>();
+
+        let env = if env.is_empty() { None } else { Some(env) };
+
+        tes::v1::types::task::Executor {
+            image: execution.image.to_owned(),
+            command: execution.args.to_vec(),
+            workdir: execution.work_dir,
+            stdin: execution.stdin,
+            stdout: execution.stdout,
+            stderr: execution.stderr,
+            env,
+        }
     }
 }

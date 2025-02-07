@@ -17,7 +17,7 @@ pub struct Config {
     url: Url,
 
     /// More nuanced, HTTP-related configuration.
-    #[builder(into)]
+    #[builder(into, default)]
     http: http::Config,
 }
 
@@ -30,5 +30,11 @@ impl Config {
     /// Gets the HTTP-related configuration.
     pub fn http(&self) -> &http::Config {
         &self.http
+    }
+
+    /// Consumes `self` and returns the constituent, owned parts of the
+    /// configuration.
+    pub fn into_parts(self) -> (Url, http::Config) {
+        (self.url, self.http)
     }
 }

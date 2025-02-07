@@ -159,3 +159,19 @@ impl From<&Resources> for HostConfig {
         host_config
     }
 }
+
+impl From<Resources> for tes::v1::types::task::Resources {
+    fn from(resources: Resources) -> Self {
+        if !resources.zones.is_empty() {
+            todo!("zones within resources are not yet implemented in Crankshaft");
+        }
+
+        tes::v1::types::task::Resources {
+            cpu_cores: resources.cpu().map(|inner| inner as i64),
+            preemptible: resources.preemptible(),
+            ram_gb: resources.ram(),
+            disk_gb: resources.disk(),
+            zones: None,
+        }
+    }
+}

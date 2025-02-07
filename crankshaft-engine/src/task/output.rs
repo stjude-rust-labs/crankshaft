@@ -64,3 +64,28 @@ impl Output {
         &self.ty
     }
 }
+
+impl From<Output> for tes::v1::types::task::Output {
+    fn from(output: Output) -> Self {
+        let Output {
+            name,
+            description,
+            url,
+            path,
+            ty,
+        } = output;
+
+        let r#type = match ty {
+            Type::File => tes::v1::types::task::file::Type::File,
+            Type::Directory => tes::v1::types::task::file::Type::Directory,
+        };
+
+        tes::v1::types::task::Output {
+            name,
+            description,
+            url: url.to_string(),
+            path,
+            r#type,
+        }
+    }
+}

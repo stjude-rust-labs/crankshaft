@@ -56,7 +56,8 @@ impl Config {
         self.defaults.as_ref()
     }
 
-    /// Consumes `self` returns the constituent parts of the [`Config`].
+    /// Consumes `self` returns the constituent, owned parts of the
+    /// configuration.
     pub fn into_parts(self) -> (String, Kind, usize, Option<Defaults>) {
         (self.name, self.kind, self.max_tasks, self.defaults)
     }

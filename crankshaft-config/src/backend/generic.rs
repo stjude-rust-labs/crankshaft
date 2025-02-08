@@ -78,7 +78,6 @@ pub struct Config {
     monitor: String,
 
     /// The frequency in seconds that the job status will be queried.
-    #[builder(into)]
     monitor_frequency: Option<u64>,
 
     /// The script used to kill a job.

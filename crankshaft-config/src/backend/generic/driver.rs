@@ -30,7 +30,6 @@ pub struct Config {
     shell: Option<Shell>,
 
     /// The maximum number of attempts to try a command execution.
-    #[builder(into)]
     max_attempts: Option<u32>,
 }
 

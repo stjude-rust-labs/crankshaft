@@ -98,7 +98,7 @@ impl crate::Backend for Backend {
                 // (2) Upload inputs to the container.
                 //
                 // TODO(clay): these could be cached.
-                for task in task.inputs().cloned().map(|i| {
+                for task in task.inputs().map(|i| {
                     let container = container.clone();
                     tokio::spawn(async move {
                         let contents = i.fetch().await;

@@ -26,3 +26,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Input::builder`.
 * Better handling for URL contents in inputs.
 * Swaps out most of the bespoke builders for `bon`.
+* Removes `#[builder(into)]` for numerical types
+  ([#10](https://github.com/stjude-rust-labs/crankshaft/pull/10)).

@@ -14,7 +14,6 @@ pub struct Config {
     username: Option<String>,
 
     /// A port.
-    #[builder(into)]
     port: usize,
 }
 

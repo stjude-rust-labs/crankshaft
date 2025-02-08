@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Use `thiserror` for custom error types ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
-* Separate `program` from `args` in container builder ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
-* Replaced `attached` with separate stdout and stderr attach flags ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Use `thiserror` for custom error types
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Separate `program` from `args` in container builder
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Replaced `attached` with separate stdout and stderr attach flags
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).

@@ -12,7 +12,6 @@ use crankshaft_config::backend::Defaults;
 #[builder(builder_type = Builder)]
 pub struct Resources {
     /// The number of CPU cores requested.
-    #[builder(into)]
     cpu: Option<usize>,
 
     /// Whether or not the task may use preemptible resources.
@@ -20,11 +19,9 @@ pub struct Resources {
     preemptible: Option<bool>,
 
     /// The requested random access memory size in gigabytes.
-    #[builder(into)]
     ram: Option<f64>,
 
     /// The requested disk size in gigabytes.
-    #[builder(into)]
     disk: Option<f64>,
 
     /// The associated compute zones.

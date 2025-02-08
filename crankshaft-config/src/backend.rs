@@ -28,7 +28,6 @@ pub struct Config {
     kind: Kind,
 
     /// The maximum number of concurrent tasks that can run.
-    #[builder(into)]
     max_tasks: usize,
 
     /// The execution defaults.

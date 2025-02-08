@@ -13,4 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Use `thiserror` for custom error types ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Use `thiserror` for custom error types
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Removes `#[builder(into)]` for numerical types
+  ([#10](https://github.com/stjude-rust-labs/crankshaft/pull/10)).

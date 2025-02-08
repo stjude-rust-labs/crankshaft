@@ -15,7 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-* Use `thiserror` for custom error types ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
-* Remove progress bar from `Engine` and made `Runner` implement `Sync` ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Use `thiserror` for custom error types
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Remove progress bar from `Engine` and made `Runner` implement `Sync`
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
 * Fixed a hang in the name generator when the bloom filter becomes saturated;
-  replace the bloom filter implementation with a growable one ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+  replace the bloom filter implementation with a growable one
+  ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Adds `Resource::builder()` and `Output::builder()` to match the
+  `Input::builder`.
+* Better handling for URL contents in inputs.
+* Swaps out most of the bespoke builders for `bon`.

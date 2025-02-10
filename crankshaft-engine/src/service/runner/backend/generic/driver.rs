@@ -302,7 +302,7 @@ fn channel_session_with_backoff(
                     return Err(Error::SSH2(e));
                 }
 
-                let jitter = rand::thread_rng().gen_range(0..=WAIT_JITTER);
+                let jitter = rand::rng().random_range(0..=WAIT_JITTER);
                 wait_time += WAIT_FLOOR + jitter;
 
                 trace!("waiting for {} ms.", wait_time);

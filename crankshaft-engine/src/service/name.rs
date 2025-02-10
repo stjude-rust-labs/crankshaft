@@ -23,7 +23,7 @@ impl Generator for UniqueAlphanumeric {
     fn generate(&mut self, rng: &mut impl Rng) -> String {
         loop {
             let random: String = rng
-                .sample_iter(&rand::distributions::Alphanumeric)
+                .sample_iter(&rand::distr::Alphanumeric)
                 .take(self.length)
                 .map(char::from)
                 .collect();

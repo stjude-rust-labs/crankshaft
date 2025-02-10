@@ -9,6 +9,7 @@ use std::process::ExitStatus;
 use std::process::Output;
 
 use bollard::Docker;
+use bollard::body_full;
 use bollard::container::AttachContainerOptions;
 use bollard::container::LogOutput;
 use bollard::container::RemoveContainerOptions;
@@ -17,9 +18,7 @@ use bollard::container::UploadToContainerOptions;
 use bollard::container::WaitContainerOptions;
 use futures::TryStreamExt as _;
 use tokio_stream::StreamExt as _;
-use tracing::Level;
 use tracing::debug;
-use tracing::enabled;
 use tracing::trace;
 
 use crate::Error;
@@ -89,15 +88,15 @@ impl Container {
                     ..Default::default()
                 }),
                 // SAFETY: this is manually crafted to always unwrap.
-                tar.into_inner().unwrap().into(),
+                body_full(tar.into_inner().unwrap().into()),
             )
             .await
             .map_err(Error::Docker)
     }
 
     /// Runs a container and waits for the execution to end.
-    pub async fn run(&self) -> Result<Output> {
-        // (1) Attach to the logs stream.
+    pub async fn run(&self, started: impl FnOnce()) -> Result<Output> {
+        // Attach to the logs stream.
         let stream = self
             .client
             .attach_container(
@@ -113,13 +112,16 @@ impl Container {
             .map_err(Error::Docker)?
             .output;
 
-        // (2) Start the container.
+        // Start the container.
         self.client
             .start_container(&self.name, None::<StartContainerOptions<String>>)
             .await
             .map_err(Error::Docker)?;
 
-        // (3) Collect standard out/standard err.
+        // Notify that the container has started
+        started();
+
+        // Collect standard out/standard err.
         let (stdout, stderr) = stream
             .try_fold(
                 (
@@ -145,42 +147,53 @@ impl Container {
             .await
             .map_err(Error::Docker)?;
 
-        // (4) Wait for the container to be completed.
+        // Wait for the container to be completed.
         let mut wait_stream = self
             .client
             .wait_container(&self.name, None::<WaitContainerOptions<String>>);
 
-        while let Some(result) = wait_stream.next().await {
+        let mut exit_code = None;
+        if let Some(result) = wait_stream.next().await {
             let response = result.map_err(Error::Docker)?;
-
-            if enabled!(Level::TRACE) {
-                trace!("{response:?}");
+            if let Some(error) = response.error {
+                return Err(Error::Message(format!(
+                    "failed to wait for Docker task to complete: {error}",
+                    error = error
+                        .message
+                        .expect("Docker reported an error without a message")
+                )));
             }
+
+            exit_code = Some(response.status_code);
         }
 
-        // (5) Get the exit code.
-        let inspect = self
-            .client
-            .inspect_container(&self.name, None)
-            .await
-            .map_err(Error::Docker)?;
+        if exit_code.is_none() {
+            // Get the exit code if the wait was immediate
+            let container = self
+                .client
+                .inspect_container(&self.name, None)
+                .await
+                .map_err(Error::Docker)?;
 
-        let status = inspect
-            .state
-            .expect("state should be present at this point")
-            .exit_code
-            .expect("exit code should be present at this point") as i32;
+            exit_code = Some(
+                container
+                    .state
+                    .expect("Docker reported a container without a state")
+                    .exit_code
+                    .expect("Docker reported a finished contained without an exit code"),
+            );
+        }
 
         #[cfg(unix)]
         let output = Output {
-            status: ExitStatus::from_raw(status),
+            status: ExitStatus::from_raw(exit_code.unwrap() as i32),
             stdout,
             stderr,
         };
 
         #[cfg(windows)]
         let output = Output {
-            status: ExitStatus::from_raw(status as u32),
+            status: ExitStatus::from_raw(exit_code.unwrap() as u32),
             stdout,
             stderr,
         };

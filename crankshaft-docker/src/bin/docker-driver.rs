@@ -139,7 +139,7 @@ async fn run(args: Args) -> Result<()> {
 
             let container =
                 create_container(docker, image, tag, name, command.remove(0), args).await?;
-            let output = container.run().await?;
+            let output = container.run(|| {}).await?;
 
             println!("exit code: {}", output.status);
             println!("stdout: {}", String::from_utf8_lossy(&output.stdout));

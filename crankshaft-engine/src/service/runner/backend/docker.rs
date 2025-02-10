@@ -5,19 +5,79 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bollard::secret::HostConfig;
+use bollard::secret::LocalNodeState;
 use bollard::secret::Mount;
 use bollard::secret::MountTypeEnum;
+use bollard::secret::NodeSpecAvailabilityEnum;
+use bollard::secret::NodeState;
 use crankshaft_config::backend::docker::Config;
+use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
+use crankshaft_docker::service::Service;
 use eyre::Context;
 use eyre::ContextCompat;
+use eyre::bail;
+use eyre::eyre;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
+use tokio::select;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
+use tracing::info;
 
 use crate::Result;
 use crate::Task;
+
+/// Represents resource information abouta Docker swarm.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SwarmResources {
+    /// The number of nodes in the swarm.
+    pub nodes: usize,
+    /// The total CPUs available to the swarm.
+    pub cpu: u64,
+    /// The total memory of the swarm, in bytes.
+    pub memory: u64,
+    /// The maximum CPUs for any of the nodes in the swarm.
+    pub max_cpu: u64,
+    /// The maximum memory for any of the nodes in the swarm.
+    pub max_memory: u64,
+}
+
+/// Represents resource information about a local Docker daemon.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LocalResources {
+    /// The total CPUs available to the local Docker daemon.
+    pub cpu: u64,
+    /// The total memory available to the local Docker daemon, in bytes.
+    pub memory: u64,
+}
+
+/// Represents information about Docker's available resources.
+#[derive(Debug, Clone, Copy)]
+pub enum Resources {
+    /// The resources are for a local Docker daemon.
+    Local(LocalResources),
+    /// The resources are for a Docker swarm.
+    Swarm(SwarmResources),
+}
+
+impl Resources {
+    /// Determines if the docker backend will use a service instead of a
+    /// container based on the resources available.
+    ///
+    /// A service should only be used when Docker is in a swarm with more than
+    /// one node. This allows for the Swarm manager to schedule the container.
+    ///
+    /// Otherwise, we'll use a single local container.
+    pub fn use_service(&self) -> bool {
+        match self {
+            Self::Local(_) => false,
+            Self::Swarm(swarm) => swarm.nodes >= 2,
+        }
+    }
+}
 
 /// A local execution backend.
 #[derive(Debug)]
@@ -26,6 +86,8 @@ pub struct Backend {
     client: Docker,
     /// Configuration for the backend.
     config: Config,
+    /// The available resources reported by Docker.
+    resources: Resources,
 }
 
 impl Backend {
@@ -35,11 +97,156 @@ impl Backend {
     /// Note that, currently, we connect [using
     /// defaults](Docker::connect_with_defaults) when attempting to connect to
     /// the Docker daemon.
-    pub fn initialize_default_with(config: Config) -> Result<Self> {
-        let client = Docker::with_defaults()
-            .context("error connecting to the Docker daemon—is it running?")?;
+    pub async fn initialize_default_with(config: Config) -> Result<Self> {
+        let client =
+            Docker::with_defaults().context("failed to connect to the local Docker daemon")?;
 
-        Ok(Self { client, config })
+        let info = client
+            .info()
+            .await
+            .context("failed to retrieve local Docker daemon information")?;
+
+        // Check to see if the daemon is part of an active swarm or not
+        // If the daemon is part of a swarm, but the node is not active or a manager, we
+        // can't spawn tasks
+        let swarm = if let Some(swarm) = &info.swarm {
+            match (&swarm.node_id, swarm.local_node_state) {
+                (Some(id), Some(LocalNodeState::ACTIVE)) if !id.is_empty() => {
+                    // Part of an active swarm, check to see if the node is a manager
+                    if !swarm.control_available.unwrap_or(false) {
+                        bail!(
+                            "the local Docker daemon is part of a swarm but cannot be used to \
+                             create tasks (the node is not a manager)"
+                        );
+                    }
+
+                    // Only look at active and ready nodes in the swarm that are reporting their
+                    // resources
+                    let nodes = client
+                        .nodes()
+                        .await
+                        .context("failed to retrieve Docker swarm node list")?;
+                    let mut swarm = SwarmResources::default();
+                    for node in nodes.iter().filter(|n| {
+                        n.description
+                            .as_ref()
+                            .map(|d| d.resources.is_some())
+                            .unwrap_or(false)
+                            && n.spec
+                                .as_ref()
+                                .map(|s| s.availability == Some(NodeSpecAvailabilityEnum::ACTIVE))
+                                .unwrap_or(false)
+                            && n.status
+                                .as_ref()
+                                .map(|s| s.state == Some(NodeState::READY))
+                                .unwrap_or(false)
+                    }) {
+                        swarm.nodes += 1;
+
+                        let resources = node
+                            .description
+                            .as_ref()
+                            .unwrap()
+                            .resources
+                            .as_ref()
+                            .unwrap();
+
+                        let node_cpu: u64 = resources
+                            .nano_cpus
+                            .map(|n| n / 1_000_000_000)
+                            .unwrap_or(0)
+                            .try_into()
+                            .context("node CPU count is negative")?;
+                        swarm.cpu += node_cpu;
+                        swarm.max_cpu = swarm.max_cpu.max(node_cpu);
+
+                        let node_memory: u64 = resources
+                            .memory_bytes
+                            .unwrap_or(0)
+                            .try_into()
+                            .context("node memory is negative")?;
+                        swarm.memory += node_memory;
+                        swarm.max_memory = swarm.max_memory.max(node_memory);
+
+                        debug!(
+                            id = node
+                                .id
+                                .as_ref()
+                                .context("Docker daemon reported a node without an identifier")?,
+                            total_cpu = node_cpu,
+                            total_memory = node_memory,
+                            "found Docker swarm node"
+                        );
+                    }
+
+                    if swarm.nodes == 0 {
+                        bail!(
+                            "the local Docker daemon is part of a swarm but there are no active \
+                             and ready nodes"
+                        );
+                    }
+
+                    Some(swarm)
+                }
+                (Some(id), _) if !id.is_empty() => {
+                    bail!(
+                        "the local Docker daemon is part of a swarm but the node state is not \
+                         active"
+                    );
+                }
+                _ => {
+                    // Not part of a swarm
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let resources = match swarm {
+            Some(swarm) => {
+                info!(
+                    nodes = swarm.nodes,
+                    cpu = swarm.cpu,
+                    memory = swarm.memory,
+                    max_cpu = swarm.max_cpu,
+                    max_memory = swarm.max_memory,
+                    "Docker backend is interacting with a swarm"
+                );
+
+                Resources::Swarm(swarm)
+            }
+            None => {
+                let cpu = info
+                    .ncpu
+                    .map(|n| {
+                        n.try_into()
+                            .context("Docker daemon reported a negative CPU count")
+                    })
+                    .transpose()?
+                    .unwrap_or(0);
+                let memory = info
+                    .mem_total
+                    .map(|n| {
+                        n.try_into()
+                            .context("Docker daemon reported a negative total memory")
+                    })
+                    .transpose()?
+                    .unwrap_or(0);
+                info!(
+                    cpu,
+                    memory, "Docker backend is interacting with a local Docker daemon"
+                );
+
+                Resources::Local(LocalResources { cpu, memory })
+            }
+        };
+
+        Ok(Self {
+            client,
+            config,
+            resources,
+        })
     }
 
     /// Attempts to initialize a new Docker [`Backend`] with the default
@@ -48,8 +255,50 @@ impl Backend {
     /// Note that, currently, we connect [using
     /// defaults](Docker::connect_with_defaults) when attempting to connect to
     /// the Docker daemon.
-    pub fn initialize_default() -> Result<Self> {
-        Self::initialize_default_with(Config::default())
+    pub async fn initialize_default() -> Result<Self> {
+        Self::initialize_default_with(Config::default()).await
+    }
+
+    /// Gets information about the resources available to the Docker backend.
+    pub fn resources(&self) -> &Resources {
+        &self.resources
+    }
+
+    /// Runs a task using a container.
+    async fn run_with_container(
+        task: &Task,
+        execution_index: usize,
+        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        container: Arc<Container>,
+    ) -> Result<Output> {
+        // TODO(clay): these could be cached.
+        for task in task.inputs().map(|i| {
+            let container = container.clone();
+            tokio::spawn(async move {
+                let contents = i.fetch().await;
+                container.upload_file(i.path(), contents).await
+            })
+        }) {
+            task.await??;
+        }
+
+        container
+            .run(|| started(execution_index))
+            .await
+            .wrap_err("failed to run Docker container")
+    }
+
+    /// Runs a task using a Docker service.
+    async fn run_with_service(
+        execution_index: usize,
+        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        service: Arc<Service>,
+    ) -> Result<Output> {
+        // TODO: handle inputs
+        service
+            .run(|| started(execution_index))
+            .await
+            .wrap_err("failed to run Docker service")
     }
 }
 
@@ -59,67 +308,123 @@ impl crate::Backend for Backend {
         "docker"
     }
 
-    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+    fn run(
+        &self,
+        task: Task,
+        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        token: CancellationToken,
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();
         let cleanup = self.config.cleanup();
+        let resources = self.resources;
         let mounts = get_shared_mounts(task.shared_volumes())?;
 
         Ok(async move {
+            // Check to see if we should use the service API for running the task
             let mut outputs = Vec::new();
 
-            for execution in task.executions() {
-                // (1) Create the container.
-                let mut builder = client
-                    .container_builder()
-                    .image(execution.image())
-                    .program(execution.program())
-                    .args(execution.args())
-                    .attach_stdout()
-                    .attach_stderr()
-                    .host_config(HostConfig {
-                        mounts: Some(mounts.clone()),
-                        ..task.resources().map(HostConfig::from).unwrap_or_default()
-                    });
+            if resources.use_service() {
+                let name = task
+                    .name()
+                    .context("task requires a name to run on the Docker backend")?
+                    .to_owned();
 
-                if let Some(work_dir) = execution.work_dir() {
-                    builder = builder.work_dir(work_dir.to_owned());
+                for (execution_index, execution) in task.executions().enumerate() {
+                    if token.is_cancelled() {
+                        bail!("task has been cancelled");
+                    }
+
+                    let mut builder = client
+                        .service_builder()
+                        .image(execution.image())
+                        .program(execution.program())
+                        .args(execution.args())
+                        .attach_stdout()
+                        .attach_stderr();
+
+                    if let Some(work_dir) = execution.work_dir() {
+                        builder = builder.work_dir(work_dir);
+                    }
+
+                    let service = Arc::new(builder.try_build(&name).await?);
+
+                    let result = select! {
+                        _ = token.cancelled() => {
+                            Err(eyre!("task has been cancelled"))
+                        }
+                        res = Self::run_with_service(execution_index, started.clone(), service.clone()) => {
+                            res
+                        }
+                    };
+
+                    if cleanup {
+                        service
+                            .delete()
+                            .await
+                            .wrap_err("failed to delete service")?
+                    }
+
+                    outputs.push(result?);
                 }
+            } else {
+                let name = task
+                    .name()
+                    .context("task requires a name to run on the Docker backend")?;
 
-                let container = Arc::new(
-                    builder
-                        .try_build(
-                            &task
-                                .name()
-                                .context("task requires a name to run on the docker backend")?,
-                        )
-                        .await?,
-                );
+                let config = HostConfig {
+                    mounts: Some(mounts.clone()),
+                    ..task.resources().map(HostConfig::from).unwrap_or_default()
+                };
 
-                // (2) Upload inputs to the container.
-                //
-                // TODO(clay): these could be cached.
-                for task in task.inputs().map(|i| {
-                    let container = container.clone();
-                    tokio::spawn(async move {
-                        let contents = i.fetch().await;
-                        container.upload_file(i.path(), contents).await
-                    })
-                }) {
-                    task.await??;
+                for (execution_index, execution) in task.executions().enumerate() {
+                    if token.is_cancelled() {
+                        bail!("task has been cancelled");
+                    }
+
+                    let mut builder = client
+                        .container_builder()
+                        .image(execution.image())
+                        .program(execution.program())
+                        .args(execution.args())
+                        .attach_stdout()
+                        .attach_stderr()
+                        .host_config(config.clone());
+
+                    if let Some(work_dir) = execution.work_dir() {
+                        builder = builder.work_dir(work_dir);
+                    }
+
+                    let container = Arc::new(
+                        builder
+                            .try_build(&name)
+                            .await?,
+                    );
+
+                    let result = select! {
+                        _ = token.cancelled() => {
+                            Err(eyre!("task has been cancelled"))
+                        }
+                        res = Self::run_with_container(&task, execution_index, started.clone(), container.clone()) => {
+                            res
+                        }
+                    };
+
+                    if cleanup {
+                        if token.is_cancelled() {
+                            container
+                                .force_remove()
+                                .await
+                                .wrap_err("failed to force remove container")?;
+                        } else {
+                            container
+                                .remove()
+                                .await
+                                .wrap_err("failed to remove container")?
+                        }
+                    }
+
+                    outputs.push(result?);
                 }
-
-                // (3) Start the container.
-                let output = container.run().await.wrap_err("failed to run container")?;
-
-                // (4) Cleanup the container (if desired).
-                if cleanup {
-                    container
-                        .remove()
-                        .await
-                        .wrap_err("failed to remove container")?
-                }
-
-                outputs.push(output);
             }
 
             // SAFETY: each task _must_ have at least one execution, so at least one

@@ -2,6 +2,7 @@
 
 use crankshaft_config::backend::Config;
 use indexmap::IndexMap;
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
 pub mod service;
@@ -47,9 +48,16 @@ impl Engine {
 
     /// Spawns a [`Task`] to be executed.
     ///
+    /// The `cancellation` token can be used to gracefully cancel the task.
+    ///
     /// A [`Handle`] is returned, which contains a channel that can be awaited
     /// for the result of the job.
-    pub fn spawn(&self, name: impl AsRef<str>, task: Task) -> Result<TaskHandle> {
+    pub fn spawn(
+        &self,
+        name: impl AsRef<str>,
+        task: Task,
+        token: CancellationToken,
+    ) -> Result<TaskHandle> {
         let name = name.as_ref();
         let backend = self
             .runners
@@ -64,7 +72,7 @@ impl Engine {
             name
         );
 
-        backend.spawn(task)
+        backend.spawn(task, token)
     }
 
     /// Starts an instrumentation loop.

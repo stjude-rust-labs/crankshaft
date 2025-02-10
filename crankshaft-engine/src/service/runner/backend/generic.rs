@@ -10,10 +10,14 @@ use std::time::Duration;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
 use eyre::Context as _;
+use eyre::bail;
+use eyre::eyre;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use regex::Regex;
+use tokio::select;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use crate::Result;
@@ -94,7 +98,12 @@ impl crate::Backend for Backend {
     }
 
     /// Runs a task in a backend.
-    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+    fn run(
+        &self,
+        task: Task,
+        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        token: CancellationToken,
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let driver = self.driver.clone();
         let config = self.config.clone();
 
@@ -111,7 +120,11 @@ impl crate::Backend for Backend {
                     .unwrap()
             });
 
-            for execution in task.executions() {
+            for (execution_index, execution) in task.executions().enumerate() {
+                if token.is_cancelled() {
+                    bail!("task has been cancelled");
+                }
+
                 // TODO(clay): this will warn every time for now. We need to
                 // change the model of how tasks are done internally to remove
                 // this need.
@@ -143,14 +156,17 @@ impl crate::Backend for Backend {
                     };
                 }
 
-                // (1) Submitting the initial job.
+                // Submitting the initial job.
                 // TODO(clay): we should probably handle this more gracefully.
                 let submit = config.resolve_submit(&substitutions).unwrap();
 
                 // TODO(clay): we should probably handle this more gracefully.
                 let output = driver.run(submit).await.unwrap();
 
-                // (2) Monitoring the output.
+                // Notify that execution has started
+                started(execution_index);
+
+                // Monitoring the output.
                 match job_id_regex {
                     Some(ref regex) => {
                         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -168,7 +184,19 @@ impl crate::Backend for Backend {
 
                         loop {
                             let monitor = config.resolve_monitor(&substitutions).unwrap();
-                            let output = driver.run(monitor).await.unwrap();
+
+                            let result = select! {
+                                _ = token.cancelled() => {
+                                    Err(eyre!("task has been cancelled"))
+                                }
+                                res = driver.run(monitor) => {
+                                    res
+                                }
+                            };
+
+                            // TODO: does there need to be a cleanup mechanism that gets invoked due
+                            // to cancellation?
+                            let output = result?;
 
                             if !output.status.success() {
                                 outputs.push(output);

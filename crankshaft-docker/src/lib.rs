@@ -5,7 +5,10 @@ use bollard::secret::ImageSummary;
 
 pub mod container;
 pub mod images;
+pub mod service;
 
+use bollard::secret::Node;
+use bollard::secret::SystemInfo;
 use thiserror::Error;
 
 pub use crate::container::Container;
@@ -16,10 +19,13 @@ use crate::images::*;
 pub enum Error {
     /// An error from [`bollard`].
     #[error("docker error: {0}")]
-    Docker(bollard::errors::Error),
+    Docker(#[from] bollard::errors::Error),
     /// A required value was missing for a builder field.
     #[error("missing required builder field `{0}`")]
     MissingBuilderField(&'static str),
+    /// An error from a message.
+    #[error("{0}")]
+    Message(String),
 }
 
 /// A [`Result`](std::result::Result) with an [`Error`].
@@ -114,6 +120,38 @@ impl Docker {
         attach_stderr: bool,
     ) -> Container {
         Container::new(self.0.clone(), id.into(), attach_stdout, attach_stderr)
+    }
+
+    //----------------------------------------------------------------------------------
+    // Nodes
+    //----------------------------------------------------------------------------------
+
+    /// Gets the nodes of the swarm.
+    ///
+    /// This method should only be called for a Docker daemon that has been
+    /// joined to a swarm.
+    pub async fn nodes(&self) -> Result<Vec<Node>> {
+        self.0.list_nodes::<&str>(None).await.map_err(Into::into)
+    }
+
+    //----------------------------------------------------------------------------------
+    // Services
+    //----------------------------------------------------------------------------------
+
+    /// Creates a service builder.
+    ///
+    /// This is the typical way you will create services.
+    pub fn service_builder(&self) -> service::Builder {
+        service::Builder::new(self.0.clone())
+    }
+
+    //----------------------------------------------------------------------------------
+    // System
+    //----------------------------------------------------------------------------------
+
+    /// Gets the system information.
+    pub async fn info(&self) -> Result<SystemInfo> {
+        self.0.info().await.map_err(Into::into)
     }
 }
 

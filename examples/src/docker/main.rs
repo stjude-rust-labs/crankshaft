@@ -15,11 +15,15 @@ use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use eyre::Context;
 use eyre::Result;
+use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use nonempty::NonEmpty;
+use tokio::select;
+use tokio::signal;
+use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt as _;
@@ -38,7 +42,7 @@ pub struct Args {
 }
 
 /// Starting point for task execution.
-async fn run(args: Args) -> Result<()> {
+async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let config = crankshaft::config::backend::Config::builder()
         .name("docker")
         .kind(Kind::Docker(Config::builder().build()))
@@ -68,7 +72,7 @@ async fn run(args: Args) -> Result<()> {
         .build();
 
     let mut tasks = (0..args.n_jobs)
-        .map(|_| Ok(engine.spawn("docker", task.clone())?.wait()))
+        .map(|_| Ok(engine.spawn("docker", task.clone(), token.clone())?.wait()))
         .collect::<Result<FuturesUnordered<_>>>()?;
 
     let progress = ProgressBar::new(tasks.len() as u64);
@@ -115,7 +119,8 @@ async fn run(args: Args) -> Result<()> {
 }
 
 /// The main function.
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     tracing_subscriber::registry()
@@ -123,9 +128,15 @@ fn main() -> Result<()> {
         .with(EnvFilter::from_default_env())
         .init();
 
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(run(args))
+    let cancellation = CancellationToken::new();
+    let mut run = run(args, cancellation.clone()).boxed();
+
+    select! {
+        _ = signal::ctrl_c() => {
+            eprintln!("\nexecution was interrupted; waiting for tasks to cancel");
+            cancellation.cancel();
+            run.await
+        },
+        res = &mut run => return res,
+    }
 }

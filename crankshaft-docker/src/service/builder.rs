@@ -1,13 +1,18 @@
 //! Builders for containers.
 
 use bollard::Docker;
-use bollard::container::Config;
-use bollard::container::CreateContainerOptions;
-use bollard::secret::HostConfig;
+use bollard::secret::ServiceSpec;
+use bollard::secret::ServiceSpecMode;
+use bollard::secret::ServiceSpecModeReplicated;
+use bollard::secret::TaskSpec;
+use bollard::secret::TaskSpecContainerSpec;
+use bollard::secret::TaskSpecResources;
+use bollard::secret::TaskSpecRestartPolicy;
+use bollard::secret::TaskSpecRestartPolicyConditionEnum;
 use indexmap::IndexMap;
 use tracing::warn;
 
-use crate::Container;
+use super::Service;
 use crate::Error;
 use crate::Result;
 
@@ -38,8 +43,8 @@ pub struct Builder {
     /// The working directory.
     work_dir: Option<String>,
 
-    /// Host configuration.
-    host_config: Option<HostConfig>,
+    /// The task resources for the service.
+    resources: Option<TaskSpecResources>,
 }
 
 impl Builder {
@@ -54,7 +59,7 @@ impl Builder {
             attach_stderr: false,
             env: Default::default(),
             work_dir: Default::default(),
-            host_config: Default::default(),
+            resources: Default::default(),
         }
     }
 
@@ -82,18 +87,6 @@ impl Builder {
         self
     }
 
-    /// Sets stdout to be attached.
-    pub fn attach_stdout(mut self) -> Self {
-        self.attach_stdout = true;
-        self
-    }
-
-    /// Sets stderr to be attached.
-    pub fn attach_stderr(mut self) -> Self {
-        self.attach_stderr = true;
-        self
-    }
-
     /// Sets an environment variable.
     pub fn env(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.env.insert(name.into(), value.into());
@@ -110,22 +103,32 @@ impl Builder {
         self
     }
 
+    /// Sets stdout to be attached.
+    pub fn attach_stdout(mut self) -> Self {
+        self.attach_stdout = true;
+        self
+    }
+
+    /// Sets stderr to be attached.
+    pub fn attach_stderr(mut self) -> Self {
+        self.attach_stderr = true;
+        self
+    }
+
     /// Sets the working directory.
     pub fn work_dir(mut self, work_dir: impl Into<String>) -> Self {
         self.work_dir = Some(work_dir.into());
         self
     }
 
-    /// Sets the host configuration.
-    pub fn host_config(mut self, host_config: HostConfig) -> Self {
-        self.host_config = Some(host_config);
+    /// Sets the task resources.
+    pub fn resources(mut self, resources: TaskSpecResources) -> Self {
+        self.resources = Some(resources);
         self
     }
 
-    /// Consumes `self` and attempts to create a Docker container.
-    ///
-    /// Note that the creation of a container does not start the container.
-    pub async fn try_build(self, name: impl AsRef<str>) -> Result<Container> {
+    /// Consumes `self` and attempts to create a Docker service.
+    pub async fn try_build(self, name: impl Into<String>) -> Result<Service> {
         let image = self
             .image
             .ok_or_else(|| Error::MissingBuilderField("image"))?;
@@ -133,42 +136,45 @@ impl Builder {
             .program
             .ok_or_else(|| Error::MissingBuilderField("program"))?;
 
-        let mut cmd = Vec::with_capacity(1 + self.args.len());
-        cmd.push(program);
-        cmd.extend(self.args);
-
         let response = self
             .client
-            .create_container(
-                Some(CreateContainerOptions {
-                    name: name.as_ref(),
-                    ..Default::default()
-                }),
-                Config {
-                    // NOTE: even though the following fields are optional, I
-                    // want _this_ struct to require the explicit designation
-                    // one way or the other and not rely on the default.
-                    cmd: Some(cmd),
-                    image: Some(image),
-                    attach_stdout: Some(self.attach_stdout),
-                    attach_stderr: Some(self.attach_stderr),
-                    // END NOTE
-                    working_dir: self.work_dir,
-                    host_config: self.host_config,
-                    env: Some(self.env.iter().map(|(k, v)| format!("{k}={v}")).collect()),
+            .create_service(
+                ServiceSpec {
+                    name: Some(name.into()),
+                    mode: Some(ServiceSpecMode {
+                        replicated: Some(ServiceSpecModeReplicated { replicas: Some(1) }),
+                        ..Default::default()
+                    }),
+                    task_template: Some(TaskSpec {
+                        container_spec: Some(TaskSpecContainerSpec {
+                            image: Some(image),
+                            command: Some(vec![program]),
+                            args: Some(self.args),
+                            dir: self.work_dir,
+                            env: Some(self.env.iter().map(|(k, v)| format!("{k}={v}")).collect()),
+                            ..Default::default()
+                        }),
+                        resources: self.resources,
+                        restart_policy: Some(TaskSpecRestartPolicy {
+                            condition: Some(TaskSpecRestartPolicyConditionEnum::NONE),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
+                None,
             )
             .await
             .map_err(Error::Docker)?;
 
-        for warning in &response.warnings {
-            warn!("{warning}");
+        for warning in response.warnings.unwrap_or_default() {
+            warn!("Docker daemon: {warning}");
         }
 
-        Ok(Container {
+        Ok(Service {
             client: self.client,
-            name: response.id,
+            id: response.id.expect("service must have an identifier"),
             attach_stdout: self.attach_stdout,
             attach_stderr: self.attach_stderr,
         })

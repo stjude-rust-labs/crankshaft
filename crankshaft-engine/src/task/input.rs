@@ -1,5 +1,7 @@
 //! Task inputs.
 
+use std::borrow::Cow;
+
 use bon::Builder;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -70,9 +72,9 @@ impl Input {
     }
 
     /// Fetches the file contents via an [`AsyncRead`]er.
-    pub async fn fetch(&self) -> Vec<u8> {
+    pub async fn fetch(&self) -> Cow<'_, [u8]> {
         match &self.contents {
-            Contents::Literal(content) => content.as_bytes().to_vec(),
+            Contents::Literal(bytes) => bytes.as_bytes().into(),
             Contents::Url(url) => match url.scheme() {
                 "file" => {
                     // SAFETY: we just checked to ensure this is a file, so
@@ -81,7 +83,7 @@ impl Input {
                     let mut file = File::open(path).await.unwrap();
                     let mut buffer = Vec::with_capacity(4096);
                     file.read_to_end(&mut buffer).await.unwrap();
-                    buffer
+                    buffer.into()
                 }
                 "http" | "https" => unimplemented!("http(s) URL support not implemented"),
                 "s3" => unimplemented!("s3 URL support not implemented"),

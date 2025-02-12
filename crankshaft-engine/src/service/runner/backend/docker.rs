@@ -277,7 +277,7 @@ impl Backend {
             let container = container.clone();
             tokio::spawn(async move {
                 let contents = i.fetch().await;
-                container.upload_file(i.path(), contents).await
+                container.upload_file(i.path(), &contents).await
             })
         }) {
             task.await??;

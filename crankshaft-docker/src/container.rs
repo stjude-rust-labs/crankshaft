@@ -67,7 +67,7 @@ impl Container {
     }
 
     /// Uploads an input file to the container.
-    pub async fn upload_file(&self, path: &str, contents: Vec<u8>) -> Result<()> {
+    pub async fn upload_file(&self, path: &str, contents: &[u8]) -> Result<()> {
         let mut tar = tar::Builder::new(Vec::with_capacity(DEFAULT_TAR_CAPACITY));
         let path = path.trim_start_matches("/");
 

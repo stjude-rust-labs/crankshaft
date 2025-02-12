@@ -9,6 +9,7 @@ use crankshaft_config::backend::Kind;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
 use tokio::sync::oneshot::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::trace;
 
 pub mod backend;
@@ -62,7 +63,7 @@ impl Runner {
     ) -> Result<Self> {
         let backend = match config {
             Kind::Docker(config) => {
-                let backend = docker::Backend::initialize_default_with(config)?;
+                let backend = docker::Backend::initialize_default_with(config).await?;
                 Arc::new(backend) as Arc<dyn Backend>
             }
             Kind::Generic(config) => {
@@ -85,7 +86,13 @@ impl Runner {
     }
 
     /// Spawns a task to be executed by the backend.
-    pub fn spawn(&self, mut task: Task) -> eyre::Result<TaskHandle> {
+    ///
+    /// The `started` callback is called for each execution of the task that has
+    /// started; the parameter is the index of the execution from the task's
+    /// executions collection.
+    ///
+    /// The `cancellation` token can be used to gracefully cancel the task.
+    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> eyre::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -100,7 +107,7 @@ impl Runner {
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let result = backend.clone().run(task)?.await;
+            let result = backend.clone().run(task, Arc::new(|_| {}), token)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

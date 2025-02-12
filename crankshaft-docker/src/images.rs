@@ -83,7 +83,7 @@ pub(crate) async fn ensure_image(
         .map_err(Error::Docker)?;
 
     if !results.is_empty() {
-        debug!("image exists locally");
+        debug!("image `{name}:{tag}` exists locally");
 
         if enabled!(Level::TRACE) {
             trace!(
@@ -95,7 +95,7 @@ pub(crate) async fn ensure_image(
         return Ok(());
     }
 
-    debug!("image does NOT exist locally; attempting to pull from remote");
+    debug!("image `{name}:{tag}` does not exist locally; attempting to pull from remote");
     let mut stream = docker.inner().create_image(
         Some(CreateImageOptions {
             from_image: name,

@@ -1,6 +1,9 @@
 //! Task inputs.
 
+use std::borrow::Cow;
+
 use bon::Builder;
+use eyre::Context;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -70,9 +73,9 @@ impl Input {
     }
 
     /// Fetches the file contents via an [`AsyncRead`]er.
-    pub async fn fetch(&self) -> Vec<u8> {
+    pub async fn fetch(&self) -> Cow<'_, [u8]> {
         match &self.contents {
-            Contents::Literal(content) => content.as_bytes().to_vec(),
+            Contents::Literal(bytes) => bytes.into(),
             Contents::Url(url) => match url.scheme() {
                 "file" => {
                     // SAFETY: we just checked to ensure this is a file, so
@@ -81,7 +84,7 @@ impl Input {
                     let mut file = File::open(path).await.unwrap();
                     let mut buffer = Vec::with_capacity(4096);
                     file.read_to_end(&mut buffer).await.unwrap();
-                    buffer
+                    buffer.into()
                 }
                 "http" | "https" => unimplemented!("http(s) URL support not implemented"),
                 "s3" => unimplemented!("s3 URL support not implemented"),
@@ -91,8 +94,10 @@ impl Input {
     }
 }
 
-impl From<Input> for tes::v1::types::task::Input {
-    fn from(input: Input) -> Self {
+impl TryFrom<Input> for tes::v1::types::task::Input {
+    type Error = eyre::Error;
+
+    fn try_from(input: Input) -> Result<Self, Self::Error> {
         let Input {
             name,
             description,
@@ -108,13 +113,15 @@ impl From<Input> for tes::v1::types::task::Input {
             Type::Directory => tes::v1::types::task::file::Type::Directory,
         };
 
-        tes::v1::types::task::Input {
+        Ok(tes::v1::types::task::Input {
             name,
             description,
             url: url.map(|url| url.to_string()),
             path,
             r#type,
-            content,
-        }
+            content: content
+                .map(|v| String::from_utf8(v).context("TES requires file content to be UTF-8"))
+                .transpose()?,
+        })
     }
 }

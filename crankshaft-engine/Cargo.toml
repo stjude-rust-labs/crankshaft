@@ -29,6 +29,7 @@ tes.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-metrics.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true

@@ -20,7 +20,7 @@ serde.workspace = true
 shlex = { workspace = true, optional = true }
 tar.workspace = true
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true }
+tokio.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
 tracing-log = { workspace = true, optional = true }
@@ -37,7 +37,6 @@ binaries = [
     "dep:clap-verbosity-flag",
     "dep:eyre",
     "dep:shlex",
-    "dep:tokio",
     "dep:tracing-log",
     "dep:tracing-subscriber",
 ]

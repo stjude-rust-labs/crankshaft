@@ -20,8 +20,8 @@ pub enum Contents {
     /// Contents sourced from a URL.
     Url(Url),
 
-    /// Contents provided as a string literal.
-    Literal(String),
+    /// Contents provided as a literal array of bytes.
+    Literal(Vec<u8>),
 }
 
 impl Contents {
@@ -36,7 +36,7 @@ impl Contents {
     ///   the value is [`None`].
     /// * The second value is the literal contents as a [`String`] if the type
     ///   is [`Contents::Literal`]. Else, the value is [`None`].
-    pub fn one_hot(self) -> (Option<Url>, Option<String>) {
+    pub fn one_hot(self) -> (Option<Url>, Option<Vec<u8>>) {
         match self {
             Contents::Url(url) => (Some(url), None),
             Contents::Literal(value) => (None, Some(value)),

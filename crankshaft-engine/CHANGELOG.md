@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added cancellation support to the engine and ctrl-c handling in the examples (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
+* Added support for Docker Swarm in the docker backend (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Adds the initial version of the crate.
 * Adds basic auth to the TES examples
   ([[#6](https://github.com/stjude-rust-labs/crankshaft/issues/6)]).

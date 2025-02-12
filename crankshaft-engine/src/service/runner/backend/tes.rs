@@ -15,14 +15,18 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
+use eyre::Context;
 use eyre::Result;
+use eyre::bail;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tes::v1::Client;
 use tes::v1::client::tasks::View;
+use tes::v1::types::task::State;
+use tokio::select;
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
-use tracing::error;
 use tracing::trace;
 
 use crate::Task;
@@ -66,6 +70,101 @@ impl Backend {
             client: Arc::new(builder.try_build().expect("client to build")),
         }
     }
+
+    /// Waits for a task to complete.
+    async fn wait_task(
+        client: &Client,
+        task_id: &str,
+        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+    ) -> Result<NonEmpty<Output>> {
+        let mut notified = false;
+
+        loop {
+            let task = client
+                .get_task(task_id, View::Full)
+                .await
+                .context("failed to get task information")?;
+
+            trace!("response for {task_id}: {task:?}");
+
+            // SAFETY: `get_task` called with `View::Full` will always
+            // return a full [`Task`], so this will always unwrap.
+            let task = task.into_task().unwrap();
+
+            if let Some(ref state) = task.state {
+                debug!("state for task {task_id}: {state:?}");
+                match state {
+                    State::Unknown | State::Queued | State::Initializing => {
+                        // Task hasn't started yet
+                        debug!("task is not yet running; waiting before polling again");
+                    }
+                    State::Running | State::Paused => {
+                        debug!("task is running; waiting before polling again");
+
+                        // Task is running (or was previously running but now paused), so notify
+                        if !notified {
+                            notified = true;
+                            for i in 0..task.executors.len() {
+                                started(i);
+                            }
+                        }
+                    }
+                    State::Complete | State::ExecutorError | State::SystemError => {
+                        // Task completed or had an error
+                        if *state == State::Complete {
+                            debug!("task has completed");
+                        } else {
+                            debug!("task has failed");
+                        }
+
+                        if !notified {
+                            for i in 0..task.executors.len() {
+                                started(i);
+                            }
+                        }
+
+                        let mut results = task
+                            .logs
+                            .unwrap()
+                            .into_iter()
+                            .flat_map(|task| task.logs)
+                            .map(|log| {
+                                let status = log.exit_code.expect("exit code to be present");
+
+                                #[cfg(unix)]
+                                let output = Output {
+                                    status: ExitStatus::from_raw(status as i32),
+                                    stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
+                                    stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
+                                };
+
+                                #[cfg(windows)]
+                                let output = Output {
+                                    status: ExitStatus::from_raw(status),
+                                    stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
+                                    stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
+                                };
+
+                                output
+                            });
+
+                        // SAFETY: at least one set of logs is always
+                        // expected to be returned from the server.
+                        // TODO(clay): we should probably change this to a
+                        // recoverable error.
+                        let mut outputs = NonEmpty::new(results.next().unwrap());
+                        outputs.extend(results);
+
+                        return Ok(outputs);
+                    }
+                    State::Canceled => bail!("task has been cancelled"),
+                }
+            }
+
+            // TODO(clay): make this configurable.
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
 }
 
 #[async_trait]
@@ -75,86 +174,26 @@ impl crate::Backend for Backend {
     }
 
     /// Runs a task in a backend.
-    fn run(&self, task: Task) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+    fn run(
+        &self,
+        task: Task,
+        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        token: CancellationToken,
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();
-        let task = tes::v1::types::Task::from(task);
+        let task = tes::v1::types::Task::try_from(task)?;
 
         Ok(async move {
             let task_id = client.create_task(task).await?.id;
 
-            loop {
-                match client.get_task(&task_id, View::Full).await {
-                    Ok(task) => {
-                        debug!("response for {task_id}: {task:?}");
-                        // SAFETY: `get_task` called with `View::Full` will always
-                        // return a full [`Task`], so this will always unwrap.
-                        let task = task.into_task().unwrap();
-
-                        if let Some(ref state) = task.state {
-                            debug!("state for task {task_id}: {state:?}");
-                            if !state.is_executing() {
-                                debug!("  -> task is completed");
-                                let mut results = task
-                                    .logs
-                                    .unwrap()
-                                    .into_iter()
-                                    .flat_map(|task| task.logs)
-                                    .map(|log| {
-                                        let status =
-                                            log.exit_code.expect("exit code to be present");
-
-                                        #[cfg(unix)]
-                                        let output = Output {
-                                            status: ExitStatus::from_raw(status as i32),
-                                            stdout: log
-                                                .stdout
-                                                .unwrap_or_default()
-                                                .as_bytes()
-                                                .to_vec(),
-                                            stderr: log
-                                                .stderr
-                                                .unwrap_or_default()
-                                                .as_bytes()
-                                                .to_vec(),
-                                        };
-
-                                        #[cfg(windows)]
-                                        let output = Output {
-                                            status: ExitStatus::from_raw(status),
-                                            stdout: log
-                                                .stdout
-                                                .unwrap_or_default()
-                                                .as_bytes()
-                                                .to_vec(),
-                                            stderr: log
-                                                .stderr
-                                                .unwrap_or_default()
-                                                .as_bytes()
-                                                .to_vec(),
-                                        };
-
-                                        output
-                                    });
-
-                                // SAFETY: at least one set of logs is always
-                                // expected to be returned from the server.
-                                // TODO(clay): we should probably change this to a
-                                // recoverable error.
-                                let mut outputs = NonEmpty::new(results.next().unwrap());
-                                outputs.extend(results);
-
-                                return Ok(outputs);
-                            } else {
-                                trace!("task was NOT completed for {task_id}; looping...");
-                            }
-                        } else {
-                            trace!("state was NOT set for {task_id}; looping...");
-                        }
-
-                        // TODO(clay): make this configurable.
-                        tokio::time::sleep(Duration::from_millis(200)).await;
-                    }
-                    Err(err) => error!("{err}"),
+            select! {
+                _ = token.cancelled() => {
+                    // Cancel the task
+                    client.cancel_task(&task_id).await?;
+                    bail!("task has been cancelled")
+                }
+                res = Self::wait_task(&client, &task_id, started) => {
+                    res
                 }
             }
         }

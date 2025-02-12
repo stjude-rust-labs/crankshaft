@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added support for submitting tasks via the service API for Docker Swarm (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Adds the initial version of the crate.
 
 ### Changed

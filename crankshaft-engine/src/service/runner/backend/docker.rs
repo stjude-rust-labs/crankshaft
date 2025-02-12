@@ -30,7 +30,7 @@ use tracing::info;
 use crate::Result;
 use crate::Task;
 
-/// Represents resource information abouta Docker swarm.
+/// Represents resource information about a Docker swarm.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SwarmResources {
     /// The number of nodes in the swarm.

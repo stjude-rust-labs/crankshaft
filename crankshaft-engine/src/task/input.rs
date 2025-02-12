@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 
 use bon::Builder;
+use eyre::Context;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -74,7 +75,7 @@ impl Input {
     /// Fetches the file contents via an [`AsyncRead`]er.
     pub async fn fetch(&self) -> Cow<'_, [u8]> {
         match &self.contents {
-            Contents::Literal(bytes) => bytes.as_bytes().into(),
+            Contents::Literal(bytes) => bytes.into(),
             Contents::Url(url) => match url.scheme() {
                 "file" => {
                     // SAFETY: we just checked to ensure this is a file, so
@@ -93,8 +94,10 @@ impl Input {
     }
 }
 
-impl From<Input> for tes::v1::types::task::Input {
-    fn from(input: Input) -> Self {
+impl TryFrom<Input> for tes::v1::types::task::Input {
+    type Error = eyre::Error;
+
+    fn try_from(input: Input) -> Result<Self, Self::Error> {
         let Input {
             name,
             description,
@@ -110,13 +113,15 @@ impl From<Input> for tes::v1::types::task::Input {
             Type::Directory => tes::v1::types::task::file::Type::Directory,
         };
 
-        tes::v1::types::task::Input {
+        Ok(tes::v1::types::task::Input {
             name,
             description,
             url: url.map(|url| url.to_string()),
             path,
             r#type,
-            content,
-        }
+            content: content
+                .map(|v| String::from_utf8(v).context("TES requires file content to be UTF-8"))
+                .transpose()?,
+        })
     }
 }

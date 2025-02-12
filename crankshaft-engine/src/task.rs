@@ -94,8 +94,10 @@ impl Task {
     }
 }
 
-impl From<Task> for tes::v1::types::Task {
-    fn from(task: Task) -> Self {
+impl TryFrom<Task> for tes::v1::types::Task {
+    type Error = eyre::Error;
+
+    fn try_from(task: Task) -> Result<Self, Self::Error> {
         let Task {
             name,
             description,
@@ -112,8 +114,8 @@ impl From<Task> for tes::v1::types::Task {
 
         let inputs = inputs
             .into_iter()
-            .map(|input| TesInput::from((*input).clone()))
-            .collect::<Vec<TesInput>>();
+            .map(|input| TesInput::try_from((*input).clone()))
+            .collect::<eyre::Result<Vec<_>>>()?;
 
         let inputs = if inputs.is_empty() {
             None
@@ -156,7 +158,7 @@ impl From<Task> for tes::v1::types::Task {
             todo!("volumes are not yet supported within Crankshaft");
         }
 
-        tes::v1::types::Task {
+        Ok(tes::v1::types::Task {
             name,
             description,
             inputs,
@@ -164,6 +166,6 @@ impl From<Task> for tes::v1::types::Task {
             executors,
             resources,
             ..Default::default()
-        }
+        })
     }
 }

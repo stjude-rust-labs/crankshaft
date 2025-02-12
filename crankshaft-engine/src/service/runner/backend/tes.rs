@@ -181,7 +181,7 @@ impl crate::Backend for Backend {
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();
-        let task = tes::v1::types::Task::from(task);
+        let task = tes::v1::types::Task::try_from(task)?;
 
         Ok(async move {
             let task_id = client.create_task(task).await?.id;

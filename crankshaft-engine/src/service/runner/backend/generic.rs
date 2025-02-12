@@ -114,11 +114,13 @@ impl crate::Backend for Backend {
 
         Ok(async move {
             let mut outputs = Vec::new();
-            let job_id_regex = config.job_id_regex().map(|pattern| {
-                Regex::new(pattern)
-                    .context("compiling job id regex")
-                    .unwrap()
-            });
+            let job_id_regex = config
+                .job_id_regex()
+                .map(|pattern| {
+                    Regex::new(pattern)
+                        .with_context(|| format!("job regex `{pattern}` is not valid"))
+                })
+                .transpose()?;
 
             for (execution_index, execution) in task.executions().enumerate() {
                 if token.is_cancelled() {
@@ -157,11 +159,13 @@ impl crate::Backend for Backend {
                 }
 
                 // Submitting the initial job.
-                // TODO(clay): we should probably handle this more gracefully.
-                let submit = config.resolve_submit(&substitutions).unwrap();
-
-                // TODO(clay): we should probably handle this more gracefully.
-                let output = driver.run(submit).await.unwrap();
+                let submit = config
+                    .resolve_submit(&substitutions)
+                    .context("failed to resolve submit command")?;
+                let output = driver
+                    .run(submit)
+                    .await
+                    .context("failed to run submit command")?;
 
                 // Notify that execution has started
                 started(execution_index);
@@ -183,7 +187,9 @@ impl crate::Backend for Backend {
                         substitutions.insert("job_id".into(), id.into());
 
                         loop {
-                            let monitor = config.resolve_monitor(&substitutions).unwrap();
+                            let monitor = config
+                                .resolve_monitor(&substitutions)
+                                .context("failed to resolve monitor command")?;
 
                             let result = select! {
                                 _ = token.cancelled() => {
@@ -194,8 +200,17 @@ impl crate::Backend for Backend {
                                 }
                             };
 
-                            // TODO: does there need to be a cleanup mechanism that gets invoked due
-                            // to cancellation?
+                            // Run the kill command when cancelled
+                            if token.is_cancelled() {
+                                let kill = config
+                                    .resolve_kill(&substitutions)
+                                    .context("failed to resolve kill command")?;
+                                driver
+                                    .run(kill)
+                                    .await
+                                    .context("failed to run kill command")?;
+                            }
+
                             let output = result?;
 
                             if !output.status.success() {

@@ -23,6 +23,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use tokio::time::sleep;
 use tracing::debug;
+use tracing::trace;
 
 use crate::Error;
 use crate::Result;
@@ -69,7 +70,7 @@ impl Service {
     /// Runs a service and waits for the task execution to end.
     pub async fn run(&self, started: impl FnOnce()) -> Result<Output> {
         let (container_id, exit_code) = loop {
-            debug!("polling tasks for service `{id}`", id = self.id);
+            trace!("polling tasks for service `{id}`", id = self.id);
 
             // Get the list of tasks for the service (there should be only one)
             let tasks = self
@@ -106,7 +107,7 @@ impl Service {
                 | Some(TaskState::READY)
                 | Some(TaskState::PREPARING)
                 | None => {
-                    debug!("task has not yet started for service `{id}`", id = self.id);
+                    trace!("task has not yet started for service `{id}`", id = self.id);
 
                     // Query again after a delay
                     // TODO: make this a variable delay so as to lessen a thundering herd

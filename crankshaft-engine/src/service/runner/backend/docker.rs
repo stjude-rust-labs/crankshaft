@@ -113,6 +113,7 @@ impl Backend {
             match (&swarm.node_id, swarm.local_node_state) {
                 (Some(id), Some(LocalNodeState::ACTIVE)) if !id.is_empty() => {
                     // Part of an active swarm, check to see if the node is a manager
+                    // Default is false as documented here: https://docs.docker.com/reference/api/engine/version/v1.47/#tag/System/operation/SystemInfo
                     if !swarm.control_available.unwrap_or(false) {
                         bail!(
                             "the local Docker daemon is part of a swarm but cannot be used to \
@@ -154,7 +155,7 @@ impl Backend {
                         let node_cpu: u64 = resources
                             .nano_cpus
                             .map(|n| n / 1_000_000_000)
-                            .unwrap_or(0)
+                            .context("Docker daemon reported an active node with no CPUs")?
                             .try_into()
                             .context("node CPU count is negative")?;
                         swarm.cpu += node_cpu;
@@ -162,7 +163,7 @@ impl Backend {
 
                         let node_memory: u64 = resources
                             .memory_bytes
-                            .unwrap_or(0)
+                            .context("Docker daemon reported an active node with no memory")?
                             .try_into()
                             .context("node memory is negative")?;
                         swarm.memory += node_memory;
@@ -224,7 +225,7 @@ impl Backend {
                             .context("Docker daemon reported a negative CPU count")
                     })
                     .transpose()?
-                    .unwrap_or(0);
+                    .context("Docker daemon did not report a CPU count")?;
                 let memory = info
                     .mem_total
                     .map(|n| {
@@ -232,7 +233,7 @@ impl Backend {
                             .context("Docker daemon reported a negative total memory")
                     })
                     .transpose()?
-                    .unwrap_or(0);
+                    .context("Docker daemon did not report a memory total")?;
                 info!(
                     cpu,
                     memory, "Docker backend is interacting with a local Docker daemon"
@@ -314,6 +315,38 @@ impl crate::Backend for Backend {
         started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+        // Helper for cleanup
+        enum Cleaner {
+            /// The cleanup is for a container.
+            Container(Arc<Container>),
+            /// The cleanup is for a service.
+            Service(Arc<Service>),
+        }
+
+        impl Cleaner {
+            /// Runs cleanup.
+            async fn cleanup(&self, cancelled: bool) -> Result<()> {
+                match self {
+                    Self::Container(container) => {
+                        if cancelled {
+                            container
+                                .force_remove()
+                                .await
+                                .wrap_err("failed to force remove container")
+                        } else {
+                            container
+                                .remove()
+                                .await
+                                .wrap_err("failed to remove container")
+                        }
+                    }
+                    Self::Service(service) => {
+                        service.delete().await.wrap_err("failed to delete service")
+                    }
+                }
+            }
+        }
+
         let client = self.client.clone();
         let cleanup = self.config.cleanup();
         let resources = self.resources;
@@ -323,17 +356,17 @@ impl crate::Backend for Backend {
             // Check to see if we should use the service API for running the task
             let mut outputs = Vec::new();
 
-            if resources.use_service() {
-                let name = task
+            let name = task
                     .name()
                     .context("task requires a name to run on the Docker backend")?
                     .to_owned();
 
-                for (execution_index, execution) in task.executions().enumerate() {
-                    if token.is_cancelled() {
-                        bail!("task has been cancelled");
-                    }
+            for (execution_index, execution) in task.executions().enumerate() {
+                if token.is_cancelled() {
+                    bail!("task has been cancelled");
+                }
 
+                let (result, cleaner) = if resources.use_service() {
                     let mut builder = client
                         .service_builder()
                         .image(execution.image())
@@ -348,39 +381,15 @@ impl crate::Backend for Backend {
 
                     let service = Arc::new(builder.try_build(&name).await?);
 
-                    let result = select! {
+                    select! {
                         _ = token.cancelled() => {
-                            Err(eyre!("task has been cancelled"))
+                            (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
                         }
                         res = Self::run_with_service(execution_index, started.clone(), service.clone()) => {
-                            res
+                            (res, Cleaner::Service(service))
                         }
-                    };
-
-                    if cleanup {
-                        service
-                            .delete()
-                            .await
-                            .wrap_err("failed to delete service")?
                     }
-
-                    outputs.push(result?);
-                }
-            } else {
-                let name = task
-                    .name()
-                    .context("task requires a name to run on the Docker backend")?;
-
-                let config = HostConfig {
-                    mounts: Some(mounts.clone()),
-                    ..task.resources().map(HostConfig::from).unwrap_or_default()
-                };
-
-                for (execution_index, execution) in task.executions().enumerate() {
-                    if token.is_cancelled() {
-                        bail!("task has been cancelled");
-                    }
-
+                } else {
                     let mut builder = client
                         .container_builder()
                         .image(execution.image())
@@ -388,7 +397,10 @@ impl crate::Backend for Backend {
                         .args(execution.args())
                         .attach_stdout()
                         .attach_stderr()
-                        .host_config(config.clone());
+                        .host_config(HostConfig {
+                            mounts: Some(mounts.clone()),
+                            ..task.resources().map(HostConfig::from).unwrap_or_default()
+                        });
 
                     if let Some(work_dir) = execution.work_dir() {
                         builder = builder.work_dir(work_dir);
@@ -400,31 +412,21 @@ impl crate::Backend for Backend {
                             .await?,
                     );
 
-                    let result = select! {
+                    select! {
                         _ = token.cancelled() => {
-                            Err(eyre!("task has been cancelled"))
+                            (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
                         }
                         res = Self::run_with_container(&task, execution_index, started.clone(), container.clone()) => {
-                            res
-                        }
-                    };
-
-                    if cleanup {
-                        if token.is_cancelled() {
-                            container
-                                .force_remove()
-                                .await
-                                .wrap_err("failed to force remove container")?;
-                        } else {
-                            container
-                                .remove()
-                                .await
-                                .wrap_err("failed to remove container")?
+                            (res, Cleaner::Container(container))
                         }
                     }
+                };
 
-                    outputs.push(result?);
+                if cleanup {
+                    cleaner.cleanup(token.is_cancelled()).await?;
                 }
+
+                outputs.push(result?);
             }
 
             // SAFETY: each task _must_ have at least one execution, so at least one

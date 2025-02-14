@@ -1,5 +1,9 @@
 //! Contents of an input.
 
+use std::fs;
+use std::path::PathBuf;
+
+use eyre::Context;
 use thiserror::Error;
 use url::Url;
 
@@ -22,6 +26,10 @@ pub enum Contents {
 
     /// Contents provided as a literal array of bytes.
     Literal(Vec<u8>),
+
+    /// Contents are provided as a path to a file or directory on the host
+    /// system.
+    Path(PathBuf),
 }
 
 impl Contents {
@@ -34,12 +42,22 @@ impl Contents {
     ///
     /// * The first value is the [`Url`] if the type is [`Contents::Url`]. Else,
     ///   the value is [`None`].
-    /// * The second value is the literal contents as a [`String`] if the type
-    ///   is [`Contents::Literal`]. Else, the value is [`None`].
-    pub fn one_hot(self) -> (Option<Url>, Option<Vec<u8>>) {
+    /// * The second value is the literal contents as a [`Vec<u8>`] if the type
+    ///   is [`Contents::Literal`] or [`Contents::Path`]. Else, the value is
+    ///   [`None`].
+    ///
+    /// Returns an error if the contents are to a path and the file contents
+    /// could not be read.
+    pub fn one_hot(self) -> eyre::Result<(Option<Url>, Option<Vec<u8>>)> {
         match self {
-            Contents::Url(url) => (Some(url), None),
-            Contents::Literal(value) => (None, Some(value)),
+            Self::Url(url) => Ok((Some(url), None)),
+            Self::Literal(value) => Ok((None, Some(value))),
+            Self::Path(path) => Ok((
+                None,
+                Some(fs::read(&path).with_context(|| {
+                    format!("failed to read file `{path}`", path = path.display())
+                })?),
+            )),
         }
     }
 }

@@ -103,7 +103,7 @@ impl Builder {
     /// Sets multiple environment variables.
     pub fn envs(
         mut self,
-        variables: impl Iterator<Item = (impl Into<String>, impl Into<String>)>,
+        variables: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
     ) -> Self {
         self.env
             .extend(variables.into_iter().map(|(k, v)| (k.into(), v.into())));

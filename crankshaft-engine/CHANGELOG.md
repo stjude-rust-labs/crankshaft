@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added support for bind mounting inputs to the Docker backend ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).
 * Added cancellation support to the engine and ctrl-c handling in the examples (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Added support for Docker Swarm in the docker backend (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Adds the initial version of the crate.
@@ -32,3 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Swaps out most of the bespoke builders for `bon`.
 * Removes `#[builder(into)]` for numerical types
   ([#10](https://github.com/stjude-rust-labs/crankshaft/pull/10)).
+
+### Fixed
+
+* The Docker backend now ensures task execution images are present locally
+  before creating any containers ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).

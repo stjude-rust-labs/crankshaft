@@ -1,6 +1,7 @@
 //! Builders for containers.
 
 use bollard::Docker;
+use bollard::secret::Mount;
 use bollard::secret::ServiceSpec;
 use bollard::secret::ServiceSpecMode;
 use bollard::secret::ServiceSpecModeReplicated;
@@ -16,7 +17,7 @@ use super::Service;
 use crate::Error;
 use crate::Result;
 
-/// A builder for a [`Container`].
+/// A builder for a [`Service`].
 pub struct Builder {
     /// A reference to the [`Docker`] client that will be used to create this
     /// container.
@@ -43,6 +44,9 @@ pub struct Builder {
     /// The working directory.
     work_dir: Option<String>,
 
+    /// The mounts for the service's task template.
+    mounts: Vec<Mount>,
+
     /// The task resources for the service.
     resources: Option<TaskSpecResources>,
 }
@@ -59,6 +63,7 @@ impl Builder {
             attach_stderr: false,
             env: Default::default(),
             work_dir: Default::default(),
+            mounts: Default::default(),
             resources: Default::default(),
         }
     }
@@ -96,7 +101,7 @@ impl Builder {
     /// Sets multiple environment variables.
     pub fn envs(
         mut self,
-        variables: impl Iterator<Item = (impl Into<String>, impl Into<String>)>,
+        variables: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
     ) -> Self {
         self.env
             .extend(variables.into_iter().map(|(k, v)| (k.into(), v.into())));
@@ -118,6 +123,18 @@ impl Builder {
     /// Sets the working directory.
     pub fn work_dir(mut self, work_dir: impl Into<String>) -> Self {
         self.work_dir = Some(work_dir.into());
+        self
+    }
+
+    /// Sets a mount for the service.
+    pub fn mount(mut self, mount: impl Into<Mount>) -> Self {
+        self.mounts.push(mount.into());
+        self
+    }
+
+    /// Sets multiple mounts for the service.
+    pub fn mounts(mut self, mounts: impl IntoIterator<Item = impl Into<Mount>>) -> Self {
+        self.mounts.extend(mounts.into_iter().map(Into::into));
         self
     }
 
@@ -152,6 +169,7 @@ impl Builder {
                             args: Some(self.args),
                             dir: self.work_dir,
                             env: Some(self.env.iter().map(|(k, v)| format!("{k}={v}")).collect()),
+                            mounts: Some(self.mounts),
                             ..Default::default()
                         }),
                         resources: self.resources,

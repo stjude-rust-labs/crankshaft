@@ -75,12 +75,15 @@ impl Docker {
 
     /// Ensures that an image exists in the Docker daemon.
     ///
+    /// If the image does not specify a tag, a default tag of `latest` will be
+    /// used.
+    ///
     /// It does this by:
     ///
     /// * Confirming that the image already exists there, or
     /// * Pulling the image from the remote repository.
-    pub async fn ensure_image(&self, name: impl AsRef<str>, tag: impl AsRef<str>) -> Result<()> {
-        ensure_image(self, name, tag).await
+    pub async fn ensure_image(&self, image: impl AsRef<str>) -> Result<()> {
+        ensure_image(self, image).await
     }
 
     /// Removes an image from the Docker daemon.

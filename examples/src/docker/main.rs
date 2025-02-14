@@ -64,7 +64,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                         .display()
                         .to_string(),
                 )
-                .image("ubuntu")
+                .image("alpine")
                 .program("echo")
                 .args([String::from("hello, world!")])
                 .build(),

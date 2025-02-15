@@ -65,11 +65,9 @@ enum Command {
     /// existing).
     EnsureImage {
         /// The name of the image.
+        ///
+        /// If a tag is not specified, a default tag of `latest` is used.
         image: String,
-
-        #[arg(short, long, default_value = "latest")]
-        /// The tag for the image.
-        tag: String,
     },
 
     /// Lists all images.
@@ -156,8 +154,8 @@ async fn run(args: Args) -> Result<()> {
                 container.remove().await?;
             }
         }
-        Command::EnsureImage { image, tag } => {
-            docker.ensure_image(image, tag).await?;
+        Command::EnsureImage { image } => {
+            docker.ensure_image(image).await?;
         }
         Command::ListImages => {
             docker.list_images().await?;

@@ -1,5 +1,8 @@
 //! A Docker backend.
 
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Output;
 use std::sync::Arc;
 
@@ -29,6 +32,8 @@ use tracing::info;
 
 use crate::Result;
 use crate::Task;
+use crate::task::Input;
+use crate::task::input::Contents;
 
 /// Represents resource information about a Docker swarm.
 #[derive(Debug, Default, Clone, Copy)]
@@ -264,43 +269,6 @@ impl Backend {
     pub fn resources(&self) -> &Resources {
         &self.resources
     }
-
-    /// Runs a task using a container.
-    async fn run_with_container(
-        task: &Task,
-        execution_index: usize,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
-        container: Arc<Container>,
-    ) -> Result<Output> {
-        // TODO(clay): these could be cached.
-        for task in task.inputs().map(|i| {
-            let container = container.clone();
-            tokio::spawn(async move {
-                let contents = i.fetch().await;
-                container.upload_file(i.path(), &contents).await
-            })
-        }) {
-            task.await??;
-        }
-
-        container
-            .run(|| started(execution_index))
-            .await
-            .wrap_err("failed to run Docker container")
-    }
-
-    /// Runs a task using a Docker service.
-    async fn run_with_service(
-        execution_index: usize,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
-        service: Arc<Service>,
-    ) -> Result<Output> {
-        // TODO: handle inputs
-        service
-            .run(|| started(execution_index))
-            .await
-            .wrap_err("failed to run Docker service")
-    }
 }
 
 #[async_trait]
@@ -350,10 +318,13 @@ impl crate::Backend for Backend {
         let client = self.client.clone();
         let cleanup = self.config.cleanup();
         let resources = self.resources;
-        let mounts = get_shared_mounts(task.shared_volumes())?;
 
         Ok(async move {
-            // Check to see if we should use the service API for running the task
+            let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
+
+            let mut mounts = Vec::new();
+            add_input_mounts(task.inputs(), tempdir.path(), &mut mounts).await?;
+            add_shared_mounts(task.shared_volumes(), tempdir.path(), &mut mounts)?;
             let mut outputs = Vec::new();
 
             let name = task
@@ -366,6 +337,13 @@ impl crate::Backend for Backend {
                     bail!("task has been cancelled");
                 }
 
+                // First ensure the execution's image exists
+                client
+                    .ensure_image(execution.image())
+                    .await
+                    .with_context(|| format!("failed to pull image `{image}`", image = execution.image()))?;
+
+                // Check to see if we should use the service API for running the task
                 let (result, cleaner) = if resources.use_service() {
                     let mut builder = client
                         .service_builder()
@@ -385,8 +363,8 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
                         }
-                        res = Self::run_with_service(execution_index, started.clone(), service.clone()) => {
-                            (res, Cleaner::Service(service))
+                        res = service.run(|| started(execution_index)) => {
+                            (res.wrap_err("failed to run Docker service"), Cleaner::Service(service))
                         }
                     }
                 } else {
@@ -416,8 +394,8 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
                         }
-                        res = Self::run_with_container(&task, execution_index, started.clone(), container.clone()) => {
-                            (res, Cleaner::Container(container))
+                        res = container.run(|| started(execution_index)) => {
+                            (res.wrap_err("failed to run Docker container"), Cleaner::Container(container))
                         }
                     }
                 };
@@ -437,24 +415,103 @@ impl crate::Backend for Backend {
     }
 }
 
+/// Adds input mounts to the list of mounts.
+///
+/// Bind mounts are created for any input specified as a path.
+///
+/// For inputs not specified by a path, the contents are fetched and written to
+/// a file within the provided temporary directory.
+///
+/// Errors may be returned if an input's contents could not be fetched.
+async fn add_input_mounts(
+    inputs: impl Iterator<Item = Arc<Input>>,
+    tempdir: &Path,
+    mounts: &mut Vec<Mount>,
+) -> Result<()> {
+    for input in inputs {
+        let source = if let Contents::Path(path) = input.contents() {
+            // Use the input path directly
+            path.to_str()
+                .with_context(|| {
+                    format!("input path `{path}` is not UTF-8", path = path.display())
+                })?
+                .to_string()
+        } else {
+            // Write the input file contents to a temporary file within the temporary
+            // directory
+            let mut file = tempfile::NamedTempFile::new_in(tempdir).with_context(|| {
+                format!(
+                    "failed to create temporary input file in `{tempdir}`",
+                    tempdir = tempdir.display()
+                )
+            })?;
+            // TODO: remotely fetched input contents should be cached somewhere
+            file.write(&input.fetch().await?).with_context(|| {
+                format!(
+                    "failed to write input file contents to `{path}`",
+                    path = file.path().display()
+                )
+            })?;
+
+            // Keep the file as the temporary directory itself will clean up the mounts
+            let (_, path) = file.keep().context("failed to persist temporary file")?;
+
+            path.into_os_string().into_string().map_err(|path| {
+                eyre!(
+                    "temporary file path `{path}` is not UTF-8",
+                    path = PathBuf::from(&path).display()
+                )
+            })?
+        };
+
+        mounts.push(Mount {
+            target: Some(input.path().to_string()),
+            source: Some(source),
+            typ: Some(MountTypeEnum::BIND),
+            read_only: Some(true),
+            ..Default::default()
+        });
+    }
+
+    Ok(())
+}
+
 /// Gets the shared mounts (if any exist) from the shared volumes in a [`Task`]
 /// (via [`Task::shared_volumes()`]).
-fn get_shared_mounts<'a>(iter: impl Iterator<Item = &'a str>) -> Result<Vec<Mount>> {
-    iter.map(|inner_path| {
-        Ok(Mount {
-            target: Some(inner_path.to_owned()),
-            source: Some(
-                TempDir::new()
-                    .wrap_err("failed to create temporary directory")?
-                    .into_path()
-                    .to_str()
-                    .with_context(|| "temporary path contains non-UTF-8 characters")?
-                    .to_owned(),
-            ),
+fn add_shared_mounts<'a>(
+    iter: impl Iterator<Item = &'a str>,
+    tempdir: &Path,
+    mounts: &mut Vec<Mount>,
+) -> Result<()> {
+    for target in iter {
+        // Create new temporary directory in the provided temporary directory
+        // The call to `into_path` will prevent the directory from being deleted on
+        // drop; instead, we're relying on the parent temporary directory to delete it
+        let path = TempDir::new_in(tempdir)
+            .wrap_err_with(|| {
+                format!(
+                    "failed to create temporary directory in `{tempdir}`",
+                    tempdir = tempdir.display()
+                )
+            })?
+            .into_path()
+            .into_os_string()
+            .into_string()
+            .map_err(|path| {
+                eyre!(
+                    "temporary directory path `{path}` is not UTF-8",
+                    path = PathBuf::from(&path).display()
+                )
+            })?;
+
+        mounts.push(Mount {
+            target: Some(target.to_owned()),
+            source: Some(path),
             typ: Some(MountTypeEnum::BIND),
             read_only: Some(false),
             ..Default::default()
-        })
-    })
-    .collect::<Result<Vec<_>>>()
+        });
+    }
+
+    Ok(())
 }

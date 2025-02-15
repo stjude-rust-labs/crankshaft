@@ -56,23 +56,20 @@ pub(crate) async fn list_images(docker: &Docker) -> Result<Vec<ImageSummary>> {
 
 /// Ensures that an image exists in the Docker daemon.
 ///
+/// If the image does not specify a tag, a default tag of `latest` will be used.
+///
 /// It does this by:
 ///
 /// * Confirming that the image already exists there, or
 /// * Pulling the image from the remote repository.
-pub(crate) async fn ensure_image(
-    docker: &Docker,
-    name: impl AsRef<str>,
-    tag: impl AsRef<str>,
-) -> Result<()> {
-    let name = name.as_ref();
-    let tag = tag.as_ref();
-    debug!("ensuring image: `{name}:{tag}`");
+pub(crate) async fn ensure_image(docker: &Docker, image: impl AsRef<str>) -> Result<()> {
+    let image = image.as_ref();
+    debug!("ensuring image: `{image}`");
 
     let mut filters = HashMap::new();
-    filters.insert(String::from("reference"), vec![format!("{name}:{tag}")]);
+    filters.insert("reference", vec![image]);
 
-    debug!("checking if image exists locally: `{name}:{tag}`");
+    debug!("checking if image exists locally: `{image}`");
     let results = docker
         .inner()
         .list_images(Some(ListImagesOptions {
@@ -83,7 +80,7 @@ pub(crate) async fn ensure_image(
         .map_err(Error::Docker)?;
 
     if !results.is_empty() {
-        debug!("image `{name}:{tag}` exists locally");
+        debug!("image `{image}` exists locally");
 
         if enabled!(Level::TRACE) {
             trace!(
@@ -95,11 +92,11 @@ pub(crate) async fn ensure_image(
         return Ok(());
     }
 
-    debug!("image `{name}:{tag}` does not exist locally; attempting to pull from remote");
+    debug!("image `{image}` does not exist locally; attempting to pull from remote");
     let mut stream = docker.inner().create_image(
         Some(CreateImageOptions {
-            from_image: name,
-            tag,
+            from_image: image,
+            tag: if image.contains(':') { "" } else { "latest" },
             ..Default::default()
         }),
         None,

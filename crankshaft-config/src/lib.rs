@@ -1,7 +1,5 @@
 //! Configuration used within Crankshaft.
 //!
-//! ### Notes
-//!
 //! A few notes on the structure of this crate.
 //!
 //! * Configuration objects are typically considered immutable and are only able

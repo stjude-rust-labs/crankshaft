@@ -141,7 +141,7 @@ mod tests {
         let backend = &config.backends[1];
 
         assert_eq!(backend.name(), "quux");
-        assert_eq!(backend.defaults().unwrap().cpu(), Some(1));
+        assert_eq!(backend.defaults().unwrap().cpu(), Some(1.0));
         assert_eq!(backend.defaults().unwrap().ram(), Some(1.0));
     }
 }

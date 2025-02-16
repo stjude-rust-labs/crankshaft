@@ -62,3 +62,27 @@ impl Config {
         (self.name, self.kind, self.max_tasks, self.defaults)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generic() {
+        let config = Config::builder()
+            .name("generic")
+            .kind(Kind::Generic(generic::demo()))
+            .max_tasks(10)
+            .defaults(Defaults::builder().cpu(1.0).ram(16.0).disk(250.0).build())
+            .build();
+
+        assert_eq!(config.name(), "generic");
+        assert!(matches!(config.kind().as_generic(), Some(_)));
+        assert_eq!(config.max_tasks(), 10);
+
+        let defaults = config.defaults.unwrap();
+        assert_eq!(defaults.cpu().unwrap(), 1.0);
+        assert_eq!(defaults.ram().unwrap(), 16.0);
+        assert_eq!(defaults.disk().unwrap(), 250.0);
+    }
+}

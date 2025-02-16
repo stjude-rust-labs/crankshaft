@@ -1,4 +1,4 @@
-<img style="margin: 0px" alt="Repository Header Image" src="./assets/repo-header.png" />
+<img style="margin: 0px" alt="Repository Header Image" src="./.github/assets/repo-header.png" />
 <hr/>
 
 <p align="center">

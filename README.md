@@ -16,7 +16,7 @@
   </p>
 
   <p align="center">
-    A headless workflow execution engine for bioinformatics that supports local, cloud, and HPC.
+    A headless task execution framework that supports local, cloud, and HPC.
     <br />
     <br />
     <a href="https://github.com/stjude-rust-labs/crankshaft/issues/new?assignees=&title=Descriptive%20Title&labels=enhancement">Request Feature</a>
@@ -30,16 +30,15 @@
 
 ## Overview
 
-`crankshaft` is a headless workflow execution engine written in Rust: it's being
-developed in coordination with the [`sprocket`] project with the goal of
-enabling large-scale bioinformatics analyses. There is no associated
-`crankshaft` command line tool—the end user is really engine _developers_ who
-want to include it as a core task execution library in their own command line
-tools.
+`crankshaft` is a headless task execution framework written in Rust: it's being
+developed in coordination with the [`sprocket`] project with the goal of enabling
+large-scale bioinformatics analyses. There is no associated `crankshaft` command line
+tool—the end user is really engine _developers_ who want to include it as a core task
+execution library in their own command line tools.
 
 ## Guiding Principles
 
-- `crankshaft` aims to be a **high-performance** workflow execution engine
+- `crankshaft` aims to be a **high-performance** task execution framework
   capable of concurrently managing and executing upwards of 20,000 concurrent
   tasks. The core focus is enabling middle- to large-scale bioinformatics
   analyses, though it can also be used to design smaller scale execution

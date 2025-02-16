@@ -1,18 +1,26 @@
 <img style="margin: 0px" alt="Repository Header Image" src="./.github/assets/repo-header.png" />
 <hr/>
 
-<p align="center">
-  <p align="center">
-    <a href="https://github.com/stjude-rust-labs/crankshaft/actions/workflows/CI.yml" target="_blank">
+<div align="center">
+  <p style="display: flex; align-items: center; justify-content: center;">
+    <a href="https://github.com/stjude-rust-labs/crankshaft/actions/workflows/CI.yml"
+      target="_blank"
+      style="margin-inline-start: 2px; margin-inline-end: 2px; text-decoration: none;">
       <img alt="CI: Status" src="https://github.com/stjude-rust-labs/crankshaft/actions/workflows/CI.yml/badge.svg" />
     </a>
-    <a href="https://crates.io/crates/crankshaft" target="_blank">
+    <a href="https://crates.io/crates/crankshaft"
+      target="_blank"
+      style="margin-inline-start: 2px; margin-inline-end: 2px; text-decoration: none;">
       <img alt="crates.io version" src="https://img.shields.io/crates/v/crankshaft">
     </a>
-    <a href="https://rustseq.zulipchat.com" target="_blank">
+    <a href="https://rustseq.zulipchat.com"
+       target="_blank"
+       style="margin-inline-start: 2px; margin-inline-end: 2px; text-decoration: none;">
       <img alt="CI: Status" src="https://img.shields.io/badge/chat-%23workflows--lib--crankshaft-blue?logo=zulip&logoColor=f6f6f6" />
     </a>
-    <img alt="crates.io downloads" src="https://img.shields.io/crates/d/crankshaft">
+    <img alt="crates.io downloads"
+         src="https://img.shields.io/crates/d/crankshaft"
+         style="margin-inline-start: 2px; margin-inline-end: 2px; text-decoration: none;">
   </p>
 
   <p align="center">
@@ -26,7 +34,7 @@
     ⭐ Consider starring the repo! ⭐
     <br />
   </p>
-</p>
+</div>
 
 ## Overview
 

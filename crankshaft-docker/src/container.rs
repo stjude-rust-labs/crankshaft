@@ -112,6 +112,8 @@ impl Container {
             .map_err(Error::Docker)?
             .output;
 
+        debug!("starting container `{name}`", name = self.name);
+
         // Start the container.
         self.client
             .start_container(&self.name, None::<StartContainerOptions<String>>)
@@ -148,6 +150,8 @@ impl Container {
             .map_err(Error::Docker)?;
 
         // Wait for the container to be completed.
+
+        debug!("waiting for container `{name}` to exit", name = self.name);
         let mut wait_stream = self
             .client
             .wait_container(&self.name, None::<WaitContainerOptions<String>>);

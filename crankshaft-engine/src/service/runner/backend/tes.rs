@@ -25,6 +25,7 @@ use tes::v1::Client;
 use tes::v1::client::tasks::View;
 use tes::v1::types::task::State;
 use tokio::select;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::trace;
@@ -75,9 +76,9 @@ impl Backend {
     async fn wait_task(
         client: &Client,
         task_id: &str,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        started: oneshot::Sender<()>,
     ) -> Result<NonEmpty<Output>> {
-        let mut notified = false;
+        let mut started = Some(started);
 
         loop {
             let task = client
@@ -102,11 +103,8 @@ impl Backend {
                         debug!("task is running; waiting before polling again");
 
                         // Task is running (or was previously running but now paused), so notify
-                        if !notified {
-                            notified = true;
-                            for i in 0..task.executors.len() {
-                                started(i);
-                            }
+                        if let Some(started) = started.take() {
+                            started.send(()).ok();
                         }
                     }
                     State::Complete | State::ExecutorError | State::SystemError => {
@@ -117,10 +115,9 @@ impl Backend {
                             debug!("task has failed");
                         }
 
-                        if !notified {
-                            for i in 0..task.executors.len() {
-                                started(i);
-                            }
+                        // Task has completed, so notify that it started if we haven't already
+                        if let Some(started) = started.take() {
+                            started.send(()).ok();
                         }
 
                         let mut results = task
@@ -177,7 +174,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        started: oneshot::Sender<()>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();

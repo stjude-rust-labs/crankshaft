@@ -26,6 +26,7 @@ use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
 use tokio::select;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
@@ -320,7 +321,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        started: oneshot::Sender<()>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         // Helper for cleanup
@@ -358,6 +359,7 @@ impl crate::Backend for Backend {
         let client = self.client.clone();
         let cleanup = self.config.cleanup();
         let resources = self.resources;
+        let mut started = Some(started);
 
         Ok(async move {
             let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
@@ -372,7 +374,9 @@ impl crate::Backend for Backend {
                     .context("task requires a name to run on the Docker backend")?
                     .to_owned();
 
-            for (execution_index, execution) in task.executions().enumerate() {
+            debug!("spawning task `{name}` with Docker backend");
+
+            for execution in task.executions() {
                 if token.is_cancelled() {
                     bail!("task has been cancelled");
                 }
@@ -398,12 +402,13 @@ impl crate::Backend for Backend {
                     }
 
                     let service = Arc::new(builder.try_build(&name).await?);
+                    let started = started.take();
 
                     select! {
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
                         }
-                        res = service.run(|| started(execution_index)) => {
+                        res = service.run(|| if let Some(started) = started { started.send(()).ok(); }) => {
                             (res.wrap_err("failed to run Docker service"), Cleaner::Service(service))
                         }
                     }
@@ -430,11 +435,13 @@ impl crate::Backend for Backend {
                             .await?,
                     );
 
+                    let started = started.take();
+
                     select! {
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
                         }
-                        res = container.run(|| started(execution_index)) => {
+                        res = container.run(|| if let Some(started) = started { started.send(()).ok(); }) => {
                             (res.wrap_err("failed to run Docker container"), Cleaner::Container(container))
                         }
                     }
@@ -508,7 +515,7 @@ async fn add_input_mounts(
             target: Some(input.path().to_string()),
             source: Some(source),
             typ: Some(MountTypeEnum::BIND),
-            read_only: Some(true),
+            read_only: Some(input.read_only()),
             ..Default::default()
         });
     }

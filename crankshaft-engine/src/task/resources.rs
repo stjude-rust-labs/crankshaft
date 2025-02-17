@@ -28,7 +28,7 @@ pub struct Resources {
     disk: Option<f64>,
 
     /// The associated compute zones.
-    #[builder(into)]
+    #[builder(into, default)]
     zones: Vec<String>,
 }
 

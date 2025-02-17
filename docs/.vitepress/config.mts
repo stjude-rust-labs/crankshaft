@@ -11,7 +11,14 @@ export default defineConfig({
         text: "Overview",
         link: "/",
       },
-      {},
+      {
+        text: "Configuration",
+        link: "/configuration",
+      },
+      {
+        text: "Backends",
+        items: [{ text: "Introduction", link: "/backends/introduction" }],
+      },
     ],
 
     socialLinks: [

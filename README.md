@@ -1,4 +1,4 @@
-<img style="margin: 0px" alt="Repository Header Image" src="./.github/assets/repo-header.png" />
+<img style="margin: 0px" alt="Repository Header Image" src="https://stjude-rust-labs.github.io/crankshaft/header.png" />
 <hr/>
 
 <div align="center">
@@ -74,7 +74,7 @@ cargo add crankshaft
 ```
 
 Once you've added `crankshaft` to your dependencies, you should head over to the
-[`examples`](./examples) to see how you can use the library in your projects.
+[`examples`] to see how you can use the library in your projects.
 
 ## 🖥️ Development
 
@@ -125,6 +125,7 @@ crates and command line tools made available by St. Jude Rust Labs.
 
 Copyright © 2024-Present [St. Jude Children's Research Hospital](https://github.com/stjude).
 
+[`examples`]: https://github.com/stjude-rust-labs/crankshaft/tree/main/examples
 [license-apache]: https://github.com/stjude-rust-labs/crankshaft/blob/main/LICENSE-APACHE
 [license-mit]: https://github.com/stjude-rust-labs/crankshaft/blob/main/LICENSE-MIT
 [`sprocket`]: https://github.com/stjude-rust-labs/sprocket

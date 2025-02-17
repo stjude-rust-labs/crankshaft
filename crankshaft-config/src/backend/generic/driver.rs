@@ -15,9 +15,34 @@ pub use shell::Shell;
 /// within a task.
 const DEFAULT_MAX_ATTEMPTS: u32 = 4;
 
+/// The maximum number of attempts for a driver.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[repr(transparent)]
+#[serde(transparent)]
+pub struct MaxAttempts(u32);
+
+impl MaxAttempts {
+    /// Gets a copy of the inner value.
+    pub fn inner(&self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for MaxAttempts {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl Default for MaxAttempts {
+    fn default() -> Self {
+        Self(DEFAULT_MAX_ATTEMPTS)
+    }
+}
+
 /// A configuration object for a command driver within a generic execution
 /// backend.
-#[derive(Builder, Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Builder, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 #[builder(builder_type = Builder)]
 pub struct Config {
@@ -30,7 +55,7 @@ pub struct Config {
     shell: Option<Shell>,
 
     /// The maximum number of attempts to try a command execution.
-    max_attempts: Option<u32>,
+    max_attempts: Option<MaxAttempts>,
 }
 
 impl Config {
@@ -45,7 +70,29 @@ impl Config {
     }
 
     /// Gets the maximum number of attempts.
-    pub fn max_attempts(&self) -> u32 {
-        self.max_attempts.unwrap_or(DEFAULT_MAX_ATTEMPTS)
+    pub fn max_attempts(&self) -> Option<MaxAttempts> {
+        self.max_attempts
+    }
+}
+
+/// A driver configuration used during testing.
+#[cfg(test)]
+pub(crate) fn demo() -> Config {
+    Config::builder()
+        .locale(Locale::Local)
+        .shell(Shell::Bash)
+        .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn demo() {
+        let demo = super::demo();
+        assert_eq!(demo.locale().unwrap(), &Locale::Local);
+        assert_eq!(demo.shell().unwrap(), &Shell::Bash);
+        assert_eq!(demo.max_attempts().unwrap_or_default().inner(), 4);
     }
 }

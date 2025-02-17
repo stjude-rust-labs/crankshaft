@@ -189,22 +189,47 @@ impl Config {
     }
 }
 
+/// A generic configuration used during testing.
+#[cfg(test)]
+pub(crate) fn demo() -> Config {
+    Config::builder()
+        .driver(driver::demo())
+        .submit("echo 'submitting'")
+        .monitor("echo 'monitoring'")
+        .kill("echo 'killing'")
+        .build()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn the_placeholder_regex_unwraps() {
-        let _ = PLACEHOLDER_REGEX;
+    fn regexes() {
+        // Ensure that the whitespace regex unwraps.
+        let _ = std::hint::black_box(&WHITESPACE_REGEX);
+
+        // Ensure that the placeholder regex unwraps.
+        let _ = std::hint::black_box(&PLACEHOLDER_REGEX);
     }
 
     #[test]
-    fn replacement_works() -> Result<(), Box<dyn std::error::Error>> {
+    fn replacement() {
         let mut replacements = HashMap::new();
         replacements.insert("foo".into(), "bar".into());
 
         assert_eq!(substitute("hello, ~{foo}", &replacements), "hello, bar");
+    }
 
-        Ok(())
+    #[test]
+    fn demo() {
+        let demo = super::demo();
+        assert_eq!(demo.driver(), &driver::demo());
+        assert_eq!(demo.submit(), "echo 'submitting'");
+        assert!(demo.job_id_regex().is_none());
+        assert_eq!(demo.monitor(), "echo 'monitoring'");
+        assert!(demo.monitor_frequency().is_none());
+        assert_eq!(demo.kill(), "echo 'killing'");
+        assert!(demo.attributes().is_empty());
     }
 }

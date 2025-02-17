@@ -330,8 +330,9 @@ async fn run_ssh_command(
 
         // Create a new channel with which to communicate with the host.
         trace!("creating a new session-based channel");
-        let mut channel = channel_session_with_backoff(&session, max_attempts)
-            .context("creating a new session-based channel")?;
+        let mut channel =
+            channel_session_with_backoff(&session, max_attempts.unwrap_or_default().inner())
+                .context("creating a new session-based channel")?;
 
         // Send a command across the channel.
         trace!("sending the execution command");

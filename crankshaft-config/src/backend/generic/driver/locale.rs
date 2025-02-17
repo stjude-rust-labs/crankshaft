@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::backend::generic::driver::ssh;
 
 /// The environment from which jobs are executed.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "PascalCase")]
 pub enum Locale {
     /// Local execution.

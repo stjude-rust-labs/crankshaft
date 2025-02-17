@@ -12,16 +12,19 @@ use crankshaft_config::backend::Defaults;
 #[builder(builder_type = Builder)]
 pub struct Resources {
     /// The number of CPU cores requested.
-    cpu: Option<usize>,
+    ///
+    /// Partial CPU requests are supported but not always respected depending on
+    /// the backend.
+    cpu: Option<f64>,
 
     /// Whether or not the task may use preemptible resources.
     #[builder(into)]
     preemptible: Option<bool>,
 
-    /// The requested random access memory size in gigabytes.
+    /// The requested random access memory size (in GiB).
     ram: Option<f64>,
 
-    /// The requested disk size in gigabytes.
+    /// The requested disk size (in GiB).
     disk: Option<f64>,
 
     /// The associated compute zones.
@@ -30,8 +33,8 @@ pub struct Resources {
 }
 
 impl Resources {
-    /// A number of CPU cores.
-    pub fn cpu(&self) -> Option<usize> {
+    /// The number of CPU cores.
+    pub fn cpu(&self) -> Option<f64> {
         self.cpu
     }
 
@@ -118,7 +121,7 @@ impl Resources {
 impl Default for Resources {
     fn default() -> Self {
         Self {
-            cpu: Some(1),
+            cpu: Some(1.0),
             preemptible: Some(false),
             ram: Some(2.0),
             disk: Some(8.0),

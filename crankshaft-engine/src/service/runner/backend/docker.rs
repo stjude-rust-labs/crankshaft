@@ -69,6 +69,46 @@ pub enum Resources {
 }
 
 impl Resources {
+    /// Gets the number of nodes.
+    pub fn nodes(&self) -> usize {
+        match self {
+            Self::Local(_) => 1,
+            Self::Swarm(resources) => resources.nodes,
+        }
+    }
+
+    /// Gets the total CPUs available.
+    pub fn cpu(&self) -> u64 {
+        match self {
+            Self::Local(resources) => resources.cpu,
+            Self::Swarm(resources) => resources.cpu,
+        }
+    }
+
+    /// Gets the total memory available, in bytes.
+    pub fn memory(&self) -> u64 {
+        match self {
+            Self::Local(resources) => resources.memory,
+            Self::Swarm(resources) => resources.memory,
+        }
+    }
+
+    /// Gets the maximum CPUs available for a single node.
+    pub fn max_cpu(&self) -> u64 {
+        match self {
+            Self::Local(resources) => resources.cpu,
+            Self::Swarm(resources) => resources.max_cpu,
+        }
+    }
+
+    /// Gets the maximum memory available for a single node, in bytes.
+    pub fn max_memory(&self) -> u64 {
+        match self {
+            Self::Local(resources) => resources.memory,
+            Self::Swarm(resources) => resources.max_memory,
+        }
+    }
+
     /// Determines if the docker backend will use a service instead of a
     /// container based on the resources available.
     ///

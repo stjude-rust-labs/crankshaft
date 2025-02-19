@@ -394,6 +394,7 @@ impl crate::Backend for Backend {
                         .image(execution.image())
                         .program(execution.program())
                         .args(execution.args())
+                        .resources(task.resources().map(Into::into).unwrap_or_default())
                         .attach_stdout()
                         .attach_stderr();
 
@@ -422,7 +423,7 @@ impl crate::Backend for Backend {
                         .attach_stderr()
                         .host_config(HostConfig {
                             mounts: Some(mounts.clone()),
-                            ..task.resources().map(HostConfig::from).unwrap_or_default()
+                            ..task.resources().map(Into::into).unwrap_or_default()
                         });
 
                     if let Some(work_dir) = execution.work_dir() {

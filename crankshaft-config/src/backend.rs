@@ -77,7 +77,7 @@ mod tests {
             .build();
 
         assert_eq!(config.name(), "generic");
-        assert!(matches!(config.kind().as_generic(), Some(_)));
+        assert!(config.kind().as_generic().is_some());
         assert_eq!(config.max_tasks(), 10);
 
         let defaults = config.defaults.unwrap();

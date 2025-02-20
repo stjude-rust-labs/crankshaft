@@ -48,6 +48,12 @@ pub struct Input {
     /// The type of the input.
     #[builder(into)]
     ty: Type,
+
+    /// Whether or not the input should be treated as read-only.
+    ///
+    /// Defaults to `true`.
+    #[builder(default = true)]
+    read_only: bool,
 }
 
 impl Input {
@@ -74,6 +80,13 @@ impl Input {
     /// The type of the container.
     pub fn ty(&self) -> &Type {
         &self.ty
+    }
+
+    /// Gets whether or not the input is read-only.
+    ///
+    /// Inputs are read-only by default.
+    pub fn read_only(&self) -> bool {
+        self.read_only
     }
 
     /// Fetches the input contents.
@@ -123,6 +136,7 @@ impl TryFrom<Input> for tes::v1::types::task::Input {
             contents,
             path,
             ty,
+            read_only: _,
         } = input;
 
         let (url, content) = contents.one_hot()?;

@@ -18,7 +18,7 @@ use crate::images::*;
 #[derive(Error, Debug)]
 pub enum Error {
     /// An error from [`bollard`].
-    #[error("docker error: {0}")]
+    #[error(transparent)]
     Docker(#[from] bollard::errors::Error),
     /// A required value was missing for a builder field.
     #[error("missing required builder field `{0}`")]

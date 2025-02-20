@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added support for respecting CPU and memory limits ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
 * Added support for submitting tasks via the service API for Docker Swarm (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Adds the initial version of the crate.
 
@@ -20,3 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
 * Replaced `attached` with separate stdout and stderr attach flags
   ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+
+### Fixed
+
+* Fixed a non-zero exit code from a container being treated as a wait error ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).

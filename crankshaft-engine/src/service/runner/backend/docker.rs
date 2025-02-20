@@ -26,6 +26,7 @@ use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
 use tokio::select;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
@@ -320,7 +321,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         // Helper for cleanup
@@ -372,7 +373,9 @@ impl crate::Backend for Backend {
                     .context("task requires a name to run on the Docker backend")?
                     .to_owned();
 
-            for (execution_index, execution) in task.executions().enumerate() {
+            debug!("spawning task `{name}` with Docker backend");
+
+            for execution in task.executions() {
                 if token.is_cancelled() {
                     bail!("task has been cancelled");
                 }
@@ -390,6 +393,7 @@ impl crate::Backend for Backend {
                         .image(execution.image())
                         .program(execution.program())
                         .args(execution.args())
+                        .resources(task.resources().map(Into::into).unwrap_or_default())
                         .attach_stdout()
                         .attach_stderr();
 
@@ -398,12 +402,16 @@ impl crate::Backend for Backend {
                     }
 
                     let service = Arc::new(builder.try_build(&name).await?);
+                    let started = started.take();
 
                     select! {
+                        // Always poll the cancellation token first
+                        biased;
+
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
                         }
-                        res = service.run(|| started(execution_index)) => {
+                        res = service.run(|| if let Some(started) = started { started.send(()).ok(); }) => {
                             (res.wrap_err("failed to run Docker service"), Cleaner::Service(service))
                         }
                     }
@@ -417,7 +425,7 @@ impl crate::Backend for Backend {
                         .attach_stderr()
                         .host_config(HostConfig {
                             mounts: Some(mounts.clone()),
-                            ..task.resources().map(HostConfig::from).unwrap_or_default()
+                            ..task.resources().map(Into::into).unwrap_or_default()
                         });
 
                     if let Some(work_dir) = execution.work_dir() {
@@ -430,11 +438,16 @@ impl crate::Backend for Backend {
                             .await?,
                     );
 
+                    let started = started.take();
+
                     select! {
+                        // Always poll the cancellation token first
+                        biased;
+
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
                         }
-                        res = container.run(|| started(execution_index)) => {
+                        res = container.run(|| if let Some(started) = started { started.send(()).ok(); }) => {
                             (res.wrap_err("failed to run Docker container"), Cleaner::Container(container))
                         }
                     }
@@ -508,7 +521,7 @@ async fn add_input_mounts(
             target: Some(input.path().to_string()),
             source: Some(source),
             typ: Some(MountTypeEnum::BIND),
-            read_only: Some(true),
+            read_only: Some(input.read_only()),
             ..Default::default()
         });
     }

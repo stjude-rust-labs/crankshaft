@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added a notification channel for the first time a task starts executing ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
 * Added support for bind mounting inputs to the Docker backend ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).
 * Added cancellation support to the engine and ctrl-c handling in the examples (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Added support for Docker Swarm in the docker backend (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).

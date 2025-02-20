@@ -13,6 +13,7 @@ use bollard::Docker;
 use bollard::container::LogOutput;
 use bollard::container::LogsOptions;
 use bollard::container::WaitContainerOptions;
+use bollard::secret::ContainerWaitResponse;
 use bollard::secret::TaskState;
 use bollard::task::ListTasksOptions;
 
@@ -139,17 +140,18 @@ impl Service {
 
                     let mut exit_code = None;
                     if let Some(result) = wait_stream.next().await {
-                        let response = result.map_err(Error::Docker)?;
-                        if let Some(error) = response.error {
-                            return Err(Error::Message(format!(
-                                "failed to wait for Docker task to complete: {error}",
-                                error = error
-                                    .message
-                                    .expect("Docker reported an error without a message")
-                            )));
+                        match result {
+                            // Bollard turns non-zero exit codes into wait errors, so check for both
+                            Ok(ContainerWaitResponse {
+                                status_code: code, ..
+                            })
+                            | Err(bollard::errors::Error::DockerContainerWaitError {
+                                code, ..
+                            }) => {
+                                exit_code = Some(code);
+                            }
+                            Err(e) => return Err(e.into()),
                         }
-
-                        exit_code = Some(response.status_code);
                     }
 
                     if exit_code.is_none() {
@@ -255,7 +257,8 @@ impl Service {
 
         #[cfg(unix)]
         let output = Output {
-            status: ExitStatus::from_raw(exit_code as i32),
+            // See WEXITSTATUS from wait(2) to explain the shift
+            status: ExitStatus::from_raw((exit_code as i32) << 8),
             stdout,
             stderr,
         };

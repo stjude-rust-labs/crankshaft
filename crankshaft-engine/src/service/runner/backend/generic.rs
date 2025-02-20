@@ -17,6 +17,7 @@ use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use regex::Regex;
 use tokio::select;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -101,7 +102,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let driver = self.driver.clone();
@@ -122,7 +123,7 @@ impl crate::Backend for Backend {
                 })
                 .transpose()?;
 
-            for (execution_index, execution) in task.executions().enumerate() {
+            for execution in task.executions() {
                 if token.is_cancelled() {
                     bail!("task has been cancelled");
                 }
@@ -168,7 +169,9 @@ impl crate::Backend for Backend {
                     .context("failed to run submit command")?;
 
                 // Notify that execution has started
-                started(execution_index);
+                if let Some(started) = started.take() {
+                    started.send(()).ok();
+                }
 
                 // Monitoring the output.
                 match job_id_regex {
@@ -192,6 +195,9 @@ impl crate::Backend for Backend {
                                 .context("failed to resolve monitor command")?;
 
                             let result = select! {
+                                // Always poll the cancellation token first
+                                biased;
+
                                 _ = token.cancelled() => {
                                     Err(eyre!("task has been cancelled"))
                                 }

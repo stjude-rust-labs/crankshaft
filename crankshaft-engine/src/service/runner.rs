@@ -107,7 +107,7 @@ impl Runner {
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let result = backend.clone().run(task, Arc::new(|_| {}), token)?.await;
+            let result = backend.clone().run(task, None, token)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

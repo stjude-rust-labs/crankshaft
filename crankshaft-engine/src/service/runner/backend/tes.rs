@@ -25,6 +25,7 @@ use tes::v1::Client;
 use tes::v1::client::tasks::View;
 use tes::v1::types::task::State;
 use tokio::select;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::trace;
@@ -75,10 +76,8 @@ impl Backend {
     async fn wait_task(
         client: &Client,
         task_id: &str,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        mut started: Option<oneshot::Sender<()>>,
     ) -> Result<NonEmpty<Output>> {
-        let mut notified = false;
-
         loop {
             let task = client
                 .get_task(task_id, View::Full)
@@ -102,11 +101,8 @@ impl Backend {
                         debug!("task is running; waiting before polling again");
 
                         // Task is running (or was previously running but now paused), so notify
-                        if !notified {
-                            notified = true;
-                            for i in 0..task.executors.len() {
-                                started(i);
-                            }
+                        if let Some(started) = started.take() {
+                            started.send(()).ok();
                         }
                     }
                     State::Complete | State::ExecutorError | State::SystemError => {
@@ -117,10 +113,9 @@ impl Backend {
                             debug!("task has failed");
                         }
 
-                        if !notified {
-                            for i in 0..task.executors.len() {
-                                started(i);
-                            }
+                        // Task has completed, so notify that it started if we haven't already
+                        if let Some(started) = started.take() {
+                            started.send(()).ok();
                         }
 
                         let mut results = task
@@ -133,7 +128,8 @@ impl Backend {
 
                                 #[cfg(unix)]
                                 let output = Output {
-                                    status: ExitStatus::from_raw(status as i32),
+                                    // See WEXITSTATUS from wait(2) to explain the shift
+                                    status: ExitStatus::from_raw((status as i32) << 8),
                                     stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
                                     stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
                                 };
@@ -177,7 +173,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Arc<dyn Fn(usize) + Send + Sync + 'static>,
+        started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();
@@ -187,6 +183,9 @@ impl crate::Backend for Backend {
             let task_id = client.create_task(task).await?.id;
 
             select! {
+                // Always poll the cancellation token first
+                biased;
+
                 _ = token.cancelled() => {
                     // Cancel the task
                     client.cancel_task(&task_id).await?;

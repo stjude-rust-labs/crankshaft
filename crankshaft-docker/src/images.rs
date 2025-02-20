@@ -64,12 +64,11 @@ pub(crate) async fn list_images(docker: &Docker) -> Result<Vec<ImageSummary>> {
 /// * Pulling the image from the remote repository.
 pub(crate) async fn ensure_image(docker: &Docker, image: impl AsRef<str>) -> Result<()> {
     let image = image.as_ref();
-    debug!("ensuring image: `{image}`");
+
+    debug!("ensuring image `{image}` exists locally");
 
     let mut filters = HashMap::new();
     filters.insert("reference", vec![image]);
-
-    debug!("checking if image exists locally: `{image}`");
     let results = docker
         .inner()
         .list_images(Some(ListImagesOptions {

@@ -150,6 +150,9 @@ impl Builder {
                     // one way or the other and not rely on the default.
                     cmd: Some(cmd),
                     image: Some(image),
+                    // Override the entrypoint to the default Docker entrypoint as we're providing
+                    // the full command
+                    entrypoint: Some(vec![String::new()]),
                     attach_stdout: Some(self.attach_stdout),
                     attach_stderr: Some(self.attach_stderr),
                     // END NOTE

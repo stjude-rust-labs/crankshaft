@@ -389,7 +389,8 @@ async fn run_ssh_command(
 
         #[cfg(unix)]
         let output = Output {
-            status: ExitStatus::from_raw(status),
+            // See WEXITSTATUS from wait(2) to explain the shift
+            status: ExitStatus::from_raw(status << 8),
             stdout,
             stderr,
         };

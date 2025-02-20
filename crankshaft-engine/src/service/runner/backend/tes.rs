@@ -130,7 +130,8 @@ impl Backend {
 
                                 #[cfg(unix)]
                                 let output = Output {
-                                    status: ExitStatus::from_raw(status as i32),
+                                    // See WEXITSTATUS from wait(2) to explain the shift
+                                    status: ExitStatus::from_raw((status as i32) << 8),
                                     stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
                                     stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
                                 };

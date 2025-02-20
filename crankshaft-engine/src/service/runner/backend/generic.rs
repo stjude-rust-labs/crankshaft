@@ -102,7 +102,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: oneshot::Sender<()>,
+        mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let driver = self.driver.clone();
@@ -112,8 +112,6 @@ impl crate::Backend for Backend {
             .resolve_resources(task.resources())
             .map(|resources| resources.to_hashmap())
             .unwrap_or_default();
-
-        let mut started = Some(started);
 
         Ok(async move {
             let mut outputs = Vec::new();
@@ -197,6 +195,9 @@ impl crate::Backend for Backend {
                                 .context("failed to resolve monitor command")?;
 
                             let result = select! {
+                                // Always poll the cancellation token first
+                                biased;
+
                                 _ = token.cancelled() => {
                                     Err(eyre!("task has been cancelled"))
                                 }

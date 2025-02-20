@@ -8,7 +8,6 @@ use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
-use tokio::sync::oneshot;
 use tokio::sync::oneshot::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
@@ -108,8 +107,7 @@ impl Runner {
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let (started_tx, _) = oneshot::channel();
-            let result = backend.clone().run(task, started_tx, token)?.await;
+            let result = backend.clone().run(task, None, token)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

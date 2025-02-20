@@ -53,17 +53,17 @@ impl Defaults {
         self.cpu_limit
     }
 
-    /// Gets the amount of RAM (in GB).
+    /// Gets the amount of RAM (in GiB).
     pub fn ram(&self) -> Option<f64> {
         self.ram
     }
 
-    /// Gets the RAM limit (in GB).
+    /// Gets the RAM limit (in GiB).
     pub fn ram_limit(&self) -> Option<f64> {
         self.ram_limit
     }
 
-    /// Gets the amount of disk space (in GB).
+    /// Gets the amount of disk space (in GiB).
     pub fn disk(&self) -> Option<f64> {
         self.disk
     }

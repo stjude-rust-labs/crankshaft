@@ -76,10 +76,8 @@ impl Backend {
     async fn wait_task(
         client: &Client,
         task_id: &str,
-        started: oneshot::Sender<()>,
+        mut started: Option<oneshot::Sender<()>>,
     ) -> Result<NonEmpty<Output>> {
-        let mut started = Some(started);
-
         loop {
             let task = client
                 .get_task(task_id, View::Full)
@@ -175,7 +173,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: oneshot::Sender<()>,
+        started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         let client = self.client.clone();
@@ -185,6 +183,9 @@ impl crate::Backend for Backend {
             let task_id = client.create_task(task).await?.id;
 
             select! {
+                // Always poll the cancellation token first
+                biased;
+
                 _ = token.cancelled() => {
                     // Cancel the task
                     client.cancel_task(&task_id).await?;

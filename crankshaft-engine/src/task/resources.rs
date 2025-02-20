@@ -7,6 +7,7 @@ use bollard::secret::HostConfig;
 use bollard::secret::TaskSpecResources;
 use bon::Builder;
 use crankshaft_config::backend::Defaults;
+use tracing::info;
 
 /// A set of requested resources.
 #[derive(Builder, Clone, Debug)]
@@ -188,11 +189,24 @@ impl From<&Resources> for HostConfig {
         let mut host_config = Self::default();
 
         // Note: Docker doesn't have a CPU reservation for containers
+        if resources.cpu().is_some() {
+            info!(
+                "ignoring minimum CPU reservation for a Docker daemon not participating in a swarm"
+            );
+        }
+
         if let Some(cpu) = resources.cpu_limit() {
             host_config.nano_cpus = Some((cpu * 1_000_000_000.0) as i64);
         }
 
         // Note: Docker doesn't have a memory reservation for containers
+        if resources.ram().is_some() {
+            info!(
+                "ignoring minimum memory reservation for a Docker daemon not participating in a \
+                 swarm"
+            );
+        }
+
         // The Docker `memory_reservation` setting acts as a soft limit and not as
         // something informing a scheduler of minimum requirements for the container
 

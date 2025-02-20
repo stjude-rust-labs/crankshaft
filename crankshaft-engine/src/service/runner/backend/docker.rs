@@ -321,7 +321,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: oneshot::Sender<()>,
+        mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
         // Helper for cleanup
@@ -359,7 +359,6 @@ impl crate::Backend for Backend {
         let client = self.client.clone();
         let cleanup = self.config.cleanup();
         let resources = self.resources;
-        let mut started = Some(started);
 
         Ok(async move {
             let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
@@ -406,6 +405,9 @@ impl crate::Backend for Backend {
                     let started = started.take();
 
                     select! {
+                        // Always poll the cancellation token first
+                        biased;
+
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
                         }
@@ -439,6 +441,9 @@ impl crate::Backend for Backend {
                     let started = started.take();
 
                     select! {
+                        // Always poll the cancellation token first
+                        biased;
+
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
                         }

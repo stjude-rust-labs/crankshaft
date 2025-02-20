@@ -59,7 +59,7 @@ impl Resources {
         self.ram
     }
 
-    /// The RAM limit.
+    /// The RAM limit in gigabytes.
     pub fn ram_limit(&self) -> Option<f64> {
         self.ram_limit
     }
@@ -192,9 +192,9 @@ impl From<&Resources> for HostConfig {
             host_config.nano_cpus = Some((cpu * 1_000_000_000.0) as i64);
         }
 
-        if let Some(ram) = resources.ram() {
-            host_config.memory_reservation = Some((ram * 1024. * 1024. * 1024.) as i64);
-        }
+        // Note: Docker doesn't have a memory reservation for containers
+        // The Docker `memory_reservation` setting acts as a soft limit and not as
+        // something informing a scheduler of minimum requirements for the container
 
         if let Some(ram) = resources.ram_limit() {
             host_config.memory = Some((ram * 1024. * 1024. * 1024.) as i64);

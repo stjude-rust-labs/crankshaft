@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* Added support for specifying CPU and memory limits to configuration defaults ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
 * Adds the initial version of the crate.
 
 ### Changed

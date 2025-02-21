@@ -10,7 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 bon.workspace = true
-config = "0.15.7"
+config.workspace = true
 dirs.workspace = true
 regex.workspace = true
 serde.workspace = true

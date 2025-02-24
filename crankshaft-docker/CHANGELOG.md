@@ -24,4 +24,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+* Fixed environment variables not being set in containers ([#18](https://github.com/stjude-rust-labs/crankshaft/pull/18))
 * Fixed a non-zero exit code from a container being treated as a wait error ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).

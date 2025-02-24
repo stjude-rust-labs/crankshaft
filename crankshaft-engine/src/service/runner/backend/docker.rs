@@ -393,6 +393,7 @@ impl crate::Backend for Backend {
                         .image(execution.image())
                         .program(execution.program())
                         .args(execution.args())
+                        .envs(execution.env())
                         .resources(task.resources().map(Into::into).unwrap_or_default())
                         .attach_stdout()
                         .attach_stderr();
@@ -421,6 +422,7 @@ impl crate::Backend for Backend {
                         .image(execution.image())
                         .program(execution.program())
                         .args(execution.args())
+                        .envs(execution.env())
                         .attach_stdout()
                         .attach_stderr()
                         .host_config(HostConfig {

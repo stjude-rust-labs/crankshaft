@@ -1,3 +1,5 @@
+# Crankshaft
+
 <img style="margin: 0px" alt="Repository Header Image" src="https://stjude-rust-labs.github.io/crankshaft/header.png" />
 <hr/>
 
@@ -44,6 +46,17 @@ large-scale bioinformatics analyses. There is no associated `crankshaft` command
 tool—the end user is really engine _developers_ who want to include it as a core task
 execution library in their own command line tools.
 
+## Documentation
+
+Comprehensive documentation is available in the [docs](./docs) directory:
+
+- [Getting Started](./docs/getting-started/installation.md) - Installation and quick start guide
+- [Core Concepts](./docs/core-concepts/overview.md) - Understanding Crankshaft's architecture
+- [Configuration Guide](./docs/configuration/overview.md) - Detailed configuration options
+- [Examples](./docs/examples/overview.md) - Code examples and use cases
+- [API Reference](./docs/api/overview.md) - Complete API documentation
+- [Troubleshooting](./docs/troubleshooting/overview.md) - Common issues and solutions
+
 ## Guiding Principles
 
 - `crankshaft` aims to be a **high-performance** task execution framework
@@ -60,7 +73,7 @@ execution library in their own command line tools.
   and, in theory, multiple frontends based on different workflow
   languages can exist (and we hope this is the case)!
 
-## 📚 Getting Started
+## Quick Start
 
 ### Installation
 
@@ -73,10 +86,35 @@ installed, you can create a new project and add the latest version of
 cargo add crankshaft
 ```
 
-Once you've added `crankshaft` to your dependencies, you should head over to the
-[`examples`] to see how you can use the library in your projects.
+### Basic Usage
 
-## 🖥️ Development
+```rust
+use crankshaft::engine::Engine;
+use crankshaft::task::Task;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a new engine
+    let engine = Engine::new()?;
+
+    // Define a simple task
+    let task = Task::new("echo", vec!["Hello, Crankshaft!"])
+        .with_stdout("/tmp/output.txt");
+
+    // Submit the task
+    let task_id = engine.submit(task).await?;
+
+    // Wait for completion
+    let status = engine.wait_for_completion(task_id).await?;
+    
+    println!("Task completed with status: {:?}", status);
+    Ok(())
+}
+```
+
+For more examples, see the [Examples Guide](./docs/examples/overview.md).
+
+## Development
 
 To bootstrap a development environment, please use the following commands.
 
@@ -89,34 +127,34 @@ cd crankshaft
 cargo build --release
 ```
 
-## 🚧️ Tests
+## Testing
 
 Before submitting any pull requests, please make sure the code passes the
 following checks (from the root directory).
 
 ```bash
-# Run the project's tests.
+# Run the project's tests
 cargo test --all-features
 
-# Run the tests for the examples.
+# Run the tests for the examples
 cargo test --examples --all-features
 
-# Ensure the project doesn't have any linting warnings.
+# Ensure the project doesn't have any linting warnings
 cargo clippy --all-features
 
-# Ensure the project passes `cargo fmt`.
+# Ensure the project passes `cargo fmt`
 cargo fmt --check
 
-# Ensure the docs build.
+# Ensure the docs build
 cargo doc
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions, issues and feature requests are welcome! Feel free to check
 [issues page](https://github.com/stjude-rust-labs/crankshaft/issues).
 
-## 📝 License
+## License
 
 This project is licensed as either [Apache 2.0][license-apache] or
 [MIT][license-mit] at your discretion. Additionally, please see [the

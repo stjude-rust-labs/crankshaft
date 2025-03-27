@@ -1,0 +1,25 @@
+{
+  "profiles": [
+    {"profile": "development", "services": "3", "status": "● Active"},
+    {"profile": "staging", "services": "5", "status": "● Active"},
+    {"profile": "production", "services": "8", "status": "○ Inactive"}
+  ],
+  "services": [
+    {"service": "frontend", "status": "● Running", "ports": "3000:3000", "cpu": "2.5%", "memory": "128MB"},
+    {"service": "api", "status": "● Running", "ports": "8000:8000", "cpu": "1.8%", "memory": "256MB"},
+    {"service": "db", "status": "● Running", "ports": "5432:5432", "cpu": "3.2%", "memory": "512MB"},
+    {"service": "cache", "status": "● Running", "ports": "6379:6379", "cpu": "0.9%", "memory": "64MB"},
+    {"service": "nginx", "status": "● Running", "ports": "80:80, 443:443", "cpu": "1.2%", "memory": "96MB"},
+    {"service": "worker", "status": "○ Stopped", "ports": "-", "cpu": "0%", "memory": "0MB"}
+  ],
+  "system_metrics": {
+    "active_profiles": "2",
+    "running_containers": "5",
+    "cpu_usage": "9.6%",
+    "memory_usage": "1056MB / 8GB",
+    "disk_usage": "42GB / 100GB",
+    "network_in": "1.2MB/s",
+    "network_out": "0.8MB/s",
+    "uptime": "3d 5h 42m"
+  }
+}

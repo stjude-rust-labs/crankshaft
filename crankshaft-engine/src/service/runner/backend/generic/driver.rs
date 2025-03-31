@@ -251,7 +251,7 @@ async fn create_ssh_transport(host: &str, config: &ssh::Config) -> Result<Transp
                 )
             })?;
     } else {
-        let username = whoami::username();
+        let username = whoami::username()?;
 
         agent
             .userauth(&username, key)

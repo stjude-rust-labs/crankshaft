@@ -10,12 +10,13 @@ use std::process::Output;
 
 use bollard::Docker;
 use bollard::body_full;
-use bollard::container::AttachContainerOptions;
 use bollard::container::LogOutput;
-use bollard::container::RemoveContainerOptions;
-use bollard::container::StartContainerOptions;
-use bollard::container::UploadToContainerOptions;
-use bollard::container::WaitContainerOptions;
+use bollard::query_parameters::AttachContainerOptions;
+use bollard::query_parameters::InspectContainerOptions;
+use bollard::query_parameters::RemoveContainerOptions;
+use bollard::query_parameters::StartContainerOptions;
+use bollard::query_parameters::UploadToContainerOptions;
+use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use futures::TryStreamExt as _;
 use tokio_stream::StreamExt as _;
@@ -85,7 +86,7 @@ impl Container {
             .upload_to_container(
                 &self.name,
                 Some(UploadToContainerOptions {
-                    path: "/",
+                    path: String::from("/"),
                     ..Default::default()
                 }),
                 // SAFETY: this is manually crafted to always unwrap.
@@ -102,10 +103,10 @@ impl Container {
             .client
             .attach_container(
                 &self.name,
-                Some(AttachContainerOptions::<String> {
-                    stdout: Some(self.attach_stdout),
-                    stderr: Some(self.attach_stderr),
-                    stream: Some(true),
+                Some(AttachContainerOptions {
+                    stdout: self.attach_stdout,
+                    stderr: self.attach_stderr,
+                    stream: true,
                     ..Default::default()
                 }),
             )
@@ -117,7 +118,7 @@ impl Container {
 
         // Start the container.
         self.client
-            .start_container(&self.name, None::<StartContainerOptions<String>>)
+            .start_container(&self.name, None::<StartContainerOptions>)
             .await
             .map_err(Error::Docker)?;
 
@@ -155,7 +156,7 @@ impl Container {
         debug!("waiting for container `{name}` to exit", name = self.name);
         let mut wait_stream = self
             .client
-            .wait_container(&self.name, None::<WaitContainerOptions<String>>);
+            .wait_container(&self.name, None::<WaitContainerOptions>);
 
         let mut exit_code = None;
         if let Some(result) = wait_stream.next().await {
@@ -175,7 +176,7 @@ impl Container {
             // Get the exit code if the wait was immediate
             let container = self
                 .client
-                .inspect_container(&self.name, None)
+                .inspect_container(&self.name, None::<InspectContainerOptions>)
                 .await
                 .map_err(Error::Docker)?;
 

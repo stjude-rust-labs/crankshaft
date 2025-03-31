@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
 * Replaced `attached` with separate stdout and stderr attach flags
   ([#8](https://github.com/stjude-rust-labs/crankshaft/pull/8)).
+* Updated `bollard` to an official, upstreamed crate release
+  ([#29](https://github.com/stjude-rust-labs/crankshaft/pull/29)).
 
 ### Fixed
 

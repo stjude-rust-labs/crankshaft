@@ -1,5 +1,6 @@
 //! A Docker client that uses [`bollard`].
 
+use bollard::query_parameters::ListNodesOptions;
 use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
 
@@ -134,7 +135,10 @@ impl Docker {
     /// This method should only be called for a Docker daemon that has been
     /// joined to a swarm.
     pub async fn nodes(&self) -> Result<Vec<Node>> {
-        self.0.list_nodes::<&str>(None).await.map_err(Into::into)
+        self.0
+            .list_nodes(None::<ListNodesOptions>)
+            .await
+            .map_err(Into::into)
     }
 
     //----------------------------------------------------------------------------------

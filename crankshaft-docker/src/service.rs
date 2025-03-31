@@ -11,11 +11,11 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
-use bollard::container::LogsOptions;
-use bollard::container::WaitContainerOptions;
+use bollard::query_parameters::{InspectContainerOptions, ListTasksOptions};
+use bollard::query_parameters::LogsOptions;
+use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use bollard::secret::TaskState;
-use bollard::task::ListTasksOptions;
 
 mod builder;
 
@@ -77,7 +77,10 @@ impl Service {
             let tasks = self
                 .client
                 .list_tasks(Some(ListTasksOptions {
-                    filters: HashMap::from_iter([("service", vec![self.id.as_str()])]),
+                    filters: Some(HashMap::from_iter([(
+                        String::from("service"),
+                        vec![self.id.to_string()],
+                    )])),
                 }))
                 .await
                 .map_err(Error::Docker)?;
@@ -136,7 +139,7 @@ impl Service {
                     // Wait for the container to be completed.
                     let mut wait_stream = self
                         .client
-                        .wait_container(&container_id, None::<WaitContainerOptions<&str>>);
+                        .wait_container(&container_id, None::<WaitContainerOptions>);
 
                     let mut exit_code = None;
                     if let Some(result) = wait_stream.next().await {
@@ -158,7 +161,7 @@ impl Service {
                         // Get the exit code if the wait was immediate
                         let container = self
                             .client
-                            .inspect_container(&container_id, None)
+                            .inspect_container(&container_id, None::<InspectContainerOptions>)
                             .await
                             .map_err(Error::Docker)?;
 
@@ -224,7 +227,7 @@ impl Service {
         // Attach to the logs stream.
         let stream = self.client.logs(
             &container_id,
-            Some(LogsOptions::<&str> {
+            Some(LogsOptions {
                 stdout: self.attach_stdout,
                 stderr: self.attach_stderr,
                 ..Default::default()

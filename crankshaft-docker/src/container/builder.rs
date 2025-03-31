@@ -1,8 +1,8 @@
 //! Builders for containers.
 
 use bollard::Docker;
-use bollard::container::Config;
-use bollard::container::CreateContainerOptions;
+use bollard::models::ContainerCreateBody;
+use bollard::query_parameters::CreateContainerOptions;
 use bollard::secret::HostConfig;
 use indexmap::IndexMap;
 use tracing::warn;
@@ -141,10 +141,10 @@ impl Builder {
             .client
             .create_container(
                 Some(CreateContainerOptions {
-                    name: name.as_ref(),
+                    name: Some(name.as_ref().into()),
                     ..Default::default()
                 }),
-                Config {
+                ContainerCreateBody {
                     // NOTE: even though the following fields are optional, I
                     // want _this_ struct to require the explicit designation
                     // one way or the other and not rely on the default.

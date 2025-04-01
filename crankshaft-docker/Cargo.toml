@@ -1,5 +1,6 @@
 [package]
 name = "crankshaft-docker"
+description = "Docker facilities for Crankshaft"
 version = "0.1.0"
 license.workspace = true
 edition.workspace = true

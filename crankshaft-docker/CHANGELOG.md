@@ -3,14 +3,19 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic
+Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## Unreleased 
+
+## 0.1.0 - 04-01-2025
 
 ### Added
 
-* Added support for respecting CPU and memory limits ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
-* Added support for submitting tasks via the service API for Docker Swarm (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
+* Added support for respecting CPU and memory limits
+  ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
+* Added support for submitting tasks via the service API for Docker Swarm
+  (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Adds the initial version of the crate.
 
 ### Changed
@@ -26,5 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-* Fixed environment variables not being set in containers ([#18](https://github.com/stjude-rust-labs/crankshaft/pull/18))
-* Fixed a non-zero exit code from a container being treated as a wait error ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
+* Fixed environment variables not being set in containers
+  ([#18](https://github.com/stjude-rust-labs/crankshaft/pull/18))
+* Fixed a non-zero exit code from a container being treated as a wait error
+  ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).

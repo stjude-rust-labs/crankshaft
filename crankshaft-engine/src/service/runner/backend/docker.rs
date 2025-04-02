@@ -436,7 +436,7 @@ impl crate::Backend for Backend {
 
                     let container = Arc::new(
                         builder
-                            .try_build(&name)
+                            .try_build(name.clone())
                             .await?,
                     );
 

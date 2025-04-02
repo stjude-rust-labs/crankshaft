@@ -1,5 +1,6 @@
 [package]
 name = "crankshaft"
+description = "A headless task execution engine that supports local, cloud, and HPC"
 version = "0.1.0"
 license.workspace = true
 edition.workspace = true

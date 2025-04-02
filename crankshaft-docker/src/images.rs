@@ -2,8 +2,9 @@
 
 use std::collections::HashMap;
 
-use bollard::image::CreateImageOptions;
-use bollard::image::ListImagesOptions;
+use bollard::query_parameters::CreateImageOptions;
+use bollard::query_parameters::ListImagesOptions;
+use bollard::query_parameters::RemoveImageOptions;
 use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
 use futures::stream::FuturesUnordered;
@@ -23,7 +24,7 @@ pub(crate) async fn list_images(docker: &Docker) -> Result<Vec<ImageSummary>> {
 
     let images = docker
         .inner()
-        .list_images(Some(ListImagesOptions::<String> {
+        .list_images(Some(ListImagesOptions {
             all: true,
             ..Default::default()
         }))
@@ -62,17 +63,17 @@ pub(crate) async fn list_images(docker: &Docker) -> Result<Vec<ImageSummary>> {
 ///
 /// * Confirming that the image already exists there, or
 /// * Pulling the image from the remote repository.
-pub(crate) async fn ensure_image(docker: &Docker, image: impl AsRef<str>) -> Result<()> {
-    let image = image.as_ref();
+pub(crate) async fn ensure_image(docker: &Docker, image: impl Into<String>) -> Result<()> {
+    let image = image.into();
 
     debug!("ensuring image `{image}` exists locally");
 
     let mut filters = HashMap::new();
-    filters.insert("reference", vec![image]);
+    filters.insert(String::from("reference"), vec![image.clone()]);
     let results = docker
         .inner()
         .list_images(Some(ListImagesOptions {
-            filters,
+            filters: Some(filters),
             ..Default::default()
         }))
         .await
@@ -94,8 +95,12 @@ pub(crate) async fn ensure_image(docker: &Docker, image: impl AsRef<str>) -> Res
     debug!("image `{image}` does not exist locally; attempting to pull from remote");
     let mut stream = docker.inner().create_image(
         Some(CreateImageOptions {
-            from_image: image,
-            tag: if image.contains(':') { "" } else { "latest" },
+            tag: Some(if image.contains(':') {
+                String::from("")
+            } else {
+                String::from("latest")
+            }),
+            from_image: Some(image),
             ..Default::default()
         }),
         None,
@@ -153,7 +158,7 @@ pub(crate) async fn remove_image<T: AsRef<str>, U: AsRef<str>>(
     debug!("removing image: {name} ({tag})");
     let images = docker
         .inner()
-        .remove_image(name, None, None)
+        .remove_image(name, None::<RemoveImageOptions>, None)
         .await
         .map_err(Error::Docker)?;
 

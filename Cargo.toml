@@ -14,12 +14,12 @@ license = "MIT OR Apache-2.0"
 edition = "2021"
 authors = ["The Rust WDL project developers"]
 homepage = "https://github.com/stjude-rust-labs/crankshaft"
-repository = "https://github.com/stjude-rust-labs/wdl"
+repository = "https://github.com/stjude-rust-labs/crankshaft"
 rust-version = "1.83.0"
 
 [workspace.dependencies]
 async-trait = "0.1.86"
-bollard = "0.18.1"
+bollard = "0.19.0-rc1"
 bon = "3.3.2"
 clap = { version = "4.5.30", features = ["derive"] }
 clap-verbosity-flag = "3.0.2"
@@ -91,6 +91,3 @@ broken_intra_doc_links = "warn"
 
 [workspace.lints.clippy]
 missing_docs_in_private_items = "warn"
-
-[patch.crates-io]
-bollard = { git = "https://github.com/peterhuene/bollard", branch = "nodes-api" }

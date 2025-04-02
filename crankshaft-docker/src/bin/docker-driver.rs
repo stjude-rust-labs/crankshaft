@@ -91,7 +91,7 @@ async fn create_container(
     docker: Docker,
     image: impl AsRef<str>,
     tag: impl AsRef<str>,
-    name: impl AsRef<str>,
+    name: impl Into<String>,
     program: impl Into<String>,
     args: impl IntoIterator<Item = impl Into<String>>,
 ) -> Result<Container> {

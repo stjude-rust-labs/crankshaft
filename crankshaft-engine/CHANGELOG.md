@@ -3,16 +3,23 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic
+Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.1.0 - 04-01-2025
+
 ### Added
 
-* Added a notification channel for the first time a task starts executing ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
-* Added support for bind mounting inputs to the Docker backend ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).
-* Added cancellation support to the engine and ctrl-c handling in the examples (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
-* Added support for Docker Swarm in the docker backend (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
+* Added a notification channel for the first time a task starts executing
+  ([#16](https://github.com/stjude-rust-labs/crankshaft/pull/16)).
+* Added support for bind mounting inputs to the Docker backend
+  ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).
+* Added cancellation support to the engine and ctrl-c handling in the examples
+  (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
+* Added support for Docker Swarm in the docker backend
+  (#[11](https://github.com/stjude-rust-labs/crankshaft/pull/11)).
 * Adds the initial version of the crate.
 * Adds basic auth to the TES examples
   ([[#6](https://github.com/stjude-rust-labs/crankshaft/issues/6)]).
@@ -38,4 +45,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * The Docker backend now ensures task execution images are present locally
-  before creating any containers ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).
+  before creating any containers
+  ([#12](https://github.com/stjude-rust-labs/crankshaft/pull/12)).

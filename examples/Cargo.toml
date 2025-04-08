@@ -29,15 +29,15 @@ url.workspace = true
 indicatif.workspace = true
 futures.workspace = true
 
-[[bin]]
+[[example]]
 name = "docker"
 path = "src/docker/main.rs"
 
-[[bin]]
+[[example]]
 name = "lsf"
 path = "src/lsf/main.rs"
 
-[[bin]]
+[[example]]
 name = "tes"
 path = "src/tes/main.rs"
 

@@ -35,9 +35,8 @@ pub struct Engine {
 impl Engine {
     /// Adds a [`Backend`] to the engine.
     pub async fn with(mut self, config: Config) -> Result<Self> {
-        let (name, kind, max_tasks, defaults) = config.into_parts();
-        let runner = Runner::initialize(kind, max_tasks, defaults).await?;
-        self.runners.insert(name, runner);
+        let runner = Runner::initialize(config.kind, config.max_tasks, config.defaults).await?;
+        self.runners.insert(config.name, runner);
         Ok(self)
     }
 
@@ -66,7 +65,8 @@ impl Engine {
 
         debug!(
             "submitting job{} to the `{}` backend",
-            task.name()
+            task.name
+                .as_ref()
                 .map(|name| format!(" with name `{}`", name))
                 .unwrap_or_default(),
             name

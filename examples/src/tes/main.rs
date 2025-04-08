@@ -21,14 +21,19 @@ use crankshaft::config::backend::tes::Config;
 use crankshaft::config::backend::tes::http;
 use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
+use crankshaft::engine::task::Output;
+use crankshaft::engine::task::output::Type;
+use eyre::Context;
 use eyre::Result;
 use eyre::bail;
+use eyre::eyre;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use nonempty::NonEmpty;
+use tempfile::NamedTempFile;
 use tokio::select;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
@@ -108,7 +113,37 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     Engine::start_instrument(3000);
 
     let mut tasks = (0..args.n_jobs)
-        .map(|_| Ok(engine.spawn("tes", task.clone(), token.clone())?.wait()))
+        .map(|_| {
+            let mut task = task.clone();
+            let stdout = NamedTempFile::new()?.into_temp_path();
+            let stderr = NamedTempFile::new()?.into_temp_path();
+
+            task.outputs.push(
+                Output::builder()
+                    .path("/stdout")
+                    .url(
+                        Url::from_file_path(&stdout)
+                            .map_err(|_| eyre!("failed to get stdout URL"))?,
+                    )
+                    .ty(Type::File)
+                    .build(),
+            );
+            task.outputs.push(
+                Output::builder()
+                    .path("/stderr")
+                    .url(
+                        Url::from_file_path(&stderr)
+                            .map_err(|_| eyre!("failed to get stderr URL"))?,
+                    )
+                    .ty(Type::File)
+                    .build(),
+            );
+
+            let handle = engine.spawn("tes", task, token.clone())?;
+            Ok(handle
+                .wait()
+                .map(|e| e.map(|e| (e.into_iter().next().unwrap(), stdout, stderr))))
+        })
         .collect::<Result<FuturesUnordered<_>>>()?;
 
     let progress = ProgressBar::new(tasks.len() as u64);
@@ -140,12 +175,17 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
 
     for (i, result) in results.into_iter().enumerate() {
         match result {
-            Ok(output) => println!(
+            Ok((status, stdout, stderr)) => println!(
                 "task #{num} {status}, stdout: {stdout:?}, stderr: {stderr:?}",
                 num = i + 1,
-                status = output.first().status,
-                stdout = std::str::from_utf8(&output.first().stdout).unwrap_or("<not UTF-8>"),
-                stderr = std::str::from_utf8(&output.first().stderr).unwrap_or("<not UTF-8>")
+                stdout = std::fs::read_to_string(&stdout).with_context(|| format!(
+                    "failed to read stdout file `{stdout}`",
+                    stdout = stdout.display()
+                ))?,
+                stderr = std::fs::read_to_string(&stderr).with_context(|| format!(
+                    "failed to read stderr file `{stderr}`",
+                    stderr = stderr.display()
+                ))?,
             ),
             Err(e) => println!("task #{num} failed: {e:#}", num = i + 1),
         }

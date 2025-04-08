@@ -69,8 +69,9 @@ const CONFIG: &str = r#"backends:
 async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let config = serde_yaml::from_str::<Config>(CONFIG)
         .context("parsing LSF configuration file")?
-        .into_backends()
-        .find(|backend| backend.name() == "lsf")
+        .backends
+        .into_iter()
+        .find(|backend| backend.name == "lsf")
         .context("locating configuration with name `lsf`")?;
 
     let engine = Engine::default().with(config).await?;
@@ -125,13 +126,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
 
     for (i, result) in results.into_iter().enumerate() {
         match result {
-            Ok(output) => println!(
-                "task #{num} {status}, stdout: {stdout:?}, stderr: {stderr:?}",
-                num = i + 1,
-                status = output.first().status,
-                stdout = std::str::from_utf8(&output.first().stdout).unwrap_or("<not UTF-8>"),
-                stderr = std::str::from_utf8(&output.first().stderr).unwrap_or("<not UTF-8>")
-            ),
+            Ok(output) => println!("task #{num} {status}", num = i + 1, status = output.first()),
             Err(e) => println!("task #{num} failed: {e:#}", num = i + 1),
         }
     }

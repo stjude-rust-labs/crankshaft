@@ -47,20 +47,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Config {
     /// All registered backends.
     #[builder(into)]
-    backends: Vec<backend::Config>,
+    pub backends: Vec<backend::Config>,
 }
 
 impl Config {
-    /// Gets the configured backends.
-    pub fn backends(&self) -> &[backend::Config] {
-        self.backends.as_slice()
-    }
-
-    /// Consumes `self` and returns the backends.
-    pub fn into_backends(self) -> impl Iterator<Item = backend::Config> {
-        self.backends.into_iter()
-    }
-
     /// Gets a builder with the default sources preloaded.
     fn default_sources() -> ConfigBuilder<DefaultState> {
         let mut builder = ConfigCrate::builder();
@@ -140,8 +130,8 @@ mod tests {
         let config = Config::fixture("example.toml").unwrap();
         let backend = &config.backends[1];
 
-        assert_eq!(backend.name(), "quux");
-        assert_eq!(backend.defaults().unwrap().cpu(), Some(1.0));
-        assert_eq!(backend.defaults().unwrap().ram(), Some(1.0));
+        assert_eq!(backend.name, "quux");
+        assert_eq!(backend.defaults.as_ref().unwrap().cpu, Some(1.0));
+        assert_eq!(backend.defaults.as_ref().unwrap().ram, Some(1.0));
     }
 }

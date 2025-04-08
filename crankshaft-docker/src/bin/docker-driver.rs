@@ -104,8 +104,6 @@ async fn create_container(
         ))
         .program(program)
         .args(args)
-        .attach_stdout()
-        .attach_stderr()
         .try_build(name)
         .await?)
 }
@@ -136,17 +134,13 @@ async fn run(args: Args) -> Result<()> {
             let args = command.split_off(1);
 
             let container =
-                create_container(docker, image, tag, name, command.remove(0), args).await?;
-            let output = container.run(|| {}).await?;
+                create_container(docker, image, tag, &name, command.remove(0), args).await?;
+            let status = container.run(&name, || {}).await?;
 
-            println!("exit code: {}", output.status);
-            println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-            println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+            println!("exit code: {}", status);
         }
         Command::RemoveContainer { name, force } => {
-            // NOTE: `attach` is hardcoded to `true` here, but that doesn't
-            // matter, because the `attach` field is never used in this call.
-            let container = docker.container_from_name(name, true, true);
+            let container = docker.container_from_name(name, None, None);
 
             if force {
                 container.force_remove().await?;

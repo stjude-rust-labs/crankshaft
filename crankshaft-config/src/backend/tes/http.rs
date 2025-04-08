@@ -13,13 +13,6 @@ pub struct Config {
     pub basic_auth_token: Option<String>,
 }
 
-impl Config {
-    /// Gets the basic auth token (if it exists).
-    pub fn basic_auth_token(&self) -> Option<&str> {
-        self.basic_auth_token.as_deref()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

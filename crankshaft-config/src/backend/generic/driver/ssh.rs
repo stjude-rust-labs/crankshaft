@@ -11,22 +11,10 @@ use serde::Serialize;
 pub struct Config {
     /// A username.
     #[builder(into)]
-    username: Option<String>,
+    pub username: Option<String>,
 
     /// A port.
-    port: usize,
-}
-
-impl Config {
-    /// Gets the username (if available).
-    pub fn username(&self) -> Option<&str> {
-        self.username.as_deref()
-    }
-
-    /// Gets the port.
-    pub fn port(&self) -> usize {
-        self.port
-    }
+    pub port: usize,
 }
 
 impl Default for Config {

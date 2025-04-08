@@ -1,6 +1,6 @@
 //! Task runner services.
 
-use std::process::Output;
+use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -29,13 +29,13 @@ const NAME_BUFFER_LEN: usize = 4096;
 
 /// A spawned task handle.
 #[derive(Debug)]
-pub struct TaskHandle(Receiver<Result<NonEmpty<Output>>>);
+pub struct TaskHandle(Receiver<Result<NonEmpty<ExitStatus>>>);
 
 impl TaskHandle {
     /// Consumes the task handle and waits for the task to complete.
     ///
-    /// Returns the output of the task.
-    pub async fn wait(self) -> Result<NonEmpty<Output>> {
+    /// Returns the exit statuses of the task's executors.
+    pub async fn wait(self) -> Result<NonEmpty<ExitStatus>> {
         self.0.await?
     }
 }
@@ -99,10 +99,10 @@ impl Runner {
         let backend = self.backend.clone();
         let lock = self.lock.clone();
 
-        if backend.default_name() == "docker" && task.name().is_none() {
+        if backend.default_name() == "docker" && task.name.is_none() {
             let mut generator = self.name_generator.lock().unwrap();
             // SAFETY: this generator should _never_ run out of entries.
-            task.override_name(generator.next().unwrap());
+            task.name = Some(generator.next().unwrap());
         }
 
         tokio::spawn(async move {

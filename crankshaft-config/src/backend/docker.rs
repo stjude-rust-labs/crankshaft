@@ -22,16 +22,7 @@ pub struct Config {
     /// (regardless of whether the job was a success or failure).
     #[serde(default = "default_cleanup")]
     #[builder(default = DEFAULT_CLEANUP)]
-    cleanup: bool,
-}
-
-impl Config {
-    /// Gets whether the backend is configured to remove the containers after
-    /// completion of the tasks (regardless of whether the job was a success or
-    /// failure).
-    pub fn cleanup(&self) -> bool {
-        self.cleanup
-    }
+    pub cleanup: bool,
 }
 
 impl Default for Config {

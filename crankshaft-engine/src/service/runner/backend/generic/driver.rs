@@ -96,11 +96,11 @@ impl Driver {
     pub async fn initialize(config: Config) -> Result<Self> {
         // NOTE: this is cloned because `default()` is only implemented on the
         // owned [`Locale`] type (not a reference).
-        let transport = match config.locale().cloned().unwrap_or_default() {
+        let transport = match &config.locale {
             // NOTE: no initialization is needed here, as we simply spawn a
             // [`tokio::process::Command`] when [`command()`] is called.
-            Locale::Local => Ok(Transport::Local),
-            Locale::SSH { host, options } => create_ssh_transport(&host, &options).await,
+            Some(Locale::Local) | None => Ok(Transport::Local),
+            Some(Locale::SSH { host, options }) => create_ssh_transport(host, options).await,
         }?;
 
         Ok(Self { transport, config })
@@ -143,13 +143,13 @@ async fn run_local_command(command: String, config: &Config) -> Result<Output> {
 
     // NOTE: this is cloned because `default()` is only implemented on the owned
     // [`Locale`] type (not a reference).
-    let command = match config.shell().cloned().unwrap_or_default() {
-        Shell::Bash => Command::new("/usr/bin/env")
+    let command = match &config.shell {
+        Some(Shell::Bash) | None => Command::new("/usr/bin/env")
             .args(["bash", "-c", &command])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn(),
-        Shell::Sh => Command::new("/usr/bin/env")
+        Some(Shell::Sh) => Command::new("/usr/bin/env")
             .args(["sh", "-c", &command])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -169,7 +169,7 @@ async fn run_local_command(command: String, config: &Config) -> Result<Output> {
 
 /// Attempts to create an SSH transport.
 async fn create_ssh_transport(host: &str, config: &ssh::Config) -> Result<Transport> {
-    let addr = format!("{host}:{}", config.port());
+    let addr = format!("{host}:{}", config.port);
 
     // Connect to the remote SSH host.
     let message = format!("connecting to SSH host: {}", addr);
@@ -239,7 +239,7 @@ async fn create_ssh_transport(host: &str, config: &ssh::Config) -> Result<Transp
     // Authenticate the SSH session.
     debug!("authenticating SSH session");
 
-    if let Some(ref username) = config.username() {
+    if let Some(username) = &config.username {
         agent
             .userauth(username, key)
             .map_err(Error::SSH2)
@@ -323,7 +323,7 @@ async fn run_ssh_command(
     config: &Config,
     command: String,
 ) -> Result<Output> {
-    let max_attempts = config.max_attempts();
+    let max_attempts = config.max_attempts;
 
     let f = move || {
         debug!("running command on remote host: `{}`", command);

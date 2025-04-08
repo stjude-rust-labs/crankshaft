@@ -1,9 +1,8 @@
 //! A Docker backend.
 
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Output;
+use std::process::ExitStatus;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -34,7 +33,6 @@ use tracing::info;
 use crate::Result;
 use crate::Task;
 use crate::task::Input;
-use crate::task::input::Contents;
 
 /// Represents resource information about a Docker swarm.
 #[derive(Debug, Default, Clone, Copy)]
@@ -323,7 +321,7 @@ impl crate::Backend for Backend {
         task: Task,
         mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>>>> {
         // Helper for cleanup
         enum Cleaner {
             /// The cleanup is for a container.
@@ -357,48 +355,93 @@ impl crate::Backend for Backend {
         }
 
         let client = self.client.clone();
-        let cleanup = self.config.cleanup();
+        let cleanup = self.config.cleanup;
         let resources = self.resources;
 
         Ok(async move {
             let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
 
             let mut mounts = Vec::new();
-            add_input_mounts(task.inputs(), tempdir.path(), &mut mounts).await?;
-            add_shared_mounts(task.shared_volumes(), tempdir.path(), &mut mounts)?;
+            add_input_mounts(task.inputs, tempdir.path(), &mut mounts).await?;
+            add_shared_mounts(task.volumes, tempdir.path(), &mut mounts)?;
             let mut outputs = Vec::new();
 
             let name = task
-                    .name()
-                    .context("task requires a name to run on the Docker backend")?
-                    .to_owned();
+                    .name
+                    .context("task requires a name to run on the Docker backend")?;
 
-            debug!("spawning task `{name}` with Docker backend");
-
-            for execution in task.executions() {
+            for execution in task.executions {
                 if token.is_cancelled() {
                     bail!("task has been cancelled");
                 }
 
                 // First ensure the execution's image exists
                 client
-                    .ensure_image(execution.image())
+                    .ensure_image(&execution.image)
                     .await
-                    .with_context(|| format!("failed to pull image `{image}`", image = execution.image()))?;
+                    .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?;
+
+                // Look for the path where the caller wants stdout saved to
+                let stdout = execution.stdout.as_ref().and_then(|p| {
+                    let url = task.outputs.iter().find_map(|o| if o.path == *p {
+                        Some(&o.url)
+                    } else {
+                        None
+                    })?;
+
+                    match url.scheme() {
+                        "file" => {
+                            Some(url.to_file_path().map_err(|_| {
+                                eyre!(
+                                    "stdout URL `{url}` has a file scheme but cannot be represented as a file path"
+                                )
+                            }))
+                        }
+                        _ => Some(Err(eyre!("unsupported scheme for stdout URL `{url}`")))
+                    }
+
+                }).transpose()?;
+
+                // Look for the path where the caller wants stderr saved to
+                let stderr = execution.stderr.as_ref().and_then(|p| {
+                    let url = task.outputs.iter().find_map(|o| if o.path == *p {
+                        Some(&o.url)
+                    } else {
+                        None
+                    })?;
+
+                    match url.scheme() {
+                        "file" => {
+                            Some(url.to_file_path().map_err(|_| {
+                                eyre!(
+                                    "stderr URL `{url}` has a file scheme but cannot be represented as a file path"
+                                )
+                            }))
+                        }
+                        _ => Some(Err(eyre!("unsupported scheme for stderr URL `{url}`")))
+                    }
+
+                }).transpose()?;
 
                 // Check to see if we should use the service API for running the task
                 let (result, cleaner) = if resources.use_service() {
                     let mut builder = client
                         .service_builder()
-                        .image(execution.image())
-                        .program(execution.program())
-                        .args(execution.args())
-                        .envs(execution.env())
-                        .resources(task.resources().map(Into::into).unwrap_or_default())
-                        .attach_stdout()
-                        .attach_stderr();
+                        .image(execution.image)
+                        .program(execution.program)
+                        .args(execution.args)
+                        .envs(execution.env)
+                        .resources(task.resources.as_ref().map(Into::into).unwrap_or_default());
 
-                    if let Some(work_dir) = execution.work_dir() {
+                    if let Some(stdout) = stdout {
+                        builder = builder.stdout(stdout);
+                    }
+
+                    if let Some(stderr) = stderr {
+                        builder = builder.stderr(stderr);
+                    }
+
+                    if let Some(work_dir) = execution.work_dir {
                         builder = builder.work_dir(work_dir);
                     }
 
@@ -412,25 +455,31 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
                         }
-                        res = service.run(|| if let Some(started) = started { started.send(()).ok(); }) => {
+                        res = service.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
                             (res.wrap_err("failed to run Docker service"), Cleaner::Service(service))
                         }
                     }
                 } else {
-                    let mut builder = client
+                   let mut builder = client
                         .container_builder()
-                        .image(execution.image())
-                        .program(execution.program())
-                        .args(execution.args())
-                        .envs(execution.env())
-                        .attach_stdout()
-                        .attach_stderr()
+                        .image(execution.image)
+                        .program(execution.program)
+                        .args(execution.args)
+                        .envs(execution.env)
                         .host_config(HostConfig {
                             mounts: Some(mounts.clone()),
-                            ..task.resources().map(Into::into).unwrap_or_default()
+                            ..task.resources.as_ref().map(|r| r.into()).unwrap_or_default()
                         });
 
-                    if let Some(work_dir) = execution.work_dir() {
+                    if let Some(stdout) = stdout {
+                        builder = builder.stdout(stdout);
+                    }
+
+                    if let Some(stderr) = stderr {
+                        builder = builder.stderr(stderr);
+                    }
+
+                    if let Some(work_dir) = execution.work_dir {
                         builder = builder.work_dir(work_dir);
                     }
 
@@ -449,7 +498,7 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
                         }
-                        res = container.run(|| if let Some(started) = started { started.send(()).ok(); }) => {
+                        res = container.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
                             (res.wrap_err("failed to run Docker container"), Cleaner::Container(container))
                         }
                     }
@@ -479,51 +528,26 @@ impl crate::Backend for Backend {
 ///
 /// Errors may be returned if an input's contents could not be fetched.
 async fn add_input_mounts(
-    inputs: impl Iterator<Item = Arc<Input>>,
-    tempdir: &Path,
+    inputs: Vec<Input>,
+    temp_dir: &Path,
     mounts: &mut Vec<Mount>,
 ) -> Result<()> {
     for input in inputs {
-        let source = if let Contents::Path(path) = input.contents() {
-            // Use the input path directly
-            path.to_str()
-                .with_context(|| {
-                    format!("input path `{path}` is not UTF-8", path = path.display())
-                })?
-                .to_string()
-        } else {
-            // Write the input file contents to a temporary file within the temporary
-            // directory
-            let mut file = tempfile::NamedTempFile::new_in(tempdir).with_context(|| {
-                format!(
-                    "failed to create temporary input file in `{tempdir}`",
-                    tempdir = tempdir.display()
-                )
-            })?;
-            // TODO: remotely fetched input contents should be cached somewhere
-            file.write(&input.fetch().await?).with_context(|| {
-                format!(
-                    "failed to write input file contents to `{path}`",
-                    path = file.path().display()
-                )
-            })?;
-
-            // Keep the file as the temporary directory itself will clean up the mounts
-            let (_, path) = file.keep().context("failed to persist temporary file")?;
-
-            path.into_os_string().into_string().map_err(|path| {
-                eyre!(
-                    "temporary file path `{path}` is not UTF-8",
-                    path = PathBuf::from(&path).display()
-                )
-            })?
-        };
+        let target = input.path;
+        let source = input.contents.fetch(temp_dir).await?;
 
         mounts.push(Mount {
-            target: Some(input.path().to_string()),
-            source: Some(source),
+            target: Some(target),
+            source: Some(
+                source
+                    .to_str()
+                    .with_context(|| {
+                        format!("path `{source}` is not UTF-8", source = source.display())
+                    })?
+                    .to_string(),
+            ),
             typ: Some(MountTypeEnum::BIND),
-            read_only: Some(input.read_only()),
+            read_only: Some(input.read_only),
             ..Default::default()
         });
     }
@@ -533,12 +557,8 @@ async fn add_input_mounts(
 
 /// Gets the shared mounts (if any exist) from the shared volumes in a [`Task`]
 /// (via [`Task::shared_volumes()`]).
-fn add_shared_mounts<'a>(
-    iter: impl Iterator<Item = &'a str>,
-    tempdir: &Path,
-    mounts: &mut Vec<Mount>,
-) -> Result<()> {
-    for target in iter {
+fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Mount>) -> Result<()> {
+    for volume in volumes {
         // Create new temporary directory in the provided temporary directory
         // The call to `into_path` will prevent the directory from being deleted on
         // drop; instead, we're relying on the parent temporary directory to delete it
@@ -560,7 +580,7 @@ fn add_shared_mounts<'a>(
             })?;
 
         mounts.push(Mount {
-            target: Some(target.to_owned()),
+            target: Some(volume),
             source: Some(path),
             typ: Some(MountTypeEnum::BIND),
             read_only: Some(false),

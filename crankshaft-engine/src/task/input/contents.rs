@@ -1,9 +1,14 @@
 //! Contents of an input.
 
+use std::borrow::Cow;
 use std::fs;
+use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
 
 use eyre::Context;
+use eyre::bail;
+use eyre::eyre;
 use thiserror::Error;
 use url::Url;
 
@@ -59,5 +64,62 @@ impl Contents {
                 })?),
             )),
         }
+    }
+
+    /// Fetches the contents locally.
+    ///
+    /// If the contents is a path, the path is returned.
+    ///
+    /// If the contents is a literal, they are written to a temporary file.
+    ///
+    /// If the contents is a URL, the file is downloaded to a temporary file.
+    ///
+    /// Returns the path to the contents.
+    pub async fn fetch(&self, temp_dir: &Path) -> eyre::Result<Cow<'_, Path>> {
+        let contents: Cow<'_, [u8]> = match self {
+            Self::Url(url) => {
+                match url.scheme() {
+                    "file" => {
+                        // SAFETY: we just checked to ensure this is a file, so
+                        // getting the file path should always unwrap.
+                        let path = url.to_file_path().map_err(|_| {
+                            eyre!(
+                                "URL `{url}` has a file scheme but cannot be represented as a \
+                                 file path"
+                            )
+                        })?;
+                        return Ok(path.into());
+                    }
+                    // TODO: remotely fetched contents should be cached somewhere
+                    "http" | "https" => bail!("support for HTTP URLs is not yet implemented"),
+                    "s3" => bail!("support for S3 URLs is not yet implemented"),
+                    "az" => bail!("support for Azure Storage URLs is not yet implemented"),
+                    "gs" => bail!("support for Google Cloud Storage URLs is not yet implemented"),
+                    scheme => bail!("URL has unsupported scheme `{scheme}`"),
+                }
+            }
+            Self::Literal(bytes) => bytes.into(),
+            Self::Path(path) => return Ok(path.into()),
+        };
+
+        // Write the contents to a temporary file within the given temporary directory
+        let mut file = tempfile::NamedTempFile::new_in(temp_dir).with_context(|| {
+            format!(
+                "failed to create temporary input file in `{temp_dir}`",
+                temp_dir = temp_dir.display()
+            )
+        })?;
+
+        file.write(&contents).with_context(|| {
+            format!(
+                "failed to write input file contents to `{path}`",
+                path = file.path().display()
+            )
+        })?;
+
+        // Keep the file as the temporary directory itself will clean up the mounts
+        let (_, path) = file.keep().context("failed to persist temporary file")?;
+
+        Ok(path.into())
     }
 }

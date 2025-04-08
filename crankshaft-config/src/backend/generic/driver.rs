@@ -48,31 +48,14 @@ impl Default for MaxAttempts {
 pub struct Config {
     /// The locale within which to run commands.
     #[builder(into)]
-    locale: Option<Locale>,
+    pub locale: Option<Locale>,
 
     /// The shell to execute within.
     #[builder(into)]
-    shell: Option<Shell>,
+    pub shell: Option<Shell>,
 
     /// The maximum number of attempts to try a command execution.
-    max_attempts: Option<MaxAttempts>,
-}
-
-impl Config {
-    /// Gets the locale.
-    pub fn locale(&self) -> Option<&Locale> {
-        self.locale.as_ref()
-    }
-
-    /// Gets the shell.
-    pub fn shell(&self) -> Option<&Shell> {
-        self.shell.as_ref()
-    }
-
-    /// Gets the maximum number of attempts.
-    pub fn max_attempts(&self) -> Option<MaxAttempts> {
-        self.max_attempts
-    }
+    pub max_attempts: Option<MaxAttempts>,
 }
 
 /// A driver configuration used during testing.
@@ -91,8 +74,8 @@ mod tests {
     #[test]
     fn demo() {
         let demo = super::demo();
-        assert_eq!(demo.locale().unwrap(), &Locale::Local);
-        assert_eq!(demo.shell().unwrap(), &Shell::Bash);
-        assert_eq!(demo.max_attempts().unwrap_or_default().inner(), 4);
+        assert_eq!(demo.locale.unwrap(), Locale::Local);
+        assert_eq!(demo.shell.unwrap(), Shell::Bash);
+        assert_eq!(demo.max_attempts.unwrap_or_default().inner(), 4);
     }
 }

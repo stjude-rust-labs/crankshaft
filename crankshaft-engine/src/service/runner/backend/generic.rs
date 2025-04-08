@@ -3,7 +3,7 @@
 //! Generic backends are intended to be relatively malleable and configurable by
 //! the end user without requiring the need to write Rust code.
 
-use std::process::Output;
+use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,7 +49,7 @@ impl Backend {
     /// connection settings and the provided configuration for the backend.
     pub async fn initialize(config: Config, defaults: Option<Defaults>) -> Result<Self> {
         // TODO(clay): this could be "taken" instead to avoid the clone.
-        let driver = Driver::initialize(config.driver().clone())
+        let driver = Driver::initialize(config.driver.clone())
             .await
             .map(Arc::new)?;
 
@@ -104,26 +104,27 @@ impl crate::Backend for Backend {
         task: Task,
         mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>>>> {
         let driver = self.driver.clone();
         let config = self.config.clone();
 
         let default_substitutions = self
-            .resolve_resources(task.resources())
+            .resolve_resources(task.resources.as_ref())
             .map(|resources| resources.to_hashmap())
             .unwrap_or_default();
 
         Ok(async move {
-            let mut outputs = Vec::new();
+            let mut statuses = Vec::new();
             let job_id_regex = config
-                .job_id_regex()
+                .job_id_regex
+                .as_ref()
                 .map(|pattern| {
                     Regex::new(pattern)
                         .with_context(|| format!("job regex `{pattern}` is not valid"))
                 })
                 .transpose()?;
 
-            for execution in task.executions() {
+            for execution in task.executions {
                 if token.is_cancelled() {
                     bail!("task has been cancelled");
                 }
@@ -134,7 +135,7 @@ impl crate::Backend for Backend {
                 warn!(
                     "generic backends do not support images; as such, the directive to use a `{}` \
                      image will be ignored",
-                    execution.image()
+                    execution.image
                 );
 
                 let mut substitutions = default_substitutions.clone();
@@ -143,8 +144,8 @@ impl crate::Backend for Backend {
                     .insert(
                         "command".into(),
                         shlex::try_join(
-                            std::iter::once(execution.program())
-                                .chain(execution.args().iter().map(String::as_str)),
+                            std::iter::once(execution.program.as_str())
+                                .chain(execution.args.iter().map(String::as_str)),
                         )?
                         .into(),
                     )
@@ -153,7 +154,7 @@ impl crate::Backend for Backend {
                     unreachable!("the `command` key should not be present here");
                 };
 
-                if let Some(cwd) = execution.work_dir() {
+                if let Some(cwd) = execution.work_dir {
                     if substitutions.insert("cwd".into(), cwd.into()).is_some() {
                         unreachable!("the `cwd` key should not be present here");
                     };
@@ -220,27 +221,27 @@ impl crate::Backend for Backend {
                             let output = result?;
 
                             if !output.status.success() {
-                                outputs.push(output);
+                                statuses.push(output.status);
                                 break;
                             }
 
                             tokio::time::sleep(Duration::from_secs(
                                 config
-                                    .monitor_frequency()
+                                    .monitor_frequency
                                     .unwrap_or(DEFAULT_MONITOR_FREQUENCY),
                             ))
                             .await;
                         }
                     }
                     _ => {
-                        outputs.push(output);
+                        statuses.push(output.status);
                     }
                 }
             }
 
             // SAFETY: each task _must_ have at least one execution, so at least one
             // execution result _must_ exist at this stage. Thus, this will always unwrap.
-            Ok(NonEmpty::from_vec(outputs).unwrap())
+            Ok(NonEmpty::from_vec(statuses).unwrap())
         }
         .boxed())
     }

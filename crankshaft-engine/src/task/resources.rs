@@ -7,7 +7,7 @@ use bollard::secret::HostConfig;
 use bollard::secret::TaskSpecResources;
 use bon::Builder;
 use crankshaft_config::backend::Defaults;
-use tracing::info;
+use tracing::debug;
 
 /// A set of requested resources.
 #[derive(Builder, Clone, Debug)]
@@ -17,69 +17,34 @@ pub struct Resources {
     ///
     /// Partial CPU requests are supported but not always respected depending on
     /// the backend.
-    cpu: Option<f64>,
+    pub cpu: Option<f64>,
 
     /// The requested CPU limit.
     ///
     /// Not all backends support limits on CPU usage.
-    cpu_limit: Option<f64>,
+    pub cpu_limit: Option<f64>,
 
     /// The requested random access memory size (in GiB).
-    ram: Option<f64>,
+    pub ram: Option<f64>,
 
     /// The requested RAM limit (in GiB).
     ///
     /// Not all backends support limits on memory usage.
-    ram_limit: Option<f64>,
+    pub ram_limit: Option<f64>,
 
     /// The requested disk size (in GiB).
-    disk: Option<f64>,
+    pub disk: Option<f64>,
 
     /// Whether or not the task may use preemptible resources.
     #[builder(into)]
-    preemptible: Option<bool>,
+    pub preemptible: Option<bool>,
 
     /// The associated compute zones.
     #[builder(into, default)]
-    zones: Vec<String>,
+    pub zones: Vec<String>,
 }
 
 impl Resources {
-    /// The number of CPU cores.
-    pub fn cpu(&self) -> Option<f64> {
-        self.cpu
-    }
-
-    /// The CPU limit.
-    pub fn cpu_limit(&self) -> Option<f64> {
-        self.cpu_limit
-    }
-
-    /// The amount of RAM in gigabytes.
-    pub fn ram(&self) -> Option<f64> {
-        self.ram
-    }
-
-    /// The RAM limit in gigabytes.
-    pub fn ram_limit(&self) -> Option<f64> {
-        self.ram_limit
-    }
-
-    /// The amount of disk space in gigabytes.
-    pub fn disk(&self) -> Option<f64> {
-        self.disk
-    }
-
-    /// Whether the instance should be preemptible.
-    pub fn preemptible(&self) -> Option<bool> {
-        self.preemptible
-    }
-
-    /// The set of requested zones.
-    pub fn zones(&self) -> &[String] {
-        &self.zones
-    }
-
     /// Applies any provided options in `other` to the [`Resources`].
     pub fn apply(mut self, other: &Self) -> Self {
         if let Some(cores) = other.cpu {
@@ -173,11 +138,11 @@ impl Default for Resources {
 impl From<&Defaults> for Resources {
     fn from(defaults: &Defaults) -> Self {
         Self {
-            cpu: defaults.cpu(),
-            cpu_limit: defaults.cpu(),
-            ram: defaults.ram(),
-            ram_limit: defaults.ram_limit(),
-            disk: defaults.disk(),
+            cpu: defaults.cpu,
+            cpu_limit: defaults.cpu,
+            ram: defaults.ram,
+            ram_limit: defaults.ram_limit,
+            disk: defaults.disk,
             preemptible: Default::default(),
             zones: Default::default(),
         }
@@ -189,19 +154,19 @@ impl From<&Resources> for HostConfig {
         let mut host_config = Self::default();
 
         // Note: Docker doesn't have a CPU reservation for containers
-        if resources.cpu().is_some() {
-            info!(
+        if resources.cpu.is_some() {
+            debug!(
                 "ignoring minimum CPU reservation for a Docker daemon not participating in a swarm"
             );
         }
 
-        if let Some(cpu) = resources.cpu_limit() {
+        if let Some(cpu) = resources.cpu_limit {
             host_config.nano_cpus = Some((cpu * 1_000_000_000.0) as i64);
         }
 
         // Note: Docker doesn't have a memory reservation for containers
-        if resources.ram().is_some() {
-            info!(
+        if resources.ram.is_some() {
+            debug!(
                 "ignoring minimum memory reservation for a Docker daemon not participating in a \
                  swarm"
             );
@@ -210,11 +175,11 @@ impl From<&Resources> for HostConfig {
         // The Docker `memory_reservation` setting acts as a soft limit and not as
         // something informing a scheduler of minimum requirements for the container
 
-        if let Some(ram) = resources.ram_limit() {
+        if let Some(ram) = resources.ram_limit {
             host_config.memory = Some((ram * 1024. * 1024. * 1024.) as i64);
         }
 
-        if let Some(disk) = resources.disk() {
+        if let Some(disk) = resources.disk {
             let mut storage_opt: HashMap<String, String> = HashMap::new();
             storage_opt.insert("size".to_string(), disk.to_string());
             host_config.storage_opt = Some(storage_opt);
@@ -228,21 +193,21 @@ impl From<&Resources> for TaskSpecResources {
     fn from(resources: &Resources) -> Self {
         let mut spec = Self::default();
 
-        if let Some(cpu) = resources.cpu() {
+        if let Some(cpu) = resources.cpu {
             spec.reservations.get_or_insert_default().nano_cpus =
                 Some((cpu * 1_000_000_000.0) as i64);
         }
 
-        if let Some(cpu) = resources.cpu_limit() {
+        if let Some(cpu) = resources.cpu_limit {
             spec.limits.get_or_insert_default().nano_cpus = Some((cpu * 1_000_000_000.0) as i64);
         }
 
-        if let Some(ram) = resources.ram() {
+        if let Some(ram) = resources.ram {
             spec.reservations.get_or_insert_default().memory_bytes =
                 Some((ram * 1024. * 1024. * 1024.) as i64);
         }
 
-        if let Some(ram) = resources.ram_limit() {
+        if let Some(ram) = resources.ram_limit {
             spec.limits.get_or_insert_default().memory_bytes =
                 Some((ram * 1024. * 1024. * 1024.) as i64);
         }
@@ -258,10 +223,10 @@ impl From<Resources> for tes::v1::types::task::Resources {
         }
 
         tes::v1::types::task::Resources {
-            cpu_cores: resources.cpu().map(|inner| inner as i64),
-            ram_gb: resources.ram(),
-            disk_gb: resources.disk(),
-            preemptible: resources.preemptible(),
+            cpu_cores: resources.cpu.map(|inner| inner as i64),
+            ram_gb: resources.ram,
+            disk_gb: resources.disk,
+            preemptible: resources.preemptible,
             zones: None,
         }
     }

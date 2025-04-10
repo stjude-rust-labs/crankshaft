@@ -38,14 +38,6 @@ jobs:
         run: rustup update stable && rustup default stable
       - run: cargo test --all-features
 
-  test-examples:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Update Rust
-        run: rustup update stable && rustup default stable
-      - run: cargo test --all-features --examples
-
   docs:
     runs-on: ubuntu-22.04
     steps:

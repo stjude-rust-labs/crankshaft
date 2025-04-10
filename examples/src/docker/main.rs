@@ -2,7 +2,7 @@
 //!
 //! You can run this command with the following command:
 //!
-//! `cargo run --release --example docker`
+//! `cargo run --release --bin docker`
 
 use std::env::current_dir;
 use std::time::Duration;

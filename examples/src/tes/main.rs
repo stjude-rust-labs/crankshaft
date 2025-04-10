@@ -6,7 +6,7 @@
 //! export USER="<USER>"
 //! export PASSWORD="<PASSWORD>"
 //!
-//! cargo run --release --example tes <URL>
+//! cargo run --release --bin tes <URL>
 //! ```
 
 use std::env::current_dir;

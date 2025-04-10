@@ -2,7 +2,7 @@
 //!
 //! You can run this command with the following command:
 //!
-//! `cargo run --release --example lsf`
+//! `cargo run --release --bin lsf`
 
 use std::env::current_dir;
 use std::time::Duration;

@@ -98,9 +98,6 @@ following checks (from the root directory).
 # Run the project's tests.
 cargo test --all-features
 
-# Run the tests for the examples.
-cargo test --examples --all-features
-
 # Ensure the project doesn't have any linting warnings.
 cargo clippy --all-features
 

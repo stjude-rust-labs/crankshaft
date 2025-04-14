@@ -107,7 +107,7 @@ impl Task {
     }
 }
 
-impl TryFrom<Task> for tes::v1::types::Task {
+impl TryFrom<Task> for tes::v1::types::requests::Task {
     type Error = eyre::Error;
 
     fn try_from(task: Task) -> Result<Self, Self::Error> {
@@ -171,7 +171,7 @@ impl TryFrom<Task> for tes::v1::types::Task {
             todo!("volumes are not yet supported within Crankshaft");
         }
 
-        Ok(tes::v1::types::Task {
+        Ok(Self {
             name,
             description,
             inputs,

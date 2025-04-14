@@ -257,12 +257,14 @@ impl From<Resources> for tes::v1::types::task::Resources {
             todo!("zones within resources are not yet implemented in Crankshaft");
         }
 
-        tes::v1::types::task::Resources {
-            cpu_cores: resources.cpu().map(|inner| inner as i64),
+        Self {
+            cpu_cores: resources.cpu().map(|inner| inner as i32),
             ram_gb: resources.ram(),
             disk_gb: resources.disk(),
             preemptible: resources.preemptible(),
             zones: None,
+            backend_parameters: None,
+            backend_parameters_strict: None,
         }
     }
 }

@@ -1,6 +1,6 @@
 //! A unit of executable work.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use bon::Builder;
 use indexmap::IndexMap;
@@ -92,7 +92,7 @@ impl From<Execution> for tes::v1::types::task::Executor {
         let env = execution
             .env
             .into_iter()
-            .collect::<HashMap<String, String>>();
+            .collect::<BTreeMap<String, String>>();
 
         let env = if env.is_empty() { None } else { Some(env) };
 
@@ -108,6 +108,7 @@ impl From<Execution> for tes::v1::types::task::Executor {
             stdout: execution.stdout,
             stderr: execution.stderr,
             env,
+            ignore_error: Some(true),
         }
     }
 }

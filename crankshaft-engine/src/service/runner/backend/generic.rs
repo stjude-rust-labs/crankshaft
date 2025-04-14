@@ -10,8 +10,7 @@ use std::time::Duration;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
 use eyre::Context as _;
-use eyre::bail;
-use eyre::eyre;
+use eyre::Result;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -21,7 +20,7 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-use crate::Result;
+use super::TaskRunError;
 use crate::Task;
 use crate::service::runner::backend::generic::driver::Driver;
 use crate::task::Resources;
@@ -104,7 +103,7 @@ impl crate::Backend for Backend {
         task: Task,
         mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         let driver = self.driver.clone();
         let config = self.config.clone();
 
@@ -126,7 +125,7 @@ impl crate::Backend for Backend {
 
             for execution in task.executions {
                 if token.is_cancelled() {
-                    bail!("task has been cancelled");
+                    return Err(TaskRunError::Canceled);
                 }
 
                 // TODO(clay): this will warn every time for now. We need to
@@ -146,7 +145,8 @@ impl crate::Backend for Backend {
                         shlex::try_join(
                             std::iter::once(execution.program.as_str())
                                 .chain(execution.args.iter().map(String::as_str)),
-                        )?
+                        )
+                        .map_err(|e| TaskRunError::Other(e.into()))?
                         .into(),
                     )
                     .is_some()
@@ -200,10 +200,10 @@ impl crate::Backend for Backend {
                                 biased;
 
                                 _ = token.cancelled() => {
-                                    Err(eyre!("task has been cancelled"))
+                                    Err(TaskRunError::Canceled)
                                 }
                                 res = driver.run(monitor) => {
-                                    res
+                                    res.map_err(TaskRunError::Other)
                                 }
                             };
 
@@ -219,7 +219,6 @@ impl crate::Backend for Backend {
                             }
 
                             let output = result?;
-
                             if !output.status.success() {
                                 statuses.push(output.status);
                                 break;

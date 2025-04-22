@@ -143,13 +143,13 @@ async fn run_local_command(command: String, config: &Config) -> Result<Output> {
 
     // NOTE: this is cloned because `default()` is only implemented on the owned
     // [`Locale`] type (not a reference).
-    let command = match config.shell() {
-        Some(Shell::Bash) | None => Command::new("/usr/bin/env")
+    let command = match config.shell().unwrap_or_default() {
+        Shell::Bash => Command::new("/usr/bin/env")
             .args(["bash", "-c", &command])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn(),
-        Some(Shell::Sh) => Command::new("/usr/bin/env")
+        Shell::Sh => Command::new("/usr/bin/env")
             .args(["sh", "-c", &command])
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())

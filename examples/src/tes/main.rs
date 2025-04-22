@@ -105,6 +105,8 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                 .image("alpine")
                 .program("echo")
                 .args([String::from("hello, world!")])
+                .stdout("/stdout")
+                .stderr("/stderr")
                 .build(),
         ))
         .build();

@@ -66,7 +66,8 @@ impl Engine {
 
         debug!(
             "submitting job{} to the `{}` backend",
-            task.name()
+            task.name
+                .as_ref()
                 .map(|name| format!(" with name `{}`", name))
                 .unwrap_or_default(),
             name

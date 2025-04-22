@@ -65,13 +65,18 @@ impl Config {
     }
 
     /// Gets the shell.
-    pub fn shell(&self) -> Option<&Shell> {
-        self.shell.as_ref()
+    pub fn shell(&self) -> Option<Shell> {
+        self.shell
     }
 
     /// Gets the maximum number of attempts.
     pub fn max_attempts(&self) -> Option<MaxAttempts> {
         self.max_attempts
+    }
+
+    /// Converts the configuration into its parts.
+    pub fn into_parts(self) -> (Option<Locale>, Option<Shell>, Option<MaxAttempts>) {
+        (self.locale, self.shell, self.max_attempts)
     }
 }
 
@@ -92,7 +97,7 @@ mod tests {
     fn demo() {
         let demo = super::demo();
         assert_eq!(demo.locale().unwrap(), &Locale::Local);
-        assert_eq!(demo.shell().unwrap(), &Shell::Bash);
+        assert_eq!(demo.shell().unwrap(), Shell::Bash);
         assert_eq!(demo.max_attempts().unwrap_or_default().inner(), 4);
     }
 }

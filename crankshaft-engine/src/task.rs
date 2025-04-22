@@ -1,7 +1,5 @@
 //! Tasks that can be run by execution runners.
 
-use std::sync::Arc;
-
 use bon::Builder;
 use nonempty::NonEmpty;
 use tes::v1::types::task::Executor;
@@ -25,31 +23,31 @@ pub use resources::Resources;
 pub struct Task {
     /// An optional name.
     #[builder(into)]
-    name: Option<String>,
+    pub(crate) name: Option<String>,
 
     /// An optional description.
     #[builder(into)]
-    description: Option<String>,
+    pub(crate) description: Option<String>,
 
     /// An optional list of [`Input`]s.
     #[builder(into, default)]
-    inputs: Vec<Arc<Input>>,
+    pub(crate) inputs: Vec<Input>,
 
     /// An optional list of [`Output`]s.
     #[builder(into, default)]
-    outputs: Vec<Output>,
+    pub(crate) outputs: Vec<Output>,
 
     /// An optional set of requested [`Resources`].
     #[builder(into)]
-    resources: Option<Resources>,
+    pub(crate) resources: Option<Resources>,
 
     /// The list of [`Execution`]s.
     #[builder(into)]
-    executions: NonEmpty<Execution>,
+    pub(crate) executions: NonEmpty<Execution>,
 
     /// The list of volumes shared across executions in the task.
     #[builder(into, default)]
-    volumes: Vec<String>,
+    pub(crate) volumes: Vec<String>,
 }
 
 impl Task {
@@ -69,13 +67,23 @@ impl Task {
     }
 
     /// Gets the inputs for the task (if any exist).
-    pub fn inputs(&self) -> impl Iterator<Item = Arc<Input>> + use<'_> {
-        self.inputs.iter().cloned()
+    pub fn inputs(&self) -> impl Iterator<Item = &Input> {
+        self.inputs.iter()
+    }
+
+    /// Adds an input to the task.
+    pub fn add_input(&mut self, input: impl Into<Input>) {
+        self.inputs.push(input.into());
     }
 
     /// Gets the outputs for the task (if any exist).
     pub fn outputs(&self) -> impl Iterator<Item = &Output> {
         self.outputs.iter()
+    }
+
+    /// Adds an output to the task.
+    pub fn add_output(&mut self, output: impl Into<Output>) {
+        self.outputs.push(output.into());
     }
 
     /// Gets the requested resources for the task (if any are specified).
@@ -86,6 +94,11 @@ impl Task {
     /// Gets the executions for this task.
     pub fn executions(&self) -> impl Iterator<Item = &Execution> {
         self.executions.iter()
+    }
+
+    /// Adds an execution to the task.
+    pub fn add_execution(&mut self, execution: impl Into<Execution>) {
+        self.executions.push(execution.into());
     }
 
     /// Gets the shared volumes across executions within this task.
@@ -114,7 +127,7 @@ impl TryFrom<Task> for tes::v1::types::Task {
 
         let inputs = inputs
             .into_iter()
-            .map(|input| TesInput::try_from((*input).clone()))
+            .map(TesInput::try_from)
             .collect::<eyre::Result<Vec<_>>>()?;
 
         let inputs = if inputs.is_empty() {

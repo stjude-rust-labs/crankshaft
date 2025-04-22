@@ -11,38 +11,38 @@ use indexmap::IndexMap;
 pub struct Execution {
     /// The container image.
     #[builder(into)]
-    image: String,
+    pub(crate) image: String,
 
     /// The program to execute.
     #[builder(into)]
-    program: String,
+    pub(crate) program: String,
 
     /// The arguments to the program.
     #[builder(into, default)]
-    args: Vec<String>,
+    pub(crate) args: Vec<String>,
 
     /// The working directory, if configured.
     #[builder(into)]
-    work_dir: Option<String>,
+    pub(crate) work_dir: Option<String>,
 
     /// The path inside the container to a file whose contents will be piped to
     /// the standard input, if configured.
     #[builder(into)]
-    stdin: Option<String>,
+    pub(crate) stdin: Option<String>,
 
     /// The path inside the container to a file where the contents of the
     /// standard output stream will be written, if configured.
     #[builder(into)]
-    stdout: Option<String>,
+    pub(crate) stdout: Option<String>,
 
     /// The path inside the container to a file where the contents of the
     /// standard error stream will be written, if configured.
     #[builder(into)]
-    stderr: Option<String>,
+    pub(crate) stderr: Option<String>,
 
     /// A map of environment variables, if configured.
     #[builder(into, default)]
-    env: IndexMap<String, String>,
+    pub(crate) env: IndexMap<String, String>,
 }
 
 impl Execution {
@@ -96,9 +96,13 @@ impl From<Execution> for tes::v1::types::task::Executor {
 
         let env = if env.is_empty() { None } else { Some(env) };
 
+        let mut command = Vec::with_capacity(execution.args.len() + 1);
+        command.push(execution.program);
+        command.extend(execution.args);
+
         tes::v1::types::task::Executor {
             image: execution.image.to_owned(),
-            command: execution.args.to_vec(),
+            command,
             workdir: execution.work_dir,
             stdin: execution.stdin,
             stdout: execution.stdout,

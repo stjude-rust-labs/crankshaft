@@ -9,7 +9,6 @@ use std::os::unix::process::ExitStatusExt;
 #[cfg(windows)]
 use std::os::windows::process::ExitStatusExt;
 use std::process::ExitStatus;
-use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,16 +26,21 @@ use tes::v1::types::task::State;
 use tokio::select;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::info;
 use tracing::trace;
 
 use crate::Task;
+
+/// The default poll interval for querying task status.
+const DEFAULT_INTERVAL: Duration = Duration::from_secs(1);
 
 /// A backend driven by the Task Execution Service (TES) schema.
 #[derive(Debug)]
 pub struct Backend {
     /// A handle to the inner TES client.
     client: Arc<Client>,
+    /// The poll interval for checking on task status.
+    interval: Duration,
 }
 
 impl Backend {
@@ -57,11 +61,10 @@ impl Backend {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn initialize(config: Config) -> Self {
-        let (url, config) = config.into_parts();
-
+        let (url, config, interval) = config.into_parts();
         let mut builder = Client::builder().url(url);
 
-        if let Some(token) = config.basic_auth_token() {
+        if let Some(token) = config.basic_auth_token {
             builder = builder.insert_header("Authorization", format!("Basic {}", token));
         }
 
@@ -69,6 +72,9 @@ impl Backend {
             // SAFETY: the only required field of `builder` is the `url`, which
             // we provided earlier.
             client: Arc::new(builder.try_build().expect("client to build")),
+            interval: interval
+                .map(Duration::from_secs)
+                .unwrap_or(DEFAULT_INTERVAL),
         }
     }
 
@@ -76,41 +82,51 @@ impl Backend {
     async fn wait_task(
         client: &Client,
         task_id: &str,
+        name: &str,
+        interval: Duration,
         mut started: Option<oneshot::Sender<()>>,
-    ) -> Result<NonEmpty<Output>> {
+    ) -> Result<NonEmpty<ExitStatus>> {
+        info!("TES task `{task_id}` (task `{name}`) has been created; waiting for task to start");
+
         loop {
             let task = client
-                .get_task(task_id, View::Full)
+                .get_task(task_id, View::Minimal)
                 .await
-                .context("failed to get task information")?;
+                .context("failed to get task information")?
+                .into_minimal()
+                .unwrap();
 
-            trace!("response for {task_id}: {task:?}");
-
-            // SAFETY: `get_task` called with `View::Full` will always
-            // return a full [`Task`], so this will always unwrap.
-            let task = task.into_task().unwrap();
+            trace!("response for `{task_id}`: {task:?}");
 
             if let Some(ref state) = task.state {
-                debug!("state for task {task_id}: {state:?}");
                 match state {
                     State::Unknown | State::Queued | State::Initializing => {
                         // Task hasn't started yet
-                        debug!("task is not yet running; waiting before polling again");
+                        trace!("task `{task_id}` is not yet running; waiting before polling again");
                     }
                     State::Running | State::Paused => {
-                        debug!("task is running; waiting before polling again");
+                        trace!("task `{task_id}` is running; waiting before polling again");
 
                         // Task is running (or was previously running but now paused), so notify
                         if let Some(started) = started.take() {
+                            info!("TES task `{task_id}` (task `{name}`) has started");
                             started.send(()).ok();
                         }
                     }
                     State::Complete | State::ExecutorError | State::SystemError => {
+                        // Repeat with a basic request
+                        let task = client
+                            .get_task(task_id, View::Basic)
+                            .await
+                            .context("failed to get task information")?
+                            .into_task()
+                            .unwrap();
+
                         // Task completed or had an error
                         if *state == State::Complete {
-                            debug!("task has completed");
+                            info!("TES task `{task_id}` (task `{name}`) has completed");
                         } else {
-                            debug!("task has failed");
+                            info!("TES task `{task_id}` (task `{name}`) has failed");
                         }
 
                         // Task has completed, so notify that it started if we haven't already
@@ -118,7 +134,7 @@ impl Backend {
                             started.send(()).ok();
                         }
 
-                        let mut results = task
+                        let mut statuses = task
                             .logs
                             .unwrap()
                             .into_iter()
@@ -126,39 +142,27 @@ impl Backend {
                             .map(|log| {
                                 let status = log.exit_code.expect("exit code to be present");
 
+                                // See WEXITSTATUS from wait(2) to explain the shift
                                 #[cfg(unix)]
-                                let output = Output {
-                                    // See WEXITSTATUS from wait(2) to explain the shift
-                                    status: ExitStatus::from_raw((status as i32) << 8),
-                                    stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
-                                    stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
-                                };
+                                let status = ExitStatus::from_raw((status as i32) << 8);
 
                                 #[cfg(windows)]
-                                let output = Output {
-                                    status: ExitStatus::from_raw(status),
-                                    stdout: log.stdout.unwrap_or_default().as_bytes().to_vec(),
-                                    stderr: log.stderr.unwrap_or_default().as_bytes().to_vec(),
-                                };
+                                let status = ExitStatus::from_raw(status);
 
-                                output
+                                status
                             });
 
                         // SAFETY: at least one set of logs is always
                         // expected to be returned from the server.
-                        // TODO(clay): we should probably change this to a
-                        // recoverable error.
-                        let mut outputs = NonEmpty::new(results.next().unwrap());
-                        outputs.extend(results);
-
-                        return Ok(outputs);
+                        let mut result = NonEmpty::new(statuses.next().unwrap());
+                        result.extend(statuses);
+                        return Ok(result);
                     }
                     State::Canceled => bail!("task has been cancelled"),
                 }
             }
 
-            // TODO(clay): make this configurable.
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            tokio::time::sleep(interval).await;
         }
     }
 }
@@ -175,9 +179,11 @@ impl crate::Backend for Backend {
         task: Task,
         started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>>>> {
         let client = self.client.clone();
-        let task = tes::v1::types::Task::try_from(task)?;
+        let name = task.name.clone();
+        let task: tes::v1::types::Task = tes::v1::types::Task::try_from(task)?;
+        let interval = self.interval;
 
         Ok(async move {
             let task_id = client.create_task(task).await?.id;
@@ -191,7 +197,7 @@ impl crate::Backend for Backend {
                     client.cancel_task(&task_id).await?;
                     bail!("task has been cancelled")
                 }
-                res = Self::wait_task(&client, &task_id, started) => {
+                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started) => {
                     res
                 }
             }

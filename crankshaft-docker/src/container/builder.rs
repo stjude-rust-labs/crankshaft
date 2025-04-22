@@ -1,10 +1,13 @@
 //! Builders for containers.
 
+use std::path::PathBuf;
+
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::CreateContainerOptions;
 use bollard::secret::HostConfig;
 use indexmap::IndexMap;
+use tracing::info;
 use tracing::warn;
 
 use crate::Container;
@@ -26,11 +29,11 @@ pub struct Builder {
     /// The arguments to the command.
     args: Vec<String>,
 
-    /// Whether or not the standard output is attached.
-    attach_stdout: bool,
+    /// The file path to write the container's stdout stream to.
+    stdout: Option<PathBuf>,
 
-    /// Whether or not the standard error is attached.
-    attach_stderr: bool,
+    /// The file path to write the container's stderr stream to.
+    stderr: Option<PathBuf>,
 
     /// Environment variables.
     env: IndexMap<String, String>,
@@ -50,8 +53,8 @@ impl Builder {
             image: Default::default(),
             program: Default::default(),
             args: Default::default(),
-            attach_stdout: false,
-            attach_stderr: false,
+            stdout: None,
+            stderr: None,
             env: Default::default(),
             work_dir: Default::default(),
             host_config: Default::default(),
@@ -82,15 +85,15 @@ impl Builder {
         self
     }
 
-    /// Sets stdout to be attached.
-    pub fn attach_stdout(mut self) -> Self {
-        self.attach_stdout = true;
+    /// Sets the file to write the container's stdout stream to.
+    pub fn stdout(mut self, path: impl Into<PathBuf>) -> Self {
+        self.stdout = Some(path.into());
         self
     }
 
-    /// Sets stderr to be attached.
-    pub fn attach_stderr(mut self) -> Self {
-        self.attach_stderr = true;
+    /// Sets the file to write the container's stderr stream to.
+    pub fn stderr(mut self, path: impl Into<PathBuf>) -> Self {
+        self.stderr = Some(path.into());
         self
     }
 
@@ -137,11 +140,12 @@ impl Builder {
         cmd.push(program);
         cmd.extend(self.args);
 
+        let name = name.into();
         let response = self
             .client
             .create_container(
                 Some(CreateContainerOptions {
-                    name: Some(name.into()),
+                    name: Some(name.clone()),
                     ..Default::default()
                 }),
                 ContainerCreateBody {
@@ -153,8 +157,8 @@ impl Builder {
                     // Override the entrypoint to the default Docker entrypoint as we're providing
                     // the full command
                     entrypoint: Some(vec![String::new()]),
-                    attach_stdout: Some(self.attach_stdout),
-                    attach_stderr: Some(self.attach_stderr),
+                    attach_stdout: Some(self.stdout.is_some()),
+                    attach_stderr: Some(self.stderr.is_some()),
                     // END NOTE
                     working_dir: self.work_dir,
                     host_config: self.host_config,
@@ -165,15 +169,17 @@ impl Builder {
             .await
             .map_err(Error::Docker)?;
 
+        info!("created container `{id}` (task `{name}`)", id = response.id);
+
         for warning in &response.warnings {
             warn!("{warning}");
         }
 
         Ok(Container {
             client: self.client,
-            name: response.id,
-            attach_stdout: self.attach_stdout,
-            attach_stderr: self.attach_stderr,
+            id: response.id,
+            stdout: self.stdout,
+            stderr: self.stderr,
         })
     }
 }

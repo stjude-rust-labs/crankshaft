@@ -1,5 +1,7 @@
 //! A Docker client that uses [`bollard`].
 
+use std::path::PathBuf;
+
 use bollard::query_parameters::ListNodesOptions;
 use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
@@ -120,10 +122,10 @@ impl Docker {
     pub fn container_from_name(
         &self,
         id: impl Into<String>,
-        attach_stdout: bool,
-        attach_stderr: bool,
+        stdout: Option<PathBuf>,
+        stderr: Option<PathBuf>,
     ) -> Container {
-        Container::new(self.0.clone(), id.into(), attach_stdout, attach_stderr)
+        Container::new(self.0.clone(), id.into(), stdout, stderr)
     }
 
     //----------------------------------------------------------------------------------

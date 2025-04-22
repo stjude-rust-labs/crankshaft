@@ -19,6 +19,9 @@ pub struct Config {
     /// More nuanced, HTTP-related configuration.
     #[builder(into, default)]
     http: http::Config,
+
+    /// The poll interval, in seconds, to use for querying TES task status.
+    interval: Option<u64>,
 }
 
 impl Config {
@@ -32,9 +35,14 @@ impl Config {
         &self.http
     }
 
+    /// Gets the poll interval, in seconds, for querying TES task status.
+    pub fn interval(&self) -> Option<u64> {
+        self.interval
+    }
+
     /// Consumes `self` and returns the constituent, owned parts of the
     /// configuration.
-    pub fn into_parts(self) -> (Url, http::Config) {
-        (self.url, self.http)
+    pub fn into_parts(self) -> (Url, http::Config, Option<u64>) {
+        (self.url, self.http, self.interval)
     }
 }

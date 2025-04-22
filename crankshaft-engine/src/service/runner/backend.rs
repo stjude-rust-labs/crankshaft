@@ -1,7 +1,7 @@
 //! Supported backends.
 
 use std::fmt::Debug;
-use std::process::Output;
+use std::process::ExitStatus;
 
 use async_trait::async_trait;
 use eyre::Result;
@@ -26,13 +26,13 @@ pub trait Backend: Debug + Send + Sync + 'static {
     ///
     /// The optional `started` channel is notified when the first execution of
     /// the task has started.
-    // TODO: use a representation of task output that isn't based on
-    // `std::process::Output` that would allow us to write stdout/stderror to a file
-    // instead of buffering it all in memory
+    ///
+    /// Returns a collection of exit status corresponding to the task's
+    /// executions.
     fn run(
         &self,
         task: Task,
         started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<Output>>>>;
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>>>>;
 }

@@ -1,15 +1,8 @@
 //! Task inputs.
 
-use std::borrow::Cow;
-use std::fs;
-
 use bon::Builder;
 use eyre::Context;
 use eyre::Result;
-use eyre::bail;
-use eyre::eyre;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 
 mod contents;
 
@@ -31,29 +24,29 @@ pub enum Type {
 pub struct Input {
     /// An optional name to give the input.
     #[builder(into)]
-    name: Option<String>,
+    pub(crate) name: Option<String>,
 
     /// A description of the input.
     #[builder(into)]
-    description: Option<String>,
+    pub(crate) description: Option<String>,
 
     /// The contents of the input.
     #[builder(into)]
-    contents: Contents,
+    pub(crate) contents: Contents,
 
     /// The expected guest path of the input.
     #[builder(into)]
-    path: String,
+    pub(crate) path: String,
 
     /// The type of the input.
     #[builder(into)]
-    ty: Type,
+    pub(crate) ty: Type,
 
     /// Whether or not the input should be treated as read-only.
     ///
     /// Defaults to `true`.
     #[builder(default = true)]
-    read_only: bool,
+    pub(crate) read_only: bool,
 }
 
 impl Input {
@@ -87,42 +80,6 @@ impl Input {
     /// Inputs are read-only by default.
     pub fn read_only(&self) -> bool {
         self.read_only
-    }
-
-    /// Fetches the input contents.
-    ///
-    /// This method will return an error if the input is a path to a directory.
-    pub async fn fetch(&self) -> Result<Cow<'_, [u8]>> {
-        match &self.contents {
-            Contents::Literal(bytes) => Ok(bytes.into()),
-            Contents::Url(url) => match url.scheme() {
-                "file" => {
-                    // SAFETY: we just checked to ensure this is a file, so
-                    // getting the file path should always unwrap.
-                    let path = url.to_file_path().map_err(|_| {
-                        eyre!(
-                            "URL `{url}` has a file scheme but cannot be represented as a file \
-                             path"
-                        )
-                    })?;
-                    let mut file = File::open(&path).await.with_context(|| {
-                        format!("failed to open file `{path}`", path = path.display())
-                    })?;
-                    let mut buffer = Vec::with_capacity(4096);
-                    file.read_to_end(&mut buffer).await.with_context(|| {
-                        format!("failed to read file `{path}`", path = path.display())
-                    })?;
-                    Ok(buffer.into())
-                }
-                "http" | "https" => bail!("support for HTTP URLs is not yet implemented"),
-                "s3" => bail!("support for S3 URLs is not yet implemented"),
-                scheme => bail!("URL has unsupported scheme `{scheme}`"),
-            },
-            Contents::Path(path) => Ok(fs::read_to_string(path)
-                .with_context(|| format!("failed to read file `{path}`", path = path.display()))?
-                .into_bytes()
-                .into()),
-        }
     }
 }
 

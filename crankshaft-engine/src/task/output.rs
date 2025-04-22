@@ -19,23 +19,23 @@ pub enum Type {
 pub struct Output {
     /// An optional name.
     #[builder(into)]
-    name: Option<String>,
+    pub(crate) name: Option<String>,
 
     /// An optional description.
     #[builder(into)]
-    description: Option<String>,
+    pub(crate) description: Option<String>,
 
     /// The URL to copy the output to when complete.
     #[builder(into)]
-    url: Url,
+    pub(crate) url: Url,
 
     /// The path to map the output to within the container.
     #[builder(into)]
-    path: String,
+    pub(crate) path: String,
 
     /// The type of the output.
     #[builder(into)]
-    ty: Type,
+    pub(crate) ty: Type,
 }
 
 impl Output {

@@ -7,7 +7,7 @@ use bollard::secret::HostConfig;
 use bollard::secret::TaskSpecResources;
 use bon::Builder;
 use crankshaft_config::backend::Defaults;
-use tracing::info;
+use tracing::debug;
 
 /// A set of requested resources.
 #[derive(Builder, Clone, Debug)]
@@ -17,31 +17,31 @@ pub struct Resources {
     ///
     /// Partial CPU requests are supported but not always respected depending on
     /// the backend.
-    cpu: Option<f64>,
+    pub(crate) cpu: Option<f64>,
 
     /// The requested CPU limit.
     ///
     /// Not all backends support limits on CPU usage.
-    cpu_limit: Option<f64>,
+    pub(crate) cpu_limit: Option<f64>,
 
     /// The requested random access memory size (in GiB).
-    ram: Option<f64>,
+    pub(crate) ram: Option<f64>,
 
     /// The requested RAM limit (in GiB).
     ///
     /// Not all backends support limits on memory usage.
-    ram_limit: Option<f64>,
+    pub(crate) ram_limit: Option<f64>,
 
     /// The requested disk size (in GiB).
-    disk: Option<f64>,
+    pub(crate) disk: Option<f64>,
 
     /// Whether or not the task may use preemptible resources.
     #[builder(into)]
-    preemptible: Option<bool>,
+    pub(crate) preemptible: Option<bool>,
 
     /// The associated compute zones.
     #[builder(into, default)]
-    zones: Vec<String>,
+    pub(crate) zones: Vec<String>,
 }
 
 impl Resources {
@@ -190,7 +190,7 @@ impl From<&Resources> for HostConfig {
 
         // Note: Docker doesn't have a CPU reservation for containers
         if resources.cpu().is_some() {
-            info!(
+            debug!(
                 "ignoring minimum CPU reservation for a Docker daemon not participating in a swarm"
             );
         }
@@ -201,7 +201,7 @@ impl From<&Resources> for HostConfig {
 
         // Note: Docker doesn't have a memory reservation for containers
         if resources.ram().is_some() {
-            info!(
+            debug!(
                 "ignoring minimum memory reservation for a Docker daemon not participating in a \
                  swarm"
             );

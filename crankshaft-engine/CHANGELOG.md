@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* Refactored how `stdout` and `stderr` are handled by backends ([#32](https://github.com/stjude-rust-labs/crankshaft/pull/31)).
+
 ## 0.1.0 - 04-01-2025
 
 ### Added

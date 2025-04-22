@@ -118,7 +118,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
             let stdout = NamedTempFile::new()?.into_temp_path();
             let stderr = NamedTempFile::new()?.into_temp_path();
 
-            task.outputs.push(
+            task.add_output(
                 Output::builder()
                     .path("/stdout")
                     .url(
@@ -128,7 +128,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                     .ty(Type::File)
                     .build(),
             );
-            task.outputs.push(
+            task.add_output(
                 Output::builder()
                     .path("/stderr")
                     .url(

@@ -69,9 +69,8 @@ const CONFIG: &str = r#"backends:
 async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let config = serde_yaml::from_str::<Config>(CONFIG)
         .context("parsing LSF configuration file")?
-        .backends
-        .into_iter()
-        .find(|backend| backend.name == "lsf")
+        .into_backends()
+        .find(|backend| backend.name() == "lsf")
         .context("locating configuration with name `lsf`")?;
 
     let engine = Engine::default().with(config).await?;

@@ -63,31 +63,31 @@ pub struct Config {
     /// Configuration related to the command driver.
     #[serde(flatten)]
     #[builder(into)]
-    pub driver: driver::Config,
+    driver: driver::Config,
 
     /// The script used for job submission.
     #[builder(into)]
-    pub submit: String,
+    submit: String,
 
     /// A regex used to extract the job id from standard out.
     #[builder(into)]
-    pub job_id_regex: Option<String>,
+    job_id_regex: Option<String>,
 
     /// The script used to monitor a submitted job.
     #[builder(into)]
-    pub monitor: String,
+    monitor: String,
 
     /// The frequency in seconds that the job status will be queried.
-    pub monitor_frequency: Option<u64>,
+    monitor_frequency: Option<u64>,
 
     /// The script used to kill a job.
     #[builder(into)]
-    pub kill: String,
+    kill: String,
 
     /// The runtime attributes.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     #[builder(into, default)]
-    pub attributes: HashMap<Cow<'static, str>, Cow<'static, str>>,
+    attributes: HashMap<Cow<'static, str>, Cow<'static, str>>,
 }
 
 impl Config {
@@ -127,6 +127,41 @@ impl Config {
         } else {
             Ok(result)
         }
+    }
+
+    /// Gets the driver configuration.
+    pub fn driver(&self) -> &driver::Config {
+        &self.driver
+    }
+
+    /// Gets the submit command.
+    pub fn submit(&self) -> &str {
+        &self.submit
+    }
+
+    /// Gets the job id regex.
+    pub fn job_id_regex(&self) -> Option<&str> {
+        self.job_id_regex.as_deref()
+    }
+
+    /// Gets the monitor command.
+    pub fn monitor(&self) -> &str {
+        self.monitor.as_ref()
+    }
+
+    /// Gets the monitor frequency (in seconds).
+    pub fn monitor_frequency(&self) -> Option<u64> {
+        self.monitor_frequency
+    }
+
+    /// Gets the kill command.
+    pub fn kill(&self) -> &str {
+        self.kill.as_ref()
+    }
+
+    /// Gets the runtime attributes.
+    pub fn attributes(&self) -> &HashMap<Cow<'static, str>, Cow<'static, str>> {
+        &self.attributes
     }
 
     /// Gets the submit command with all of the substitutions resolved.
@@ -189,12 +224,12 @@ mod tests {
     #[test]
     fn demo() {
         let demo = super::demo();
-        assert_eq!(demo.driver, driver::demo());
-        assert_eq!(demo.submit, "echo 'submitting'");
-        assert!(demo.job_id_regex.is_none());
-        assert_eq!(demo.monitor, "echo 'monitoring'");
-        assert!(demo.monitor_frequency.is_none());
-        assert_eq!(demo.kill, "echo 'killing'");
-        assert!(demo.attributes.is_empty());
+        assert_eq!(demo.driver(), &driver::demo());
+        assert_eq!(demo.submit(), "echo 'submitting'");
+        assert!(demo.job_id_regex().is_none());
+        assert_eq!(demo.monitor(), "echo 'monitoring'");
+        assert!(demo.monitor_frequency().is_none());
+        assert_eq!(demo.kill(), "echo 'killing'");
+        assert!(demo.attributes().is_empty());
     }
 }

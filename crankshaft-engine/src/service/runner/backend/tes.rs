@@ -61,9 +61,10 @@ impl Backend {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn initialize(config: Config) -> Self {
-        let mut builder = Client::builder().url(config.url);
+        let (url, config, interval) = config.into_parts();
+        let mut builder = Client::builder().url(url);
 
-        if let Some(token) = config.http.basic_auth_token {
+        if let Some(token) = config.basic_auth_token {
             builder = builder.insert_header("Authorization", format!("Basic {}", token));
         }
 
@@ -71,8 +72,7 @@ impl Backend {
             // SAFETY: the only required field of `builder` is the `url`, which
             // we provided earlier.
             client: Arc::new(builder.try_build().expect("client to build")),
-            interval: config
-                .interval
+            interval: interval
                 .map(Duration::from_secs)
                 .unwrap_or(DEFAULT_INTERVAL),
         }

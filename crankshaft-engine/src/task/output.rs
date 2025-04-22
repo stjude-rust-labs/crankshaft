@@ -19,23 +19,50 @@ pub enum Type {
 pub struct Output {
     /// An optional name.
     #[builder(into)]
-    pub name: Option<String>,
+    pub(crate) name: Option<String>,
 
     /// An optional description.
     #[builder(into)]
-    pub description: Option<String>,
+    pub(crate) description: Option<String>,
 
     /// The URL to copy the output to when complete.
     #[builder(into)]
-    pub url: Url,
+    pub(crate) url: Url,
 
     /// The path to map the output to within the container.
     #[builder(into)]
-    pub path: String,
+    pub(crate) path: String,
 
     /// The type of the output.
     #[builder(into)]
-    pub ty: Type,
+    pub(crate) ty: Type,
+}
+
+impl Output {
+    /// The name of the output (if it exists).
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// The description of the output (if it exists).
+    pub fn description(&self) -> Option<&str> {
+        self.description.as_deref()
+    }
+
+    /// The URL to place the file when the task completes.
+    pub fn url(&self) -> &str {
+        self.url.as_ref()
+    }
+
+    /// The path to the file within the container.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// The type of the output.
+    pub fn ty(&self) -> &Type {
+        &self.ty
+    }
 }
 
 impl From<Output> for tes::v1::types::task::Output {

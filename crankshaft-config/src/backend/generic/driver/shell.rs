@@ -9,7 +9,7 @@ use serde::Serialize;
 const ENV_PATH: &str = "/usr/bin/env";
 
 /// A shell within which to run commands.
-#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Shell {
     /// Run commands using `bash`.

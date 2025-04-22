@@ -14,14 +14,35 @@ use url::Url;
 pub struct Config {
     /// The URL to reach the TES service at.
     #[builder(into)]
-    pub url: Url,
+    url: Url,
 
     /// More nuanced, HTTP-related configuration.
     #[builder(into, default)]
-    pub http: http::Config,
+    http: http::Config,
 
     /// The poll interval, in seconds, to use for querying TES task status.
-    ///
-    /// Defaults to 1 second.
-    pub interval: Option<u64>,
+    interval: Option<u64>,
+}
+
+impl Config {
+    /// Gets the URL of the TES server.
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+
+    /// Gets the HTTP-related configuration.
+    pub fn http(&self) -> &http::Config {
+        &self.http
+    }
+
+    /// Gets the poll interval, in seconds, for querying TES task status.
+    pub fn interval(&self) -> Option<u64> {
+        self.interval
+    }
+
+    /// Consumes `self` and returns the constituent, owned parts of the
+    /// configuration.
+    pub fn into_parts(self) -> (Url, http::Config, Option<u64>) {
+        (self.url, self.http, self.interval)
+    }
 }

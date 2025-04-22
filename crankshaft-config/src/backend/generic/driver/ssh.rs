@@ -9,19 +9,37 @@ use serde::Serialize;
 #[serde(rename_all = "kebab-case")]
 #[builder(builder_type = Builder)]
 pub struct Config {
-    /// A username.
+    /// The host for the connection.
     #[builder(into)]
-    pub username: Option<String>,
+    host: String,
 
-    /// A port.
-    pub port: usize,
+    /// The port for the connection.
+    #[builder(default = 22)]
+    port: u16,
+
+    /// The SSH username.
+    #[builder(into)]
+    username: Option<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            username: Default::default(),
-            port: 22,
-        }
+impl Config {
+    /// Gets the SSH host.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    /// Gets the SSH port.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Gets the username (if available).
+    pub fn username(&self) -> Option<&str> {
+        self.username.as_deref()
+    }
+
+    /// Converts the configuration into its parts.
+    pub fn into_parts(self) -> (String, u16, Option<String>) {
+        (self.host, self.port, self.username)
     }
 }

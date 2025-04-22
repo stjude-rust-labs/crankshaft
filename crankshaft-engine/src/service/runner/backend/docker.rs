@@ -355,7 +355,7 @@ impl crate::Backend for Backend {
         }
 
         let client = self.client.clone();
-        let cleanup = self.config.cleanup;
+        let cleanup = self.config.cleanup();
         let resources = self.resources;
 
         Ok(async move {

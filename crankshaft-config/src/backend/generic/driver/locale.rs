@@ -14,12 +14,5 @@ pub enum Locale {
     Local,
 
     /// Remote execution over SSH.
-    SSH {
-        /// The host for the connection.
-        host: String,
-
-        /// Any options for the SSH connection.
-        #[serde(default)]
-        options: ssh::Config,
-    },
+    SSH(#[serde(default)] ssh::Config),
 }

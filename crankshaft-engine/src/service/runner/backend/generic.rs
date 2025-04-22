@@ -49,7 +49,7 @@ impl Backend {
     /// connection settings and the provided configuration for the backend.
     pub async fn initialize(config: Config, defaults: Option<Defaults>) -> Result<Self> {
         // TODO(clay): this could be "taken" instead to avoid the clone.
-        let driver = Driver::initialize(config.driver.clone())
+        let driver = Driver::initialize(config.driver().clone())
             .await
             .map(Arc::new)?;
 
@@ -116,7 +116,7 @@ impl crate::Backend for Backend {
         Ok(async move {
             let mut statuses = Vec::new();
             let job_id_regex = config
-                .job_id_regex
+                .job_id_regex()
                 .as_ref()
                 .map(|pattern| {
                     Regex::new(pattern)
@@ -227,7 +227,7 @@ impl crate::Backend for Backend {
 
                             tokio::time::sleep(Duration::from_secs(
                                 config
-                                    .monitor_frequency
+                                    .monitor_frequency()
                                     .unwrap_or(DEFAULT_MONITOR_FREQUENCY),
                             ))
                             .await;

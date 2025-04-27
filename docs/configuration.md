@@ -94,7 +94,6 @@ url = "https://tes.cloud.example.com/v1"
 # Key Configuration Sections
 
 ## [[backends]]: Defines an array element for each backend configuration
-```toml
 - **name** (String, Required): Unique identifier used in `engine.spawn("name", ...)`.
 - **kind** (String, Required): Type of backend (Docker, TES, Generic). Determines other relevant fields.
 - **max_tasks** (Integer, Required): Crankshaft's concurrency limit for this specific backend. Prevents overwhelming the backend API/scheduler.

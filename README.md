@@ -44,6 +44,22 @@ large-scale bioinformatics analyses. There is no associated `crankshaft` command
 tool—the end user is really engine _developers_ who want to include it as a core task
 execution library in their own command line tools.
 
+### Core Concepts
+
+*   **Engine:** The central orchestrator managing backends and tasks.
+*   **Backend:** A specific execution environment (Docker, TES, Generic/HPC). Configured via TOML.
+*   **Task:** A unit of work comprising one or more `Execution` steps.
+*   **Execution:** A single command/script within an environment (often a container).
+*   **Input/Output:** Data dependencies and products for tasks.
+*   **Resources:** Computational requirements (CPU, RAM, disk).
+
+## ✨ Guiding Principles
+
+*   **High-Performance:** Built for large-scale concurrent task execution using Rust and Tokio.
+*   **Headless Library:** Designed for integration, focusing on core execution logic.
+*   **Backend Agnostic:** Define tasks once, run on different configured backends.
+*   **Language Independent:** Not tied to a specific workflow language like WDL or CWL.
+
 ## Guiding Principles
 
 - `crankshaft` aims to be a **high-performance** task execution framework

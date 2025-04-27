@@ -102,9 +102,9 @@ url = "https://tes.cloud.example.com/v1"
 
 ## Kind-Specific Settings
 Fields required or optional based on the kind. See detailed pages:
-- Docker Backend
-- TES Backend
-- Generic Backend
+ Docker Backend
+ TES Backend
+ Generic Backend
 
 ## Environment Variables
 Override TOML settings using environment variables prefixed with `CRANKSHAFT_`. Use double underscores (`__`) for nesting and array indices (starting from 0).

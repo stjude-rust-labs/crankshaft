@@ -18,7 +18,11 @@ Run this process for each subcrate.
     ```
     git tag crankshaft-config-v0.1.0
     ```
-  * [ ] Push release: `git push && git push --tags`.
   * [ ] Publish the component crate: `cargo publish --all-features`.
+
+After all subcrates have been released, do the following.
+
+  * [ ] Push release: `git push && git push --tags`.
+  * [ ] Make sure the CI is green for those commits.
   * [ ] Go to the Releases page in Github, create a Release for this tag, and
     copy the notes from the `CHANGELOG.md` file.

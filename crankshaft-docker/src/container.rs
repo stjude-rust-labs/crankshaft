@@ -57,9 +57,8 @@ pub struct Container {
 impl Container {
     /// Creates a new [`Container`] if you already know the container id.
     ///
-    /// You should typically use [`Self::builder()`] unless you receive the
-    /// container name externally from a user (say, on the command line as an
-    /// argument).
+    /// You should typically use a [`Builder`] unless you receive the container
+    /// name externally from a user (say, on the command line as an argument).
     pub fn new(
         client: Docker,
         id: String,

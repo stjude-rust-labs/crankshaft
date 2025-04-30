@@ -59,9 +59,8 @@ pub struct Service {
 impl Service {
     /// Creates a new [`Service`] if you already know the id of the service.
     ///
-    /// You should typically use [`Self::builder()`] unless you receive the
-    /// service name externally from a user (say, on the command line as an
-    /// argument).
+    /// You should typically use a [`Builder`] unless you receive the service
+    /// name externally from a user (say, on the command line as an argument).
     pub fn new(
         client: Docker,
         id: String,

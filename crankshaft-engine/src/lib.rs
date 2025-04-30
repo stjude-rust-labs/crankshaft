@@ -16,13 +16,13 @@ use crate::service::runner::TaskHandle;
 
 /// The top-level result returned within the engine.
 ///
-/// An [`eyre::Result`] was chosen as the top-level result for the engine
-/// simply because engine errors are not typically recoverable—they will usually
-/// be displayed directly to the user.
+/// An [`eyre::Result`] was chosen as the top-level result for the engine simply
+/// because engine errors are not typically recoverable—they will usually be
+/// displayed directly to the user.
 ///
 /// In cases where an error may be recoverable throughout this crate, a
 /// different error type may be returned (as it will always be coercible to it's
-/// [`anyhow`] equivalent for display).
+/// [`eyre`] equivalent for display).
 pub type Result<T> = eyre::Result<T>;
 
 /// A workflow execution engine.
@@ -50,8 +50,8 @@ impl Engine {
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
     ///
-    /// A [`Handle`] is returned, which contains a channel that can be awaited
-    /// for the result of the job.
+    /// A [`TaskHandle`] is returned, which contains a channel that can be
+    /// awaited for the result of the job.
     pub fn spawn(
         &self,
         name: impl AsRef<str>,

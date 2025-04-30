@@ -138,9 +138,8 @@ impl Backend {
     /// Attempts to initialize a new Docker [`Backend`] with the default
     /// connection settings and the provided configuration for the backend.
     ///
-    /// Note that, currently, we connect [using
-    /// defaults](Docker::connect_with_defaults) when attempting to connect to
-    /// the Docker daemon.
+    /// Note that, currently, we connect [using defaults](Docker::with_defaults)
+    /// when attempting to connect to the Docker daemon.
     pub async fn initialize_default_with(config: Config) -> Result<Self> {
         let client =
             Docker::with_defaults().context("failed to connect to the local Docker daemon")?;
@@ -297,9 +296,8 @@ impl Backend {
     /// Attempts to initialize a new Docker [`Backend`] with the default
     /// connection settings and default backend configuration.
     ///
-    /// Note that, currently, we connect [using
-    /// defaults](Docker::connect_with_defaults) when attempting to connect to
-    /// the Docker daemon.
+    /// Note that, currently, we connect [using defaults](Docker::with_defaults)
+    /// when attempting to connect to the Docker daemon.
     pub async fn initialize_default() -> Result<Self> {
         Self::initialize_default_with(Config::default()).await
     }

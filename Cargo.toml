@@ -19,8 +19,8 @@ rust-version = "1.83.0"
 [workspace.dependencies]
 async-trait = "0.1.86"
 bollard = "0.19.0-rc1"
-bon = "3.3.2"
-clap = { version = "4.5.30", features = ["derive"] }
+bon = "3.6.3"
+clap = { version = "4.5.37", features = ["derive"] }
 clap-verbosity-flag = "3.0.2"
 color-eyre = "0.6.3"
 config = "0.15.8"
@@ -28,10 +28,10 @@ dirs = "6.0.0"
 eyre = "0.6.12"
 futures = "0.3.31"
 growable-bloom-filter = "2.1.1"
-indexmap = { version = "2.7.1", features = ["serde"] }
+indexmap = { version = "2.9.0", features = ["serde"] }
 indicatif = "0.17.11"
 nonempty = "0.11.0"
-rand = "0.9.0"
+rand = "0.9.1"
 regex = "1.11.1"
 serde = { version = "1.0.218", features = ["derive"] }
 serde_yaml = "0.9"
@@ -40,12 +40,12 @@ ssh2 = "0.9.5"
 tar = "0.4.43"
 tempfile = "3.17.1"
 tes = { version = "0.5.0", features = ["client", "serde"] }
-thiserror = "2.0.11"
-tokio = { version = "1.43.0", features = ["full", "time", "tracing"] }
-tokio-metrics = "0.4.0"
+thiserror = "2.0.12"
+tokio = { version = "1.44.2", features = ["full", "time", "tracing"] }
+tokio-metrics = "0.4.2"
 tokio-stream = "0.1.17"
-tokio-util = "0.7.13"
-toml = "0.8.20"
+tokio-util = "0.7.15"
+toml = "0.8.22"
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

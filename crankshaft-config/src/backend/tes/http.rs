@@ -7,7 +7,7 @@ use serde::Serialize;
 // **NOTE:** all default values for this struct need to be tested below to
 // ensure the defaults never change.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Config {
     /// If needed, the basic auth token to provide to the service.
     pub basic_auth_token: Option<String>,

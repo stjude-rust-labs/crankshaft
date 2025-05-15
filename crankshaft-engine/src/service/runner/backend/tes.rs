@@ -12,11 +12,11 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::bail;
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
-use eyre::Context;
-use eyre::Result;
-use eyre::bail;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;

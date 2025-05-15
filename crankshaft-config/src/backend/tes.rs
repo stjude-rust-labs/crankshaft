@@ -2,6 +2,7 @@
 
 pub mod http;
 
+use anyhow::Result;
 use bon::Builder;
 use serde::Deserialize;
 use serde::Serialize;
@@ -9,7 +10,7 @@ use url::Url;
 
 /// A configuration object for a TES execution backend.
 #[derive(Builder, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[builder(builder_type = Builder)]
 pub struct Config {
     /// The URL to reach the TES service at.
@@ -25,6 +26,11 @@ pub struct Config {
 }
 
 impl Config {
+    /// Validates the TES backend configuration object.
+    pub fn validate(&self) -> Result<()> {
+        todo!("implement TES backend configuration validation")
+    }
+
     /// Gets the URL of the TES server.
     pub fn url(&self) -> &Url {
         &self.url

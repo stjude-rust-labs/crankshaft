@@ -16,14 +16,14 @@ use crate::service::runner::TaskHandle;
 
 /// The top-level result returned within the engine.
 ///
-/// An [`eyre::Result`] was chosen as the top-level result for the engine simply
+/// An [`anyhow::Result`] was chosen as the top-level result for the engine simply
 /// because engine errors are not typically recoverable—they will usually be
 /// displayed directly to the user.
 ///
 /// In cases where an error may be recoverable throughout this crate, a
 /// different error type may be returned (as it will always be coercible to it's
-/// [`eyre`] equivalent for display).
-pub type Result<T> = eyre::Result<T>;
+/// [`anyhow`] equivalent for display).
+pub type Result<T> = anyhow::Result<T>;
 
 /// A workflow execution engine.
 #[derive(Debug, Default)]

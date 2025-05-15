@@ -92,7 +92,7 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> eyre::Result<TaskHandle> {
+    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -116,7 +116,7 @@ impl Runner {
             let _ = tx.send(result);
             drop(_permit);
 
-            eyre::Ok(())
+            anyhow::Ok(())
         });
 
         Ok(TaskHandle(rx))

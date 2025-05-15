@@ -10,9 +10,10 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 bon.workspace = true
-config.workspace = true
 dirs.workspace = true
+figment.workspace = true
 regex.workspace = true
 serde.workspace = true
 thiserror.workspace = true

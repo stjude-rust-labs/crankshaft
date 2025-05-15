@@ -1,5 +1,6 @@
 //! Kinds of execution backends.
 
+use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -22,6 +23,15 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// Validates the backend kind configuration object.
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            Kind::Docker(config) => config.validate(),
+            Kind::Generic(config) => config.validate(),
+            Kind::TES(config) => config.validate(),
+        }
+    }
+
     /// Attempts to return a reference to the inner [docker
     /// configuration][`docker::Config`].
     pub fn as_docker(&self) -> Option<&docker::Config> {

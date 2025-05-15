@@ -10,12 +10,12 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 async-trait.workspace = true
 bollard.workspace = true
 bon.workspace = true
 crankshaft-config = { path = "../crankshaft-config", version = "0.2.0" }
 crankshaft-docker = { path = "../crankshaft-docker", version = "0.2.0" }
-eyre.workspace = true
 futures.workspace = true
 growable-bloom-filter.workspace = true
 indexmap.workspace = true

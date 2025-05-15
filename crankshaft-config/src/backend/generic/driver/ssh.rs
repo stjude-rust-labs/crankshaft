@@ -6,7 +6,7 @@ use serde::Serialize;
 
 /// Configuration related to SSH.
 #[derive(Builder, Clone, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[builder(builder_type = Builder)]
 pub struct Config {
     /// The host for the connection.

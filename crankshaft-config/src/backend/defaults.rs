@@ -7,7 +7,7 @@ use serde::Serialize;
 
 /// Default resource requests.
 #[derive(Builder, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[builder(builder_type = Builder)]
 pub struct Defaults {
     /// The number of CPUs to use during execution.

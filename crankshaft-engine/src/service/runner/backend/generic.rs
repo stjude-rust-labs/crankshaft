@@ -7,11 +7,11 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
+use anyhow::anyhow;
+use anyhow::bail;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
-use eyre::Context as _;
-use eyre::bail;
-use eyre::eyre;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -19,7 +19,7 @@ use regex::Regex;
 use tokio::select;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::debug;
 
 use crate::Result;
 use crate::Task;
@@ -129,15 +129,6 @@ impl crate::Backend for Backend {
                     bail!("task has been cancelled");
                 }
 
-                // TODO(clay): this will warn every time for now. We need to
-                // change the model of how tasks are done internally to remove
-                // this need.
-                warn!(
-                    "generic backends do not support images; as such, the directive to use a `{}` \
-                     image will be ignored",
-                    execution.image
-                );
-
                 let mut substitutions = default_substitutions.clone();
 
                 if substitutions
@@ -164,6 +155,7 @@ impl crate::Backend for Backend {
                 let submit = config
                     .resolve_submit(&substitutions)
                     .context("failed to resolve submit command")?;
+
                 let output = driver
                     .run(submit)
                     .await
@@ -188,6 +180,7 @@ impl crate::Backend for Backend {
                         // SAFETY: this will always unwrap, as the group is
                         // _required_ for the pattern to match.
                         let id = captures.get(1).map(|c| c.as_str()).unwrap();
+                        debug!("captured job id: `{id}`");
                         substitutions.insert("job_id".into(), id.into());
 
                         loop {
@@ -200,7 +193,7 @@ impl crate::Backend for Backend {
                                 biased;
 
                                 _ = token.cancelled() => {
-                                    Err(eyre!("task has been cancelled"))
+                                    Err(anyhow!("task has been cancelled"))
                                 }
                                 res = driver.run(monitor) => {
                                     res

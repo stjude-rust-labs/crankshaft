@@ -4,6 +4,8 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use anyhow::Result;
+use anyhow::bail;
 use bon::Builder;
 use bon::builder;
 use regex::Captures;
@@ -57,7 +59,7 @@ pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, Cow<'_, str>
 
 /// A configuration object for a generic execution backend.
 #[derive(Builder, Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[builder(builder_type = Builder)]
 pub struct Config {
     /// Configuration related to the command driver.
@@ -91,6 +93,32 @@ pub struct Config {
 }
 
 impl Config {
+    /// Validates the generic backend configuration object.
+    pub fn validate(&self) -> Result<()> {
+        if !self.submit.contains("~{command}") {
+            bail!(
+                "the `submit` command should contain a placeholder for the \
+                command to run (`~{{command}}`)"
+            )
+        }
+
+        if !self.monitor.contains("~{job_id}") {
+            bail!(
+                "the `monitor` command should contain a placeholder for the \
+                job id to monitor (`~{{job_id}}`)"
+            )
+        }
+
+        if !self.kill.contains("~{job_id}") {
+            bail!(
+                "the `kill` command should contain a placeholder for the \
+                job id to kill (`~{{job_id}}`)"
+            )
+        }
+
+        Ok(())
+    }
+
     /// A utility method to perform the substitutions on a particular command at
     /// runtime.
     ///

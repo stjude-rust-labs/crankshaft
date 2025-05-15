@@ -1,5 +1,7 @@
 //! Configuration related to execution backends.
 
+use anyhow::Result;
+use anyhow::bail;
 use bon::Builder;
 use serde::Deserialize;
 use serde::Serialize;
@@ -12,6 +14,9 @@ pub mod tes;
 
 pub use defaults::Defaults;
 pub use kind::Kind;
+
+/// The default number of max tasks.
+const MAX_TASKS: usize = usize::MAX;
 
 /// A configuration object for an execution backend.
 #[derive(Builder, Deserialize, Serialize, Debug, Clone)]
@@ -28,6 +33,7 @@ pub struct Config {
     kind: Kind,
 
     /// The maximum number of concurrent tasks that can run.
+    #[builder(default = MAX_TASKS)]
     max_tasks: usize,
 
     /// The execution defaults.
@@ -36,6 +42,22 @@ pub struct Config {
 }
 
 impl Config {
+    /// Validates the backend configuration object.
+    pub fn validate(&self) -> Result<()> {
+        if self.name.is_empty() {
+            bail!("Crankshaft backend configuration must have a non-empty name")
+        }
+
+        if self.max_tasks == 0 {
+            bail!(
+                "`max_tasks` parameter for a Crankshaft backend configuration \
+                must be greater than 0"
+            )
+        }
+
+        self.kind.validate()
+    }
+
     /// Gets the name of the backend.
     pub fn name(&self) -> &str {
         &self.name
@@ -44,6 +66,11 @@ impl Config {
     /// Gets the kind of the backend.
     pub fn kind(&self) -> &Kind {
         &self.kind
+    }
+
+    /// Consumes `self` and returns the inner [`Kind`].
+    pub fn into_kind(self) -> Kind {
+        self.kind
     }
 
     /// Gets the maximum number of tasks.

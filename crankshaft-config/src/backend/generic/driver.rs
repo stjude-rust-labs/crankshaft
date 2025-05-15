@@ -43,7 +43,7 @@ impl Default for MaxAttempts {
 /// A configuration object for a command driver within a generic execution
 /// backend.
 #[derive(Builder, Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[builder(builder_type = Builder)]
 pub struct Config {
     /// The locale within which to run commands.

@@ -10,13 +10,13 @@ use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::bail;
 use crankshaft_config::backend::generic::driver::Config;
 use crankshaft_config::backend::generic::driver::Locale;
 use crankshaft_config::backend::generic::driver::Shell;
 use crankshaft_config::backend::generic::driver::ssh;
-use eyre::Context as _;
-use eyre::Result;
-use eyre::bail;
 use rand::Rng as _;
 use ssh2::Channel;
 use ssh2::Session;
@@ -402,7 +402,7 @@ async fn run_ssh_command(
             stderr,
         };
 
-        eyre::Result::<Output>::Ok(output)
+        anyhow::Result::<Output>::Ok(output)
     };
 
     tokio::task::spawn_blocking(f)

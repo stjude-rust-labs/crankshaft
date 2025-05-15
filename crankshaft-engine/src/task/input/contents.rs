@@ -6,9 +6,9 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use eyre::Context;
-use eyre::bail;
-use eyre::eyre;
+use anyhow::Context;
+use anyhow::anyhow;
+use anyhow::bail;
 use thiserror::Error;
 use url::Url;
 
@@ -53,7 +53,7 @@ impl Contents {
     ///
     /// Returns an error if the contents are to a path and the file contents
     /// could not be read.
-    pub fn one_hot(self) -> eyre::Result<(Option<Url>, Option<Vec<u8>>)> {
+    pub fn one_hot(self) -> anyhow::Result<(Option<Url>, Option<Vec<u8>>)> {
         match self {
             Self::Url(url) => Ok((Some(url), None)),
             Self::Literal(value) => Ok((None, Some(value))),
@@ -75,7 +75,7 @@ impl Contents {
     /// If the contents is a URL, the file is downloaded to a temporary file.
     ///
     /// Returns the path to the contents.
-    pub async fn fetch(&self, temp_dir: &Path) -> eyre::Result<Cow<'_, Path>> {
+    pub async fn fetch(&self, temp_dir: &Path) -> anyhow::Result<Cow<'_, Path>> {
         let contents: Cow<'_, [u8]> = match self {
             Self::Url(url) => {
                 match url.scheme() {
@@ -83,7 +83,7 @@ impl Contents {
                         // SAFETY: we just checked to ensure this is a file, so
                         // getting the file path should always unwrap.
                         let path = url.to_file_path().map_err(|_| {
-                            eyre!(
+                            anyhow!(
                                 "URL `{url}` has a file scheme but cannot be represented as a \
                                  file path"
                             )

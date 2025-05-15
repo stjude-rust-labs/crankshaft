@@ -1,0 +1,15 @@
+[[backends]]
+name = "test"
+kind = "Generic"
+submit = "foo bar"
+monitor = "foo bar"
+kill = "foo bar"
+max-tasks = 10
+
+[[backends]]
+name = "test"
+kind = "Generic"
+submit = "foo bar"
+monitor = "foo bar"
+kill = "foo bar"
+max-tasks = 10

@@ -7,6 +7,9 @@
 use std::env::current_dir;
 use std::time::Duration;
 
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
 use clap::Parser;
 use crankshaft::Engine;
 use crankshaft::config::backend::Kind;
@@ -15,9 +18,6 @@ use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use crankshaft::engine::task::Output;
 use crankshaft::engine::task::output::Type;
-use eyre::Context;
-use eyre::Result;
-use eyre::eyre;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
@@ -89,7 +89,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                     .path("/stdout")
                     .url(
                         Url::from_file_path(&stdout)
-                            .map_err(|_| eyre!("failed to get stdout URL"))?,
+                            .map_err(|_| anyhow!("failed to get stdout URL"))?,
                     )
                     .ty(Type::File)
                     .build(),
@@ -99,7 +99,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                     .path("/stderr")
                     .url(
                         Url::from_file_path(&stderr)
-                            .map_err(|_| eyre!("failed to get stderr URL"))?,
+                            .map_err(|_| anyhow!("failed to get stderr URL"))?,
                     )
                     .ty(Type::File)
                     .build(),

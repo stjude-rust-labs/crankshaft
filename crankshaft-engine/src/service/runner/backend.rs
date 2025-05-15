@@ -3,8 +3,8 @@
 use std::fmt::Debug;
 use std::process::ExitStatus;
 
+use anyhow::Result;
 use async_trait::async_trait;
-use eyre::Result;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tokio::sync::oneshot;

@@ -1,5 +1,6 @@
 //! Configuration related to the _Docker_ execution backend.
 
+use anyhow::Result;
 use bon::Builder;
 use bon::builder;
 use serde::Deserialize;
@@ -15,7 +16,7 @@ fn default_cleanup() -> bool {
 
 /// A configuration object for a Docker execution backend.
 #[derive(Builder, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 #[builder(builder_type = Builder)]
 pub struct Config {
     /// Whether or not to remove the containers after completion of the tasks
@@ -26,6 +27,11 @@ pub struct Config {
 }
 
 impl Config {
+    /// Validates the Docker backend configuration object.
+    pub fn validate(&self) -> Result<()> {
+        Ok(())
+    }
+
     /// Gets whether the backend is configured to remove the containers after
     /// completion of the tasks (regardless of whether the job was a success or
     /// failure).

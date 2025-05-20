@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* Improved backend error reporting to allow the caller to know if a task was
+  canceled or preempted so that the appropriate action can be taken ([#36](https://github.com/stjude-rust-labs/crankshaft/pull/36)).
+
 ## 0.2.0 - 04-31-2025
 
 ### Changed

@@ -4,7 +4,6 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use backend::TaskRunError;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
 use eyre::Result;
@@ -30,14 +29,16 @@ const NAME_BUFFER_LEN: usize = 4096;
 
 /// A spawned task handle.
 #[derive(Debug)]
-pub struct TaskHandle(Receiver<Result<NonEmpty<ExitStatus>, TaskRunError>>);
+pub struct TaskHandle(Receiver<Result<NonEmpty<ExitStatus>, backend::TaskRunError>>);
 
 impl TaskHandle {
     /// Consumes the task handle and waits for the task to complete.
     ///
     /// Returns the exit statuses of the task's executors.
-    pub async fn wait(self) -> Result<NonEmpty<ExitStatus>, TaskRunError> {
-        self.0.await.map_err(|e| TaskRunError::Other(e.into()))?
+    pub async fn wait(self) -> Result<NonEmpty<ExitStatus>, backend::TaskRunError> {
+        self.0
+            .await
+            .map_err(|e| backend::TaskRunError::Other(e.into()))?
     }
 }
 

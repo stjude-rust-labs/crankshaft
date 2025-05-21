@@ -4,9 +4,9 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
-use eyre::Result;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
 use tokio::sync::oneshot::Receiver;
@@ -94,7 +94,7 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> eyre::Result<TaskHandle> {
+    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -117,8 +117,7 @@ impl Runner {
             // returned result, so we ignore any errors related to that.
             let _ = tx.send(result);
             drop(_permit);
-
-            eyre::Ok(())
+            anyhow::Ok(())
         });
 
         Ok(TaskHandle(rx))

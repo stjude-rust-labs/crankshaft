@@ -7,10 +7,10 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
+use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
-use eyre::Context as _;
-use eyre::Result;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -207,7 +207,7 @@ impl crate::Backend for Backend {
                                 }
                             };
 
-                            // Run the kill command when cancelled
+                            // Run the kill command when canceled
                             if token.is_cancelled() {
                                 let kill = config
                                     .resolve_kill(&substitutions)

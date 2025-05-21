@@ -1,8 +1,8 @@
 //! Task inputs.
 
+use anyhow::Context;
+use anyhow::Result;
 use bon::Builder;
-use eyre::Context;
-use eyre::Result;
 
 mod contents;
 
@@ -84,7 +84,7 @@ impl Input {
 }
 
 impl TryFrom<Input> for tes::v1::types::task::Input {
-    type Error = eyre::Error;
+    type Error = anyhow::Error;
 
     fn try_from(input: Input) -> Result<Self, Self::Error> {
         let Input {

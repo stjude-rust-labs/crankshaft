@@ -1,7 +1,7 @@
 //! The engine that powers Crankshaft.
 
+use anyhow::Result;
 use crankshaft_config::backend::Config;
-use eyre::Result;
 use indexmap::IndexMap;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;

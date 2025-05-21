@@ -5,6 +5,10 @@ use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::sync::Arc;
 
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
+use anyhow::bail;
 use async_trait::async_trait;
 use bollard::secret::HostConfig;
 use bollard::secret::LocalNodeState;
@@ -16,11 +20,6 @@ use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
 use crankshaft_docker::service::Service;
-use eyre::Context;
-use eyre::ContextCompat;
-use eyre::Result;
-use eyre::bail;
-use eyre::eyre;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -331,23 +330,23 @@ impl crate::Backend for Backend {
 
         impl Cleaner {
             /// Runs cleanup.
-            async fn cleanup(&self, cancelled: bool) -> Result<()> {
+            async fn cleanup(&self, canceled: bool) -> Result<()> {
                 match self {
                     Self::Container(container) => {
-                        if cancelled {
+                        if canceled {
                             container
                                 .force_remove()
                                 .await
-                                .wrap_err("failed to force remove container")
+                                .context("failed to force remove container")
                         } else {
                             container
                                 .remove()
                                 .await
-                                .wrap_err("failed to remove container")
+                                .context("failed to remove container")
                         }
                     }
                     Self::Service(service) => {
-                        service.delete().await.wrap_err("failed to delete service")
+                        service.delete().await.context("failed to delete service")
                     }
                 }
             }
@@ -391,12 +390,12 @@ impl crate::Backend for Backend {
                     match url.scheme() {
                         "file" => {
                             Some(url.to_file_path().map_err(|_| {
-                                eyre!(
+                                anyhow!(
                                     "stdout URL `{url}` has a file scheme but cannot be represented as a file path"
                                 )
                             }))
                         }
-                        _ => Some(Err(eyre!("unsupported scheme for stdout URL `{url}`")))
+                        _ => Some(Err(anyhow!("unsupported scheme for stdout URL `{url}`")))
                     }
 
                 }).transpose()?;
@@ -412,12 +411,12 @@ impl crate::Backend for Backend {
                     match url.scheme() {
                         "file" => {
                             Some(url.to_file_path().map_err(|_| {
-                                eyre!(
+                                anyhow!(
                                     "stderr URL `{url}` has a file scheme but cannot be represented as a file path"
                                 )
                             }))
                         }
-                        _ => Some(Err(eyre!("unsupported scheme for stderr URL `{url}`")))
+                        _ => Some(Err(anyhow!("unsupported scheme for stderr URL `{url}`")))
                     }
 
                 }).transpose()?;
@@ -452,10 +451,10 @@ impl crate::Backend for Backend {
                         biased;
 
                         _ = token.cancelled() => {
-                            (Err(eyre!("task has been cancelled")), Cleaner::Service(service))
+                            (Err(TaskRunError::Canceled), Cleaner::Service(service))
                         }
                         res = service.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
-                            (res.wrap_err("failed to run Docker service"), Cleaner::Service(service))
+                            (res.context("failed to run Docker service").map_err(TaskRunError::Other), Cleaner::Service(service))
                         }
                     }
                 } else {
@@ -495,10 +494,10 @@ impl crate::Backend for Backend {
                         biased;
 
                         _ = token.cancelled() => {
-                            (Err(eyre!("task has been cancelled")), Cleaner::Container(container))
+                            (Err(TaskRunError::Canceled), Cleaner::Container(container))
                         }
                         res = container.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
-                            (res.wrap_err("failed to run Docker container"), Cleaner::Container(container))
+                            (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleaner::Container(container))
                         }
                     }
                 };
@@ -562,7 +561,7 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
         // The call to `into_path` will prevent the directory from being deleted on
         // drop; instead, we're relying on the parent temporary directory to delete it
         let path = TempDir::new_in(tempdir)
-            .wrap_err_with(|| {
+            .with_context(|| {
                 format!(
                     "failed to create temporary directory in `{tempdir}`",
                     tempdir = tempdir.display()
@@ -572,7 +571,7 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
             .into_os_string()
             .into_string()
             .map_err(|path| {
-                eyre!(
+                anyhow!(
                     "temporary directory path `{path}` is not UTF-8",
                     path = PathBuf::from(&path).display()
                 )

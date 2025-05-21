@@ -10,11 +10,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 crankshaft = { path = "../crankshaft" }
 base64.workspace = true
 clap.workspace = true
 dirs.workspace = true
-eyre.workspace = true
 nonempty.workspace = true
 serde_yaml.workspace = true
 tempfile.workspace = true

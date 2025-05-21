@@ -4,13 +4,13 @@
 #![allow(missing_docs)]
 #![allow(clippy::missing_docs_in_private_items)]
 
+use anyhow::Result;
+use anyhow::anyhow;
 use clap::Parser;
 use clap::Subcommand;
 use clap_verbosity_flag::Verbosity;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
-use eyre::Result;
-use eyre::eyre;
 use tracing_log::AsTrace;
 use tracing_subscriber::EnvFilter;
 
@@ -130,7 +130,7 @@ async fn run(args: Args) -> Result<()> {
             tag,
         } => {
             let mut command =
-                shlex::split(&command).ok_or_else(|| eyre!("invalid command `{command}`"))?;
+                shlex::split(&command).ok_or_else(|| anyhow!("invalid command `{command}`"))?;
             let args = command.split_off(1);
 
             let container =

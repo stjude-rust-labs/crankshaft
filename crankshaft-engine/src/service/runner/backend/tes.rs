@@ -12,12 +12,11 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
-use eyre::Context;
-use eyre::ContextCompat;
-use eyre::Result;
-use eyre::eyre;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -141,7 +140,7 @@ impl Backend {
                             .and_then(|l| l.system_logs.as_ref().map(|l| l.join("\n")))
                             .unwrap_or_default();
 
-                        return Err(TaskRunError::Other(eyre!(
+                        return Err(TaskRunError::Other(anyhow!(
                             "task failed due to system error:\n\n{messages}",
                         )));
                     }

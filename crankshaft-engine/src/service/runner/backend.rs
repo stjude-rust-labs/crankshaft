@@ -3,8 +3,8 @@
 use std::fmt::Debug;
 use std::process::ExitStatus;
 
+use anyhow::Result;
 use async_trait::async_trait;
-use eyre::Result;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tokio::sync::oneshot;
@@ -19,8 +19,8 @@ pub mod tes;
 /// Represents an error that may occur when running a task.
 #[derive(Debug, thiserror::Error)]
 pub enum TaskRunError {
-    /// The task has been cancelled.
-    #[error("the task has been cancelled")]
+    /// The task has been canceled.
+    #[error("the task has been canceled")]
     Canceled,
     /// The task has been preempted.
     ///
@@ -30,7 +30,7 @@ pub enum TaskRunError {
     Preempted,
     /// Another error occurred while running the task.
     #[error(transparent)]
-    Other(#[from] eyre::Error),
+    Other(#[from] anyhow::Error),
 }
 
 /// An execution backend.

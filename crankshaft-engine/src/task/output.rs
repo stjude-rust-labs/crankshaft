@@ -75,17 +75,18 @@ impl From<Output> for tes::v1::types::task::Output {
             ty,
         } = output;
 
-        let r#type = match ty {
-            Type::File => tes::v1::types::task::file::Type::File,
-            Type::Directory => tes::v1::types::task::file::Type::Directory,
+        let ty = match ty {
+            Type::File => tes::v1::types::task::IoType::File,
+            Type::Directory => tes::v1::types::task::IoType::Directory,
         };
 
-        tes::v1::types::task::Output {
+        Self {
             name,
             description,
             url: url.to_string(),
             path,
-            r#type,
+            path_prefix: None,
+            ty,
         }
     }
 }

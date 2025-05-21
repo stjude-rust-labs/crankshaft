@@ -4,6 +4,7 @@ use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
 use nonempty::NonEmpty;
@@ -16,7 +17,6 @@ pub mod backend;
 
 pub use backend::Backend;
 
-use crate::Result;
 use crate::Task;
 use crate::service::name::GeneratorIterator;
 use crate::service::name::UniqueAlphanumeric;
@@ -29,14 +29,16 @@ const NAME_BUFFER_LEN: usize = 4096;
 
 /// A spawned task handle.
 #[derive(Debug)]
-pub struct TaskHandle(Receiver<Result<NonEmpty<ExitStatus>>>);
+pub struct TaskHandle(Receiver<Result<NonEmpty<ExitStatus>, backend::TaskRunError>>);
 
 impl TaskHandle {
     /// Consumes the task handle and waits for the task to complete.
     ///
     /// Returns the exit statuses of the task's executors.
-    pub async fn wait(self) -> Result<NonEmpty<ExitStatus>> {
-        self.0.await?
+    pub async fn wait(self) -> Result<NonEmpty<ExitStatus>, backend::TaskRunError> {
+        self.0
+            .await
+            .map_err(|e| backend::TaskRunError::Other(e.into()))?
     }
 }
 
@@ -92,7 +94,7 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> eyre::Result<TaskHandle> {
+    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -115,8 +117,7 @@ impl Runner {
             // returned result, so we ignore any errors related to that.
             let _ = tx.send(result);
             drop(_permit);
-
-            eyre::Ok(())
+            anyhow::Ok(())
         });
 
         Ok(TaskHandle(rx))

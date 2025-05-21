@@ -7,14 +7,13 @@
 use std::env::current_dir;
 use std::time::Duration;
 
+use anyhow::Context as _;
+use anyhow::Result;
 use clap::Parser;
 use crankshaft::Config;
 use crankshaft::Engine;
 use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
-use eyre::Context as _;
-use eyre::ContextCompat as _;
-use eyre::Result;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;

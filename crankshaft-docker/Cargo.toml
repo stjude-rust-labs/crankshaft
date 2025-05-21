@@ -10,11 +10,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
 bollard.workspace = true
 bon.workspace = true
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
-eyre = { workspace = true, optional = true }
 futures.workspace = true
 indexmap = { workspace = true }
 serde.workspace = true
@@ -36,7 +36,6 @@ workspace = true
 binaries = [
     "dep:clap",
     "dep:clap-verbosity-flag",
-    "dep:eyre",
     "dep:shlex",
     "dep:tracing-log",
     "dep:tracing-subscriber",

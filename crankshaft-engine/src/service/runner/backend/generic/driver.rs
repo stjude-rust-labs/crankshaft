@@ -10,13 +10,13 @@ use std::process::Output;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::bail;
 use crankshaft_config::backend::generic::driver::Config;
 use crankshaft_config::backend::generic::driver::Locale;
 use crankshaft_config::backend::generic::driver::Shell;
 use crankshaft_config::backend::generic::driver::ssh;
-use eyre::Context as _;
-use eyre::Result;
-use eyre::bail;
 use rand::Rng as _;
 use ssh2::Channel;
 use ssh2::Session;
@@ -90,7 +90,7 @@ impl Driver {
     /// negotiation is done via subprocesses or network calls to initialize the
     /// necessary state (e.g., establishing an SSH session with a remote host).
     ///
-    /// **NOTE:** this method returns an [`eyre::Result`] because any errors
+    /// **NOTE:** this method returns an [`anyhow::Result`] because any errors
     /// are intended to be returned directly to the user in the calling binary
     /// (i.e., the errors are typically unrecoverable).
     pub async fn initialize(config: Config) -> Result<Self> {
@@ -108,7 +108,7 @@ impl Driver {
 
     /// Runs a shell command within the configuration locale.
     ///
-    /// **NOTE:** this method returns an [`eyre::Result`] because any errors
+    /// **NOTE:** this method returns an [`anyhow::Result`] because any errors
     /// are intended to be returned directly to the user in the calling binary
     /// (i.e., the errors are typically unrecoverable).
     pub async fn run(&self, command: impl Into<String>) -> Result<Output> {
@@ -402,7 +402,7 @@ async fn run_ssh_command(
             stderr,
         };
 
-        eyre::Result::<Output>::Ok(output)
+        Ok(output)
     };
 
     tokio::task::spawn_blocking(f)

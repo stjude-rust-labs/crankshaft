@@ -1,8 +1,8 @@
 //! Task inputs.
 
+use anyhow::Context;
+use anyhow::Result;
 use bon::Builder;
-use eyre::Context;
-use eyre::Result;
 
 mod contents;
 
@@ -84,7 +84,7 @@ impl Input {
 }
 
 impl TryFrom<Input> for tes::v1::types::task::Input {
-    type Error = eyre::Error;
+    type Error = anyhow::Error;
 
     fn try_from(input: Input) -> Result<Self, Self::Error> {
         let Input {
@@ -98,9 +98,9 @@ impl TryFrom<Input> for tes::v1::types::task::Input {
 
         let (url, content) = contents.one_hot()?;
 
-        let r#type = match ty {
-            Type::File => tes::v1::types::task::file::Type::File,
-            Type::Directory => tes::v1::types::task::file::Type::Directory,
+        let ty = match ty {
+            Type::File => tes::v1::types::task::IoType::File,
+            Type::Directory => tes::v1::types::task::IoType::Directory,
         };
 
         Ok(tes::v1::types::task::Input {
@@ -108,10 +108,11 @@ impl TryFrom<Input> for tes::v1::types::task::Input {
             description,
             url: url.map(|url| url.to_string()),
             path,
-            r#type,
+            ty,
             content: content
                 .map(|v| String::from_utf8(v).context("TES requires file content to be UTF-8"))
                 .transpose()?,
+            streamable: None,
         })
     }
 }

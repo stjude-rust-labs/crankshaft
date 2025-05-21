@@ -1,5 +1,6 @@
 //! The engine that powers Crankshaft.
 
+use anyhow::Result;
 use crankshaft_config::backend::Config;
 use indexmap::IndexMap;
 use tokio_util::sync::CancellationToken;
@@ -13,17 +14,6 @@ pub use task::Task;
 use crate::service::Runner;
 use crate::service::runner::Backend;
 use crate::service::runner::TaskHandle;
-
-/// The top-level result returned within the engine.
-///
-/// An [`eyre::Result`] was chosen as the top-level result for the engine simply
-/// because engine errors are not typically recoverable—they will usually be
-/// displayed directly to the user.
-///
-/// In cases where an error may be recoverable throughout this crate, a
-/// different error type may be returned (as it will always be coercible to it's
-/// [`eyre`] equivalent for display).
-pub type Result<T> = eyre::Result<T>;
 
 /// A workflow execution engine.
 #[derive(Debug, Default)]

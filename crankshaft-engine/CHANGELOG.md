@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.3.0 - 05-28-2025
+
 ### Changed
 
 * Improved backend error reporting to allow the caller to know if a task was

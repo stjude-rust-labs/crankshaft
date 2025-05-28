@@ -10,6 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## 0.2.0 - 04-30-2025
 
+* `crankshaft-engine`: updated to v0.3.0
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-engine-v0.3.0)).
+
+## 0.2.0 - 04-30-2025
+
 * `crankshaft-config`: updated to v0.2.0
   ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-config-v0.2.0)).
 * `crankshaft-docker`: updated to v0.2.0

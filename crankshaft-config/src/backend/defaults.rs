@@ -24,7 +24,7 @@ pub struct Defaults {
     /// The amount of RAM (in GiB) to use during execution.
     ///
     /// This is a float because RAM can be allocated more granularly than in
-    /// gigabytes. These may be rounded to any level of precision that is
+    /// gibibytes. These may be rounded to any level of precision that is
     /// required for a particular environment.
     ram: Option<f64>,
 
@@ -37,7 +37,7 @@ pub struct Defaults {
     /// The amount of disk (in GiB) to use during execution.
     ///
     /// This is a float because disks can be allocated more granularly than in
-    /// gigabytes. These may be rounded to any level of precision that is
+    /// gibibytes. These may be rounded to any level of precision that is
     /// required for a particular environment.
     disk: Option<f64>,
 }

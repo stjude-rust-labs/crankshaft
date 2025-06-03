@@ -36,5 +36,8 @@ url.workspace = true
 uuid.workspace = true
 whoami.workspace = true
 
+[dev-dependencies]
+approx.workspace = true
+
 [lints]
 workspace = true

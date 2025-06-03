@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added support for bearer token authentication in the TES backend ([#38](https://github.com/stjude-rust-labs/crankshaft/pull/38)).
+
 ### Fixed
 
 * Fixed improper unit conversion in the TES backend ([#37](https://github.com/stjude-rust-labs/crankshaft/pull/37)).

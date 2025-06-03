@@ -12,7 +12,6 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 crankshaft = { path = "../crankshaft" }
-base64.workspace = true
 clap.workspace = true
 dirs.workspace = true
 nonempty.workspace = true

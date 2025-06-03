@@ -8,7 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-## 0.2.0 - 04-30-2025
+## 0.3.1 - 06-03-2025
+
+* `crankshaft-engine`: updated to v0.3.1
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-engine-v0.3.1)).
+
+## 0.3.0 - 05-28-2025
 
 * `crankshaft-engine`: updated to v0.3.0
   ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-engine-v0.3.0)).

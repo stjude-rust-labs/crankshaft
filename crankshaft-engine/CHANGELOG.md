@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.3.1 - 06-03-2025
+
 ### Fixed
 
 * Fixed improper unit conversion in the TES backend ([#37](https://github.com/stjude-rust-labs/crankshaft/pull/37)).

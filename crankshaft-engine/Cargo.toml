@@ -1,7 +1,7 @@
 [package]
 name = "crankshaft-engine"
 description = "The core engine that comprises Crankshaft"
-version = "0.3.0"
+version = "0.3.1"
 license.workspace = true
 edition.workspace = true
 authors.workspace = true

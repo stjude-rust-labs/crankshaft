@@ -223,8 +223,7 @@ impl crate::Backend for Backend {
             let task_id = client
                 .create_task(&task)
                 .await
-                .context("failed to create task with TES server")
-                .map_err(|e| TaskRunError::Other(e.into()))?
+                .context("failed to create task with TES server")?
                 .id;
 
             select! {
@@ -236,8 +235,7 @@ impl crate::Backend for Backend {
                     client
                         .cancel_task(&task_id)
                         .await
-                        .context("failed to cancel task with TES server")
-                        .map_err(|e| TaskRunError::Other(e.into()))?;
+                        .context("failed to cancel task with TES server")?;
                     Err(TaskRunError::Canceled)
                 }
                 res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started) => {

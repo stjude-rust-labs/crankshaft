@@ -55,17 +55,17 @@ impl Resources {
         self.cpu_limit
     }
 
-    /// The amount of RAM in gigabytes.
+    /// The amount of RAM in gibibytes (GiB).
     pub fn ram(&self) -> Option<f64> {
         self.ram
     }
 
-    /// The RAM limit in gigabytes.
+    /// The RAM limit in gibibytes (GiB).
     pub fn ram_limit(&self) -> Option<f64> {
         self.ram_limit
     }
 
-    /// The amount of disk space in gigabytes.
+    /// The amount of disk space in gibibytes (GiB).
     pub fn disk(&self) -> Option<f64> {
         self.disk
     }
@@ -253,18 +253,54 @@ impl From<&Resources> for TaskSpecResources {
 
 impl From<Resources> for tes::v1::types::task::Resources {
     fn from(resources: Resources) -> Self {
-        if !resources.zones.is_empty() {
-            todo!("zones within resources are not yet implemented in Crankshaft");
+        fn gib_to_gb(v: f64) -> f64 {
+            (v * (1024.0 * 1024.0 * 1024.0)) / (1000.0 * 1000.0 * 1000.0)
         }
 
         Self {
-            cpu_cores: resources.cpu().map(|inner| inner as i32),
-            ram_gb: resources.ram(),
-            disk_gb: resources.disk(),
+            cpu_cores: resources.cpu().map(|inner| inner.ceil() as i32),
+            ram_gb: resources.ram().map(gib_to_gb),
+            disk_gb: resources.disk().map(gib_to_gb),
             preemptible: resources.preemptible(),
-            zones: None,
+            zones: if resources.zones.is_empty() {
+                None
+            } else {
+                Some(resources.zones)
+            },
             backend_parameters: None,
             backend_parameters_strict: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use approx::assert_relative_eq;
+
+    use super::*;
+
+    #[test]
+    fn tes_resource_conversion() {
+        let resources = Resources {
+            cpu: Some(1.5),
+            cpu_limit: None,
+            ram: Some(16.),
+            ram_limit: None,
+            disk: Some(80.),
+            preemptible: Some(true),
+            zones: vec!["foo".into(), "bar".into(), "baz".into()],
+        };
+
+        let tes: tes::v1::types::task::Resources = resources.into();
+        assert_eq!(tes.cpu_cores, Some(2));
+        assert_relative_eq!(tes.ram_gb.unwrap(), 17.179869184);
+        assert_relative_eq!(tes.disk_gb.unwrap(), 85.89934592);
+        assert_eq!(tes.preemptible, Some(true));
+        assert_eq!(
+            tes.zones,
+            Some(vec!["foo".into(), "bar".into(), "baz".into()])
+        );
+        assert_eq!(tes.backend_parameters, None);
+        assert_eq!(tes.backend_parameters_strict, None);
     }
 }

@@ -10,6 +10,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+base64.workspace = true
 bon.workspace = true
 config.workspace = true
 dirs.workspace = true

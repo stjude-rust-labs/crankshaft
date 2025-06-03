@@ -66,8 +66,8 @@ impl Backend {
         let (url, config, interval) = config.into_parts();
         let mut builder = Client::builder().url(url);
 
-        if let Some(token) = config.basic_auth_token {
-            builder = builder.insert_header("Authorization", format!("Basic {}", token));
+        if let Some(auth) = &config.auth {
+            builder = builder.insert_header("Authorization", auth.header_value());
         }
 
         Self {

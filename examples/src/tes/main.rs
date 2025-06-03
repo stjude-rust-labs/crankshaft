@@ -16,8 +16,6 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::bail;
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD;
 use clap::Parser;
 use crankshaft::Engine;
 use crankshaft::config::backend::Kind;
@@ -79,9 +77,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
 
     // If username and password are available, add them to the config.
     if let (Some(username), Some(password)) = (username, password) {
-        let credentials = format!("{}:{}", username, password);
-        let token = STANDARD.encode(credentials);
-        http_config.basic_auth_token = Some(token);
+        http_config.auth = Some(http::HttpAuthConfig::Basic { username, password });
     }
 
     let config = crankshaft::config::backend::Config::builder()

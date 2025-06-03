@@ -220,7 +220,12 @@ impl crate::Backend for Backend {
         let interval = self.interval;
 
         Ok(async move {
-            let task_id = client.create_task(&task).await.map_err(|e| TaskRunError::Other(e.into()))?.id;
+            let task_id = client
+                .create_task(&task)
+                .await
+                .context("failed to create task with TES server")
+                .map_err(|e| TaskRunError::Other(e.into()))?
+                .id;
 
             select! {
                 // Always poll the cancellation token first
@@ -228,7 +233,11 @@ impl crate::Backend for Backend {
 
                 _ = token.cancelled() => {
                     // Cancel the task
-                    client.cancel_task(&task_id).await.map_err(|e| TaskRunError::Other(e.into()))?;
+                    client
+                        .cancel_task(&task_id)
+                        .await
+                        .context("failed to cancel task with TES server")
+                        .map_err(|e| TaskRunError::Other(e.into()))?;
                     Err(TaskRunError::Canceled)
                 }
                 res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started) => {

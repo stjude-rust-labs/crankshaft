@@ -1,0 +1,52 @@
+
+syntax = "proto3";
+
+package crankshaft.monitor;
+
+// MonitorService defines the gRPC services
+service MonitorService {
+  rpc StreamEvent(StreamEventRequest) returns (stream Event) {}
+}
+
+message StreamEventRequest {
+  // the unique identifier of the workflow we want to target
+  string workflow_id = 1;
+}
+
+message Event {
+  string workflow_id = 1;
+  string task_id = 2;
+  EventType event_type = 3;
+  int64 timestamp = 4;
+  string message = 5; //  a message or a log maybe
+}
+
+enum EventType {
+  TaskStarted = 0;
+  TaskCompleted = 1;
+  TaskStopped = 2;
+  TaskFailed = 3;
+  WorkflowStarted = 4;
+  WorkflowCompleted = 5;
+  WorkflowFailed = 6;
+  WorkflowStopped = 7;
+  TaskLogs = 8;
+}
+
+// TaskStatus provides the current status of a task within a workflow.
+message TaskStatus {
+  string task_id = 1;
+  TaskState state = 2;
+  int64 start_time = 3;
+  string error_message = 6;
+}
+
+// TaskState defines the possible states of a task.
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  PENDING = 1;
+  RUNNING = 2;
+  COMPLETED = 3;
+  FAILED = 4;
+  CANCELED = 5;
+}

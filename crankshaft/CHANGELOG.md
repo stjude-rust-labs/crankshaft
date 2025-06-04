@@ -8,12 +8,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* Bumped crate dependencies to latest ([#40](https://github.com/stjude-rust-labs/crankshaft/pull/40)).
+
 ## 0.2.0 - 04-30-2025
+
+### Changed
 
 * `crankshaft-engine`: updated to v0.3.0
   ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-engine-v0.3.0)).
 
 ## 0.2.0 - 04-30-2025
+
+### Changed
 
 * `crankshaft-config`: updated to v0.2.0
   ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-config-v0.2.0)).

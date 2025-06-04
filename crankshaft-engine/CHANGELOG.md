@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+* Add missing error context for TES api calls ([#39](https://github.com/stjude-rust-labs/crankshaft/pull/39)).
 * Fixed improper unit conversion in the TES backend ([#37](https://github.com/stjude-rust-labs/crankshaft/pull/37)).
 
 ## 0.3.0 - 05-28-2025

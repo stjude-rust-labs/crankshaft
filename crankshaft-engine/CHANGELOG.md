@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.4.0 - 06-04-2025
+
 ### Added
 
 * Added support for bearer token authentication in the TES backend ([#38](https://github.com/stjude-rust-labs/crankshaft/pull/38)).

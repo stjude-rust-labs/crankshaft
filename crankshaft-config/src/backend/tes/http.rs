@@ -44,6 +44,9 @@ impl HttpAuthConfig {
 pub struct Config {
     /// The HTTP authentication to use.
     pub auth: Option<HttpAuthConfig>,
+
+    /// The number of retries for each request.
+    pub retries: Option<u32>,
 }
 
 #[cfg(test)]

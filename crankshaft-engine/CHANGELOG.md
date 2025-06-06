@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* Adds configuration for TES client retries ([#42](https://github.com/stjude-rust-labs/crankshaft/pull/42)).
+
 ## 0.4.0 - 06-04-2025
 
 ### Added

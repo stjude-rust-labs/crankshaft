@@ -1,52 +1,32 @@
-
 syntax = "proto3";
 
 package crankshaft.monitor;
 
-// MonitorService defines the gRPC services
+// MonitorService defines the gRPC services for real-time monitoring.
 service MonitorService {
-  rpc StreamEvent(StreamEventRequest) returns (stream Event) {}
+  // SubscribeEvents streams all task events to connected clients.
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream Event) {}
 }
 
-message StreamEventRequest {
-  // the unique identifier of the workflow we want to target
-  string workflow_id = 1;
-}
+// SubscribeEventsRequest is a minimal request to subscribe to all task events.
+message SubscribeEventsRequest {}
 
+// Event represents a monitoring event from a task.
 message Event {
-  string workflow_id = 1;
-  string task_id = 2;
-  EventType event_type = 3;
-  int64 timestamp = 4;
-  string message = 5; //  a message or a log maybe
-}
-
-enum EventType {
-  TaskStarted = 0;
-  TaskCompleted = 1;
-  TaskStopped = 2;
-  TaskFailed = 3;
-  WorkflowStarted = 4;
-  WorkflowCompleted = 5;
-  WorkflowFailed = 6;
-  WorkflowStopped = 7;
-  TaskLogs = 8;
-}
-
-// TaskStatus provides the current status of a task within a workflow.
-message TaskStatus {
   string task_id = 1;
-  TaskState state = 2;
-  int64 start_time = 3;
-  string error_message = 6;
+  EventType event_type = 2;
+  int64 timestamp = 3;
+  string message = 4; // description or log message
+  map<string, string> metadata =
+      5; // Additional key-value metadata (e.g., resource usage)
 }
 
-// TaskState defines the possible states of a task.
-enum TaskState {
-  TASK_STATE_UNSPECIFIED = 0;
-  PENDING = 1;
-  RUNNING = 2;
-  COMPLETED = 3;
-  FAILED = 4;
-  CANCELED = 5;
+// EventType defines the possible types of monitoring events.
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  TASK_STARTED = 1;   // Task has started
+  TASK_COMPLETED = 2; // Task has completed successfully
+  TASK_FAILED = 3;    // Task has failed
+  TASK_STOPPED = 4;   // Task was stopped
+  TASK_LOGS = 5;      // Log message from a task
 }

@@ -3,7 +3,7 @@ members = [
     "crankshaft",
     "crankshaft-config",
     "crankshaft-docker",
-    "crankshaft-engine",
+    "crankshaft-engine", "crankshaft-monitor",
     "examples",
 ]
 resolver = "2"

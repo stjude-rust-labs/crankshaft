@@ -4,6 +4,7 @@ export default defineConfig({
   title: "Crankshaft",
   description: "Documentation related to the Crankshaft project.",
   base: "/crankshaft/",
+  appearance: "dark",
   themeConfig: {
     nav: [{ text: "Home", link: "/" }],
     sidebar: [

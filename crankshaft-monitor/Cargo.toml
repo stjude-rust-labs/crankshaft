@@ -10,12 +10,12 @@ rust-version.workspace = true
 
 [dependencies]
 tokio.workspace = true
-prost = "0.13.5"
-tonic = "0.13.1"
-futures-util = "0.3.31"
-async-stream = "0.3.6"
-futures-core = "0.3.31"
 tokio-stream.workspace = true
+prost.workspace = true
+tonic.workspace = true
+futures-util.workspace = true
+async-stream.workspace = true
+futures-core.workspace = true
 
 [build-dependencies]
 tonic-build = "0.13.1"

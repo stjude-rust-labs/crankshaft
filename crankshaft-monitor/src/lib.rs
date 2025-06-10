@@ -5,9 +5,7 @@ use proto::{Event, monitor_service_server::MonitorServiceServer};
 use server::CrankshaftMonitorServer;
 use tokio::sync::broadcast;
 
-/// protobuf module.
 pub mod proto;
-/// server module.
 pub mod server;
 
 /// The main external Api to start the crankshaft monitor.

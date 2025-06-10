@@ -1,3 +1,4 @@
+//! The module for the actual gRPC server
 use std::pin::Pin;
 
 use crate::proto::monitor_service_server::MonitorService;

@@ -1,4 +1,4 @@
-//! Tests for the gRPC server are written here , more e2e soon
+//! Tests for the gRPC server are written here
 use crankshaft_monitor::proto::monitor_service_server::MonitorService;
 use crankshaft_monitor::proto::{Event, EventType, SubscribeEventsRequest};
 use crankshaft_monitor::server::CrankshaftMonitorServer;
@@ -7,7 +7,7 @@ use futures_util::StreamExt;
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
 use tokio::time::{Duration, timeout};
-use tonic::{Request, Status};
+use tonic::Request;
 
 #[tokio::test]
 async fn test_subscribe_events_streams_all_task_events() {

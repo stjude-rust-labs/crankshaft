@@ -3,7 +3,8 @@ members = [
     "crankshaft",
     "crankshaft-config",
     "crankshaft-docker",
-    "crankshaft-engine", "crankshaft-monitor",
+    "crankshaft-engine",
+    "crankshaft-monitor",
     "examples",
 ]
 resolver = "2"
@@ -57,6 +58,12 @@ uuid = { version = "1.17.0", features = [
     "macro-diagnostics",
 ] }
 whoami = "1.6.0"
+
+prost = "0.13.5"
+tonic = "0.13.1"
+futures-util = "0.3.31"
+async-stream = "0.3.6"
+futures-core = "0.3.31"
 
 [workspace.lints.rust]
 missing_docs = "warn"

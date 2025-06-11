@@ -1,7 +1,7 @@
 //! Tests for the gRPC server are written here
-use crankshaft_monitor::proto::monitor_service_server::MonitorService;
+use crankshaft_monitor::proto::monitor_server::Monitor;
 use crankshaft_monitor::proto::{Event, EventType, SubscribeEventsRequest};
-use crankshaft_monitor::server::CrankshaftMonitorServer;
+use crankshaft_monitor::server::MonitorService;
 use crankshaft_monitor::start_monitoring;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
@@ -11,10 +11,12 @@ use tonic::Request;
 
 #[tokio::test]
 async fn test_subscribe_events_streams_all_task_events() {
+    // Set up a broadcast channel
     let (tx, rx) = broadcast::channel::<Event>(16);
     // create a new server instance
-    let server = CrankshaftMonitorServer::new(rx);
+    let service = MonitorService::new(rx);
 
+    // Create test events for different tasks
     let event1 = Event {
         task_id: "t1".to_string(),
         event_type: EventType::TaskStarted as i32,
@@ -33,7 +35,7 @@ async fn test_subscribe_events_streams_all_task_events() {
     let request = Request::new(SubscribeEventsRequest {});
 
     // we need to have a subscriber to even send a message in broadcast channel
-    let response = server
+    let response = service
         .subscribe_events(request)
         .await
         .expect("Stream failed");
@@ -43,14 +45,22 @@ async fn test_subscribe_events_streams_all_task_events() {
     tx.send(event1.clone()).expect("Failed to send event1");
     tx.send(event2.clone()).expect("Failed to send event2");
 
-    let received1 = stream.next().await.expect("No event received");
+    // Check the first event
+    let received1 = timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Timeout waiting for event")
+        .expect("No event received");
 
     let received_event1 = received1.expect("Error in stream");
     assert_eq!(received_event1.task_id, "t1");
     assert_eq!(received_event1.event_type, EventType::TaskStarted as i32);
     assert_eq!(received_event1.message, "Task t1 started");
 
-    let received2 = stream.next().await.expect("No event received");
+    // Check the second event
+    let received2 = timeout(Duration::from_secs(1), stream.next())
+        .await
+        .expect("Timeout waiting for event")
+        .expect("No event received");
 
     let received_event2 = received2.expect("Error in stream");
     assert_eq!(received_event2.task_id, "t2");
@@ -80,8 +90,7 @@ async fn test_start_server_and_subscribe_events() {
         .await
         .expect("Failed to connect");
 
-    let mut client =
-        crankshaft_monitor::proto::monitor_service_client::MonitorServiceClient::new(channel);
+    let mut client = crankshaft_monitor::proto::monitor_client::MonitorClient::new(channel);
 
     //  request to subscribe to all events
     let request = Request::new(SubscribeEventsRequest {});

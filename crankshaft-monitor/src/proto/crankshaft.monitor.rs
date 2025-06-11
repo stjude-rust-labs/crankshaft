@@ -66,7 +66,7 @@ impl EventType {
     }
 }
 /// Generated client implementations.
-pub mod monitor_service_client {
+pub mod monitor_client {
     #![allow(
         unused_variables,
         dead_code,
@@ -78,10 +78,10 @@ pub mod monitor_service_client {
     use tonic::codegen::http::Uri;
     /// MonitorService defines the gRPC services for real-time monitoring.
     #[derive(Debug, Clone)]
-    pub struct MonitorServiceClient<T> {
+    pub struct MonitorClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl MonitorServiceClient<tonic::transport::Channel> {
+    impl MonitorClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -92,7 +92,7 @@ pub mod monitor_service_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> MonitorServiceClient<T>
+    impl<T> MonitorClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
@@ -110,7 +110,7 @@ pub mod monitor_service_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> MonitorServiceClient<InterceptedService<T, F>>
+        ) -> MonitorClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -124,7 +124,7 @@ pub mod monitor_service_client {
                 http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            MonitorServiceClient::new(InterceptedService::new(inner, interceptor))
+            MonitorClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -175,22 +175,19 @@ pub mod monitor_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/crankshaft.monitor.MonitorService/SubscribeEvents",
+                "/crankshaft.monitor.Monitor/SubscribeEvents",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new(
-                        "crankshaft.monitor.MonitorService",
-                        "SubscribeEvents",
-                    ),
+                    GrpcMethod::new("crankshaft.monitor.Monitor", "SubscribeEvents"),
                 );
             self.inner.server_streaming(req, path, codec).await
         }
     }
 }
 /// Generated server implementations.
-pub mod monitor_service_server {
+pub mod monitor_server {
     #![allow(
         unused_variables,
         dead_code,
@@ -199,9 +196,9 @@ pub mod monitor_service_server {
         clippy::let_unit_value,
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with MonitorServiceServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with MonitorServer.
     #[async_trait]
-    pub trait MonitorService: std::marker::Send + std::marker::Sync + 'static {
+    pub trait Monitor: std::marker::Send + std::marker::Sync + 'static {
         /// Server streaming response type for the SubscribeEvents method.
         type SubscribeEventsStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::Event, tonic::Status>,
@@ -219,14 +216,14 @@ pub mod monitor_service_server {
     }
     /// MonitorService defines the gRPC services for real-time monitoring.
     #[derive(Debug)]
-    pub struct MonitorServiceServer<T> {
+    pub struct MonitorServer<T> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T> MonitorServiceServer<T> {
+    impl<T> MonitorServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -277,9 +274,9 @@ pub mod monitor_service_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for MonitorServiceServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for MonitorServer<T>
     where
-        T: MonitorService,
+        T: Monitor,
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
@@ -294,11 +291,11 @@ pub mod monitor_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/crankshaft.monitor.MonitorService/SubscribeEvents" => {
+                "/crankshaft.monitor.Monitor/SubscribeEvents" => {
                     #[allow(non_camel_case_types)]
-                    struct SubscribeEventsSvc<T: MonitorService>(pub Arc<T>);
+                    struct SubscribeEventsSvc<T: Monitor>(pub Arc<T>);
                     impl<
-                        T: MonitorService,
+                        T: Monitor,
                     > tonic::server::ServerStreamingService<
                         super::SubscribeEventsRequest,
                     > for SubscribeEventsSvc<T> {
@@ -314,8 +311,7 @@ pub mod monitor_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as MonitorService>::subscribe_events(&inner, request)
-                                    .await
+                                <T as Monitor>::subscribe_events(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -364,7 +360,7 @@ pub mod monitor_service_server {
             }
         }
     }
-    impl<T> Clone for MonitorServiceServer<T> {
+    impl<T> Clone for MonitorServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -377,8 +373,8 @@ pub mod monitor_service_server {
         }
     }
     /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "crankshaft.monitor.MonitorService";
-    impl<T> tonic::server::NamedService for MonitorServiceServer<T> {
+    pub const SERVICE_NAME: &str = "crankshaft.monitor.Monitor";
+    impl<T> tonic::server::NamedService for MonitorServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }

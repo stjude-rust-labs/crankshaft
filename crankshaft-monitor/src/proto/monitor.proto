@@ -3,7 +3,7 @@ syntax = "proto3";
 package crankshaft.monitor;
 
 // MonitorService defines the gRPC services for real-time monitoring.
-service MonitorService {
+service Monitor {
   // SubscribeEvents streams all task events to connected clients.
   rpc SubscribeEvents(SubscribeEventsRequest) returns (stream Event) {}
 }

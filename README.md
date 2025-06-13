@@ -78,6 +78,10 @@ Once you've added `crankshaft` to your dependencies, you should head over to the
 
 ## 🖥️ Development
 
+### Prerequisites
+
+A protobuf compiler is required to build Crankshaft. Please follow the [installation guide](https://protobuf.dev/installation/) to install the compiler.
+
 To bootstrap a development environment, please use the following commands.
 
 ```bash

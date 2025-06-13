@@ -13,7 +13,7 @@ use crate::proto::monitor_server::Monitor;
 
 /// The MonitorService struct represents a gRPC service for monitoring events.
 pub struct MonitorService {
-    /// The receiver field is a broadcast::Receiver<Event> that receives events
+    /// The receiver field is a `broadcast::Receiver<Event>` that receives events
     /// to stream to clients.
     pub receiver: broadcast::Receiver<Event>,
 }

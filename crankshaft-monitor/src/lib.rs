@@ -10,7 +10,8 @@ use tokio::sync::broadcast;
 pub mod proto;
 pub mod server;
 
-/// This represents the default capacity of the broadcast channel used for event communication.
+/// This represents the default capacity of the broadcast channel used for event
+/// communication.
 const DEFAULT_CHANNEL_CAPACITY: usize = 16;
 
 /// JoinHandle type alias for the tokio task handle.

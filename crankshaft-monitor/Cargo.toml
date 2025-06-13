@@ -1,0 +1,25 @@
+[package]
+name = "crankshaft-monitor"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+prost.workspace = true
+tonic.workspace = true
+futures-util.workspace = true
+async-stream.workspace = true
+futures-core.workspace = true
+
+[build-dependencies]
+tonic-build = "0.13.1"
+
+[lints]
+workspace = true

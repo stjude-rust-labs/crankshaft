@@ -75,7 +75,6 @@ async fn test_subscribe_events_streams_all_task_events() {
 #[tokio::test]
 async fn test_start_server_and_subscribe_events() {
     // Arrange: Set up the broadcast channel and start the server
-    let (tx, rx) = broadcast::channel::<Event>(16);
     let addr = "127.0.0.1:8080"
         .parse::<SocketAddr>()
         .expect("Invalid address");

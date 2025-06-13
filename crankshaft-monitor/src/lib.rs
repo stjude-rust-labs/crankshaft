@@ -1,8 +1,9 @@
 //! Crate for monitoring crankshaft events.
 use std::net::SocketAddr;
 
-use anyhow;
-use proto::{Event, monitor_server::MonitorServer};
+use anyhow::Result;
+use proto::Event;
+use proto::monitor_server::MonitorServer;
 use server::MonitorService;
 use tokio::sync::broadcast;
 
@@ -14,13 +15,10 @@ const DEFAULT_CHANNEL_CAPACITY: usize = 16;
 /// The main external API to start the Crankshaft monitor.
 pub fn start_monitoring(
     addr: SocketAddr,
-) -> Result<
-    (
-        broadcast::Sender<Event>,
-        tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
-    ),
-    anyhow::Error,
-> {
+) -> Result<(
+    broadcast::Sender<Event>,
+    tokio::task::JoinHandle<Result<(), tonic::transport::Error>>,
+)> {
     let (event_sender, event_receiver) = broadcast::channel(DEFAULT_CHANNEL_CAPACITY);
     let monitor_service = MonitorService::new(event_receiver);
     let server = MonitorServer::new(monitor_service);

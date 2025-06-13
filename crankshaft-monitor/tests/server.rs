@@ -1,12 +1,16 @@
 //! Tests for the gRPC server are written here
+use std::net::SocketAddr;
+
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::monitor_server::Monitor;
-use crankshaft_monitor::proto::{Event, EventType, SubscribeEventsRequest};
 use crankshaft_monitor::server::MonitorService;
 use crankshaft_monitor::start_monitoring;
 use futures_util::StreamExt;
-use std::net::SocketAddr;
 use tokio::sync::broadcast;
-use tokio::time::{Duration, timeout};
+use tokio::time::Duration;
+use tokio::time::timeout;
 use tonic::Request;
 
 #[tokio::test]
@@ -78,7 +82,8 @@ async fn test_start_server_and_subscribe_events() {
 
     let (sender, server_handle) = start_monitoring(addr).expect("Failed to start server");
 
-    // we have to introduce a little delay to allow the server to start otherwise the connection is refused
+    // we have to introduce a little delay to allow the server to start otherwise
+    // the connection is refused
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Create a gRPC transport channel to connect to the server

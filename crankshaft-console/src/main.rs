@@ -1,2 +1,2 @@
-//! This binary holds the TUI implementation
+//! The Binary of the console TUI
 fn main() {}

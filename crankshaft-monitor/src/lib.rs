@@ -12,7 +12,7 @@ pub mod server;
 const DEFAULT_CHANNEL_CAPACITY: usize = 16;
 
 /// The main external API to start the Crankshaft monitor.
-pub async fn start_monitoring(
+pub fn start_monitoring(
     addr: SocketAddr,
 ) -> Result<
     (

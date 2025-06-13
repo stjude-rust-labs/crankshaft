@@ -76,9 +76,7 @@ async fn test_start_server_and_subscribe_events() {
         .parse::<SocketAddr>()
         .expect("Invalid address");
 
-    let (sender, server_handle) = start_monitoring(addr)
-        .await
-        .expect("Failed to start server");
+    let (sender, server_handle) = start_monitoring(addr).expect("Failed to start server");
 
     // we have to introduce a little delay to allow the server to start otherwise the connection is refused
     tokio::time::sleep(Duration::from_millis(100)).await;

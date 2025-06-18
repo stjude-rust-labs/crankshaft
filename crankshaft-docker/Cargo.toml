@@ -26,6 +26,7 @@ tokio-stream.workspace = true
 tracing.workspace = true
 tracing-log = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
+crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.1.0" }
 
 [dev-dependencies]
 

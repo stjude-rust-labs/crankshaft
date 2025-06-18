@@ -8,9 +8,12 @@ use std::os::windows::process::ExitStatusExt as _;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
+use bollard::query_parameters::AttachContainerOptions;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::ListTasksOptions;
 use bollard::query_parameters::LogsOptions;
@@ -21,9 +24,11 @@ use bollard::secret::TaskState;
 mod builder;
 
 pub use builder::Builder;
+use crankshaft_monitor::proto::{Event, EventType};
 use futures::StreamExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::debug;
 use tracing::info;
@@ -76,7 +81,11 @@ impl Service {
     }
 
     /// Runs a service and waits for the task execution to end.
-    pub async fn run(&self, name: &str, started: impl FnOnce()) -> Result<ExitStatus> {
+    pub async fn run(
+        &self,
+        name: &str,
+        event_sender: Option<broadcast::Sender<Event>>,
+    ) -> Result<ExitStatus> {
         let (container_id, exit_code) = loop {
             trace!(
                 "polling tasks for service `{id}` (task `{name}`)",
@@ -87,10 +96,9 @@ impl Service {
             let tasks = self
                 .client
                 .list_tasks(Some(ListTasksOptions {
-                    filters: Some(HashMap::from_iter([(
-                        String::from("service"),
-                        vec![self.id.to_owned()],
-                    )])),
+                    filters: Some(HashMap::from_iter([(String::from("service"), vec![
+                        self.id.to_owned(),
+                    ])])),
                 }))
                 .await
                 .map_err(Error::Docker)?;
@@ -126,6 +134,17 @@ impl Service {
                         id = self.id
                     );
 
+                    // TODO: we should find a better way to handle this
+                    if let Some(event_sender) = event_sender.clone() {
+                        event_sender
+                            .send(Event {
+                                task_id: task.id.unwrap(),
+                                event_type: EventType::Unspecified as i32,
+                                timestamp: now_millis(),
+                                message: "Task has not yet started".to_string(),
+                            })
+                            .unwrap();
+                    }
                     // Query again after a delay
                     // TODO: make this a variable delay so as to lessen a thundering herd
                     sleep(Duration::from_secs(1)).await;
@@ -141,14 +160,77 @@ impl Service {
                         .container_id
                         .expect("Docker reported a starting or running task with no container id");
 
+                    let mut logs = self
+                        .client
+                        .attach_container(
+                            &container_id,
+                            Some(AttachContainerOptions {
+                                stream: true,
+                                ..Default::default()
+                            }),
+                        )
+                        .await
+                        .unwrap()
+                        .output;
+
                     info!(
                         "service `{id}` (task `{name}`) has started container `{container_id}",
                         id = self.id
                     );
 
                     // Notify that the task has started
-                    started();
+                    // started();
+                    // TODO: we should find a better way to handle this
+                    if let Some(event_sender) = event_sender.clone() {
+                        event_sender
+                            .send(Event {
+                                task_id: task.id.clone().unwrap(),
+                                event_type: EventType::TaskStarted as i32,
+                                timestamp: now_millis(),
+                                message: format!(
+                                    "Service `{id}` (task `{name}`) has started container \
+                                     `{container_id}`",
+                                    id = self.id,
+                                    container_id = container_id
+                                ),
+                            })
+                            .expect("Failed to send event");
+                    }
 
+                    while let Some(result) = logs.next().await {
+                        let output = result.map_err(Error::Docker)?;
+                        match output {
+                            LogOutput::StdOut { message } => {
+                                if let Some(event_sender) = event_sender.clone() {
+                                    event_sender
+                                        .send(Event {
+                                            task_id: task.id.clone().unwrap(),
+                                            event_type: EventType::TaskLogs as i32,
+                                            timestamp: now_millis(),
+                                            message: std::str::from_utf8(&message)
+                                                .expect("Invalid UTF-8")
+                                                .to_string(),
+                                        })
+                                        .expect("Failed to send logs");
+                                };
+                            }
+                            LogOutput::StdErr { message } => {
+                                if let Some(event_sender) = event_sender.clone() {
+                                    event_sender
+                                        .send(Event {
+                                            task_id: task.id.clone().unwrap(),
+                                            event_type: EventType::TaskLogs as i32,
+                                            timestamp: now_millis(),
+                                            message: std::str::from_utf8(&message)
+                                                .expect("Invalid UTF-8")
+                                                .to_string(),
+                                        })
+                                        .expect("Failed to send logs");
+                                };
+                            }
+                            _ => {}
+                        }
+                    }
                     // Wait for the container to be completed.
                     let mut wait_stream = self
                         .client
@@ -207,7 +289,22 @@ impl Service {
                     );
 
                     // Notify that the task has started (and has already completed)
-                    started();
+                    // started();
+                    // TODO: we should find a better way to handle this
+                    if let Some(event_sender) = event_sender {
+                        event_sender
+                            .send(Event {
+                                task_id: task.id.unwrap(),
+                                event_type: EventType::TaskCompleted as i32,
+                                timestamp: now_millis(),
+                                message: format!(
+                                    "container `{container_id}` for service `{id}` (task \
+                                     `{name}`) has completed",
+                                    id = self.id
+                                ),
+                            })
+                            .unwrap();
+                    }
 
                     break (
                         container_id,
@@ -223,7 +320,18 @@ impl Service {
                 | Some(TaskState::ORPHANED)
                 | Some(TaskState::REMOVE) => {
                     // Notify that the task has started (and has failed)
-                    started();
+                    // started();
+                    // TODO: we should find a better way to handle this
+                    if let Some(event_sender) = event_sender {
+                        event_sender
+                            .send(Event {
+                                task_id: task.id.unwrap(),
+                                event_type: EventType::TaskFailed as i32,
+                                timestamp: now_millis(),
+                                message: String::new(),
+                            })
+                            .unwrap();
+                    }
 
                     // Handle the failure
                     return Err(Error::Message(format!(
@@ -323,4 +431,11 @@ impl Service {
 
         Ok(())
     }
+}
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time before UNIX epoch")
+        .as_millis() as i64
 }

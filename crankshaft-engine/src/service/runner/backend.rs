@@ -5,9 +5,10 @@ use std::process::ExitStatus;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use crankshaft_monitor::proto::Event;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
-use tokio::sync::oneshot;
+use tokio::sync::{broadcast, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use crate::Task;
@@ -50,6 +51,7 @@ pub trait Backend: Debug + Send + Sync + 'static {
         &self,
         task: Task,
         started: Option<oneshot::Sender<()>>,
+        event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>>;
 }

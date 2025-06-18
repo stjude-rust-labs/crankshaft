@@ -17,8 +17,6 @@ message Event {
   EventType event_type = 2;
   int64 timestamp = 3;
   string message = 4; // description or log message
-  map<string, string> metadata =
-      5; // Additional key-value metadata (e.g., resource usage)
 }
 
 // EventType defines the possible types of monitoring events.

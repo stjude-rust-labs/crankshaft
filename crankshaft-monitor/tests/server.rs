@@ -26,14 +26,12 @@ async fn test_subscribe_events_streams_all_task_events() {
         event_type: EventType::TaskStarted as i32,
         timestamp: 1625234567,
         message: "Task t1 started".to_string(),
-        metadata: std::collections::HashMap::new(),
     };
     let event2 = Event {
         task_id: "t2".to_string(),
         event_type: EventType::TaskCompleted as i32,
         timestamp: 1625234568,
         message: "Task t2 completed".to_string(),
-        metadata: std::collections::HashMap::new(),
     };
     // wrap it in Request
     let request = Request::new(SubscribeEventsRequest {});
@@ -107,14 +105,12 @@ async fn test_start_server_and_subscribe_events() {
         event_type: EventType::TaskStarted as i32,
         timestamp: 1625234567,
         message: "Task t1 started".to_string(),
-        metadata: std::collections::HashMap::new(),
     };
     let event2 = Event {
         task_id: "t2".to_string(),
         event_type: EventType::TaskFailed as i32,
         timestamp: 1625234568,
         message: "Task t2 failed".to_string(),
-        metadata: std::collections::HashMap::new(),
     };
     sender.send(event1.clone()).expect("Failed to send event1");
     sender.send(event2.clone()).expect("Failed to send event2");

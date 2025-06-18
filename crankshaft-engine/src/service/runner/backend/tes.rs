@@ -17,6 +17,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
+use crankshaft_monitor::proto::Event;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -25,6 +26,7 @@ use tes::v1::types::requests::GetTaskParams;
 use tes::v1::types::requests::View;
 use tes::v1::types::task::State;
 use tokio::select;
+use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -91,6 +93,7 @@ impl Backend {
         name: &str,
         interval: Duration,
         mut started: Option<oneshot::Sender<()>>,
+        _event_sender: Option<broadcast::Sender<Event>>,
     ) -> Result<NonEmpty<ExitStatus>, TaskRunError> {
         info!("TES task `{task_id}` (task `{name}`) has been created; waiting for task to start");
 
@@ -216,6 +219,7 @@ impl crate::Backend for Backend {
         &self,
         task: Task,
         started: Option<oneshot::Sender<()>>,
+        event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         let client = self.client.clone();
@@ -242,7 +246,7 @@ impl crate::Backend for Backend {
                         .context("failed to cancel task with TES server")?;
                     Err(TaskRunError::Canceled)
                 }
-                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started) => {
+                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started, event_sender) => {
                     res
                 }
             }

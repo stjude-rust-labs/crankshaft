@@ -16,6 +16,7 @@ bollard.workspace = true
 bon.workspace = true
 crankshaft-config = { path = "../crankshaft-config", version = "0.3.0" }
 crankshaft-docker = { path = "../crankshaft-docker", version = "0.2.0" }
+crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.1.0" }
 futures.workspace = true
 growable-bloom-filter.workspace = true
 indexmap.workspace = true

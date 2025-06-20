@@ -73,7 +73,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                 .program("sh")
                 .args([
                     String::from("-c"),
-                    String::from("sleep 3 && echo hello, world!"),
+                    String::from("for i in $(seq 10); do echo hello_world; sleep 1; done"),
                 ])
                 .stdout("/stdout")
                 .stderr("/stderr")

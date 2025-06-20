@@ -499,7 +499,10 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(TaskRunError::Canceled), Cleaner::Container(container))
                         }
-                        res = container.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
+                        res = container.run(&name,
+                            || if let Some(started) = started { started.send(()).ok(); },
+                            event_sender.clone()
+                        ) => {
                             (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleaner::Container(container))
                         }
                     }

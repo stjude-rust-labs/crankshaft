@@ -30,5 +30,7 @@ pub fn start_monitoring(addr: SocketAddr) -> Result<(broadcast::Sender<Event>, J
             .await
     });
 
+    println!("grpc server started at port {:?}", addr);
+
     Ok((event_sender, server_handle))
 }

@@ -7,6 +7,8 @@ use std::os::unix::process::ExitStatusExt as _;
 use std::os::windows::process::ExitStatusExt as _;
 use std::path::PathBuf;
 use std::process::ExitStatus;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use bollard::Docker;
 use bollard::body_full;
@@ -18,8 +20,11 @@ use bollard::query_parameters::StartContainerOptions;
 use bollard::query_parameters::UploadToContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
 use tokio_stream::StreamExt as _;
 use tracing::debug;
 use tracing::info;
@@ -102,7 +107,12 @@ impl Container {
     }
 
     /// Runs a container and waits for the execution to end.
-    pub async fn run(&self, name: &str, started: impl FnOnce()) -> Result<ExitStatus> {
+    pub async fn run(
+        &self,
+        name: &str,
+        started: impl FnOnce(),
+        event_sender: Option<broadcast::Sender<Event>>,
+    ) -> Result<ExitStatus> {
         // Attach to the container before we start it
         let stream = if self.stdout.is_some() || self.stderr.is_some() {
             debug!(
@@ -142,6 +152,16 @@ impl Container {
         started();
 
         info!("container `{id}` (task `{name}`) has started", id = self.id);
+        if let Some(event_sender) = event_sender.clone() {
+            event_sender
+                .send(Event {
+                    task_id: self.id.clone(),
+                    event_type: EventType::TaskStarted as i32,
+                    timestamp: now_millis(),
+                    message: String::from(""),
+                })
+                .unwrap();
+        }
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
@@ -181,6 +201,18 @@ impl Container {
                                     path = self.stdout.as_ref().unwrap().display()
                                 ))
                             })?;
+                        if let Some(event_sender) = event_sender.clone() {
+                            event_sender
+                                .send(Event {
+                                    task_id: self.id.clone(),
+                                    event_type: EventType::TaskLogs as i32,
+                                    timestamp: now_millis(),
+                                    message: std::str::from_utf8(&message)
+                                        .expect("Invalid UTF-8")
+                                        .to_string(),
+                                })
+                                .unwrap();
+                        }
                     }
                     LogOutput::StdErr { message } => {
                         stderr
@@ -292,4 +324,11 @@ impl Container {
         debug!("force removing container `{id}`", id = self.id);
         self.remove_inner(true).await
     }
+}
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time before UNIX epoch")
+        .as_millis() as i64
 }

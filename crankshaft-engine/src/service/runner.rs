@@ -1,5 +1,6 @@
 //! Task runner services.
 
+use std::net::SocketAddr;
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -7,6 +8,7 @@ use std::sync::Mutex;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
+use crankshaft_monitor::start_monitoring;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
 use tokio::sync::oneshot::Receiver;
@@ -109,7 +111,14 @@ impl Runner {
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let result = backend.clone().run(task, None, None, token)?.await;
+            // lets call start_monitoring here and then return the event sender with the taskhandle
+            // and then we can use it in th example hopefully
+            let socketaddr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+            let (event_sender, _handle) = start_monitoring(socketaddr).unwrap();
+            let result = backend
+                .clone()
+                .run(task, None, Some(event_sender), token)?
+                .await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

@@ -5,6 +5,7 @@ submit = "foo bar"
 monitor = "foo bar"
 kill = "foo bar"
 max-tasks = 10
+monitoring = false
 
 [[backends]]
 name = "quux"
@@ -14,8 +15,10 @@ monitor = "foo bar"
 kill = "foo bar"
 max-tasks = 10
 defaults = { cpu = 1, ram = 1 }
+monitoring = false
 
 [[backends]]
 name = "docker"
 kind = "Docker"
 max-tasks = 10
+monitoring = false

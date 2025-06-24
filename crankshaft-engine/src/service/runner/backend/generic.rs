@@ -6,13 +6,12 @@
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use anyhow::Context as _;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
+use crankshaft_docker::events::send_event;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
 use futures::FutureExt;
@@ -180,26 +179,21 @@ impl crate::Backend for Backend {
                     started.send(()).ok();
                 }
 
-                if let Some(event_sender) = event_sender.clone() {
-                    event_sender
-                        .send(Event {
-                            task_id: task.name().unwrap().to_string(),
-                            event_type: EventType::TaskStarted as i32,
-                            timestamp: now_millis() as i64,
-                            message: "Task started".to_string(),
-                        })
-                        .expect("Failed to send event started message from generic");
-                };
+                // TODO(raj): fix this
+                let task_name = task.name().unwrap_or_default();
+                send_event(
+                    &event_sender,
+                    &task.name().unwrap().to_string(),
+                    EventType::TaskStarted,
+                    format!("Task {task_name} started"),
+                );
 
                 // Monitoring the output.
                 match job_id_regex {
                     Some(ref regex) => {
                         let stdout = String::from_utf8_lossy(&output.stdout);
                         let captures = regex.captures_iter(&stdout).next().unwrap_or_else(|| {
-                            panic!(
-                                "could not match the job id regex within stdout: `{}`",
-                                stdout
-                            )
+                            panic!("could not match the job id regex within stdout: `{stdout}`")
                         });
 
                         // SAFETY: this will always unwrap, as the group is
@@ -261,11 +255,4 @@ impl crate::Backend for Backend {
         }
         .boxed())
     }
-}
-
-fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis() as u64
 }

@@ -52,6 +52,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .name("docker")
         .kind(Kind::Docker(Config::builder().build()))
         .max_tasks(args.max_tasks)
+        .monitoring(false)
         .build();
 
     let engine = Engine::default()

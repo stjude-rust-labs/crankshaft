@@ -18,16 +18,18 @@ use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use crankshaft::engine::task::Output;
 use crankshaft::engine::task::output::Type;
+use crankshaft_monitor::proto::SubscribeEventsRequest;
+use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
 use nonempty::NonEmpty;
 use tempfile::NamedTempFile;
 use tokio::select;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
+use tonic::Request;
+use tonic::transport::Channel;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt as _;
@@ -52,6 +54,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .name("docker")
         .kind(Kind::Docker(Config::builder().build()))
         .max_tasks(args.max_tasks)
+        .monitoring(true)
         .build();
 
     let engine = Engine::default()
@@ -124,32 +127,12 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                 .map(|e| e.map(|e| (e.into_iter().next().unwrap(), stdout, stderr))),
         );
     }
-    // let progress = ProgressBar::new(tasks.len() as u64);
-    // progress.set_style(
-    //     ProgressStyle::with_template(
-    //         "{spinner:.cyan/blue} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos:>7}/{len:7} \
-    //          {msg}",
-    //     )
-    //     .unwrap()
-    //     .progress_chars("#>-"),
-    // );
-
-    // progress.enable_steady_tick(Duration::from_millis(100));
 
     let mut results = Vec::new();
     while let Some(result) = tasks.next().await {
-        let failed = result.is_err();
+        let _failed = result.is_err();
         results.push(result);
-
-        // progress.set_message(format!(
-        //     "task #{num} {status}",
-        //     num = results.len(),
-        //     status = if failed { "failed" } else { "completed" }
-        // ));
-        // progress.inc(1);
     }
-
-    // drop(progress);
 
     for (i, result) in results.into_iter().enumerate() {
         match result {
@@ -172,11 +155,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     Ok(())
 }
 
-use crankshaft_monitor::proto::SubscribeEventsRequest;
-use crankshaft_monitor::proto::monitor_client::MonitorClient;
-use tonic::Request;
-use tonic::transport::Channel;
-
+/// performs polling
 fn start_polling() {
     tokio::spawn(async {
         let addr = "http://127.0.0.1:8080";

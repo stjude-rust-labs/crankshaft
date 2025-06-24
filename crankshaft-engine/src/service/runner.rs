@@ -56,6 +56,9 @@ pub struct Runner {
     /// The unique name generator for tasks without names being sent to backends
     /// that may need names.
     name_generator: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
+
+    /// The flag for monitoring
+    monitored: bool,
 }
 
 impl Runner {
@@ -64,6 +67,7 @@ impl Runner {
         config: Kind,
         max_tasks: usize,
         defaults: Option<Defaults>,
+        monitored: bool,
     ) -> Result<Self> {
         let backend = match config {
             Kind::Docker(config) => {
@@ -86,6 +90,7 @@ impl Runner {
                 generator,
                 NAME_BUFFER_LEN,
             ))),
+            monitored,
         })
     }
 
@@ -108,23 +113,33 @@ impl Runner {
             // SAFETY: this generator should _never_ run out of entries.
             task.name = Some(generator.next().unwrap());
         }
+        let is_monitored = self.monitored;
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            // lets call start_monitoring here and then return the event sender with the taskhandle
-            // and then we can use it in th example hopefully
-            let socketaddr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-            let (event_sender, _handle) = start_monitoring(socketaddr).unwrap();
-            let result = backend
-                .clone()
-                .run(task, None, Some(event_sender), token)?
-                .await;
 
-            // NOTE: if the send does not succeed, that is almost certainly
-            // because the receiver was dropped. That is a relatively standard
-            // practice if you don't specifically _want_ to keep a handle to the
-            // returned result, so we ignore any errors related to that.
-            let _ = tx.send(result);
+            if is_monitored {
+                let socketaddr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+                let (event_sender, _handle) = start_monitoring(socketaddr).unwrap();
+                let result = backend
+                    .clone()
+                    .run(task, None, Some(event_sender), token)?
+                    .await;
+
+                // NOTE: if the send does not succeed, that is almost certainly
+                // because the receiver was dropped. That is a relatively standard
+                // practice if you don't specifically _want_ to keep a handle to the
+                // returned result, so we ignore any errors related to that.
+                let _ = tx.send(result);
+            } else {
+                let result = backend.clone().run(task, None, None, token)?.await;
+
+                // NOTE: if the send does not succeed, that is almost certainly
+                // because the receiver was dropped. That is a relatively standard
+                // practice if you don't specifically _want_ to keep a handle to the
+                // returned result, so we ignore any errors related to that.
+                let _ = tx.send(result);
+            }
             drop(_permit);
             anyhow::Ok(())
         });

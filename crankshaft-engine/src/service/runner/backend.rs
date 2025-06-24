@@ -8,7 +8,8 @@ use async_trait::async_trait;
 use crankshaft_monitor::proto::Event;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::Task;

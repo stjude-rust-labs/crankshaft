@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
+pub mod events;
 pub mod service;
 pub mod task;
 
@@ -25,8 +26,8 @@ pub struct Engine {
 impl Engine {
     /// Adds a [`Backend`] to the engine.
     pub async fn with(mut self, config: Config) -> Result<Self> {
-        let (name, kind, max_tasks, defaults) = config.into_parts();
-        let runner = Runner::initialize(kind, max_tasks, defaults).await?;
+        let (name, kind, max_tasks, defaults, monitoring) = config.into_parts();
+        let runner = Runner::initialize(kind, max_tasks, defaults, monitoring).await?;
         self.runners.insert(name, runner);
         Ok(self)
     }
@@ -58,7 +59,7 @@ impl Engine {
             "submitting job{} to the `{}` backend",
             task.name
                 .as_ref()
-                .map(|name| format!(" with name `{}`", name))
+                .map(|name| format!(" with name `{name}`"))
                 .unwrap_or_default(),
             name
         );

@@ -7,8 +7,6 @@ use std::os::unix::process::ExitStatusExt as _;
 use std::os::windows::process::ExitStatusExt as _;
 use std::path::PathBuf;
 use std::process::ExitStatus;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use bollard::Docker;
 use bollard::body_full;
@@ -31,6 +29,7 @@ use tracing::info;
 
 use crate::Error;
 use crate::Result;
+use crate::events::send_event;
 
 mod builder;
 
@@ -110,7 +109,6 @@ impl Container {
     pub async fn run(
         &self,
         name: &str,
-        started: impl FnOnce(),
         event_sender: Option<broadcast::Sender<Event>>,
     ) -> Result<ExitStatus> {
         // Attach to the container before we start it
@@ -148,20 +146,11 @@ impl Container {
             .await
             .map_err(Error::Docker)?;
 
-        // Notify that the container has started
-        started();
+        let task_id = &self.id;
 
         info!("container `{id}` (task `{name}`) has started", id = self.id);
-        if let Some(event_sender) = event_sender.clone() {
-            event_sender
-                .send(Event {
-                    task_id: self.id.clone(),
-                    event_type: EventType::TaskStarted as i32,
-                    timestamp: now_millis(),
-                    message: String::from(""),
-                })
-                .unwrap();
-        }
+
+        send_event(&event_sender, task_id, EventType::TaskStarted, "");
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
@@ -201,18 +190,15 @@ impl Container {
                                     path = self.stdout.as_ref().unwrap().display()
                                 ))
                             })?;
-                        if let Some(event_sender) = event_sender.clone() {
-                            event_sender
-                                .send(Event {
-                                    task_id: self.id.clone(),
-                                    event_type: EventType::TaskLogs as i32,
-                                    timestamp: now_millis(),
-                                    message: std::str::from_utf8(&message)
-                                        .expect("Invalid UTF-8")
-                                        .to_string(),
-                                })
-                                .unwrap();
-                        }
+
+                        send_event(
+                            &event_sender,
+                            task_id,
+                            EventType::TaskStarted,
+                            std::str::from_utf8(&message)
+                                .expect("Invalid UTF-8")
+                                .to_string(),
+                        );
                     }
                     LogOutput::StdErr { message } => {
                         stderr
@@ -226,6 +212,15 @@ impl Container {
                                     path = self.stderr.as_ref().unwrap().display()
                                 ))
                             })?;
+
+                        send_event(
+                            &event_sender,
+                            task_id,
+                            EventType::TaskStarted,
+                            std::str::from_utf8(&message)
+                                .expect("Invalid UTF-8")
+                                .to_string(),
+                        );
                     }
                     _ => {}
                 }
@@ -324,11 +319,4 @@ impl Container {
         debug!("force removing container `{id}`", id = self.id);
         self.remove_inner(true).await
     }
-}
-
-fn now_millis() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time before UNIX epoch")
-        .as_millis() as i64
 }

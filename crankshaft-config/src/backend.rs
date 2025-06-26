@@ -34,7 +34,7 @@ pub struct Config {
     #[builder(into)]
     defaults: Option<Defaults>,
 
-    /// The monitoring flag
+    /// Whether or not to enable the monitoring server.
     monitoring: bool,
 }
 

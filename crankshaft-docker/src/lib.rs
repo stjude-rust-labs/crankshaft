@@ -7,7 +7,6 @@ use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
 
 pub mod container;
-pub mod events;
 pub mod images;
 pub mod service;
 

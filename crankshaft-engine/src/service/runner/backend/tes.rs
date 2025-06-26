@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -35,7 +36,6 @@ use tracing::trace;
 
 use super::TaskRunError;
 use crate::Task;
-use crate::events::send_event;
 
 /// The default poll interval for querying task status.
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(1);

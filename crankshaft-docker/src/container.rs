@@ -20,6 +20,7 @@ use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
@@ -29,7 +30,6 @@ use tracing::info;
 
 use crate::Error;
 use crate::Result;
-use crate::events::send_event;
 
 mod builder;
 
@@ -194,7 +194,7 @@ impl Container {
                         send_event(
                             &event_sender,
                             task_id,
-                            EventType::TaskStarted,
+                            EventType::TaskLogs,
                             std::str::from_utf8(&message)
                                 .expect("Invalid UTF-8")
                                 .to_string(),
@@ -216,7 +216,7 @@ impl Container {
                         send_event(
                             &event_sender,
                             task_id,
-                            EventType::TaskStarted,
+                            EventType::TaskLogs,
                             std::str::from_utf8(&message)
                                 .expect("Invalid UTF-8")
                                 .to_string(),

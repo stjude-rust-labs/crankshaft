@@ -14,7 +14,6 @@ use bollard::container::LogOutput;
 use bollard::query_parameters::AttachContainerOptions;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::ListTasksOptions;
-use bollard::query_parameters::LogsOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use bollard::secret::TaskState;
@@ -24,6 +23,7 @@ mod builder;
 pub use builder::Builder;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use futures::StreamExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -35,7 +35,6 @@ use tracing::trace;
 
 use crate::Error;
 use crate::Result;
-use crate::events::send_event;
 
 /// A docker service.
 ///
@@ -86,7 +85,26 @@ impl Service {
         name: &str,
         event_sender: Option<broadcast::Sender<Event>>,
     ) -> Result<ExitStatus> {
-        let (container_id, exit_code) = loop {
+        let mut stdout = match &self.stdout {
+            Some(path) => Some(File::create(path).await.map_err(|e| {
+                Error::Message(format!(
+                    "failed to create stdout file `{path}`: {e}",
+                    path = path.display()
+                ))
+            })?),
+            None => None,
+        };
+
+        let mut stderr = match &self.stderr {
+            Some(path) => Some(File::create(path).await.map_err(|e| {
+                Error::Message(format!(
+                    "failed to create stderr file `{path}`: {e}",
+                    path = path.display()
+                ))
+            })?),
+            None => None,
+        };
+        let (_container_id, exit_code) = loop {
             trace!(
                 "polling tasks for service `{id}` (task `{name}`)",
                 id = self.id
@@ -200,6 +218,14 @@ impl Service {
                                         .expect("Invalid UTF-8")
                                         .to_string(),
                                 );
+                                if let Some(stdout) = stdout.as_mut() {
+                                    stdout.write(&message).await.map_err(|e| {
+                                        Error::Message(format!(
+                                            "failed to write to stdout file `{path}`: {e}",
+                                            path = self.stdout.as_ref().unwrap().display()
+                                        ))
+                                    })?;
+                                }
                             }
                             LogOutput::StdErr { message } => {
                                 send_event(
@@ -210,6 +236,14 @@ impl Service {
                                         .expect("Invalid UTF-8")
                                         .to_string(),
                                 );
+                                if let Some(stderr) = stderr.as_mut() {
+                                    stderr.write(&message).await.map_err(|e| {
+                                        Error::Message(format!(
+                                            "failed to write to stderr file `{path}`: {e}",
+                                            path = self.stderr.as_ref().unwrap().display()
+                                        ))
+                                    })?;
+                                }
                             }
                             _ => {}
                         }
@@ -299,7 +333,14 @@ impl Service {
                         &event_sender,
                         &task_id,
                         EventType::TaskFailed,
-                        String::from(""),
+                        format!(
+                            "Docker task failed: {msg}",
+                            msg = status
+                                .err
+                                .as_deref()
+                                .or(status.message.as_deref())
+                                .unwrap_or("no error message was provided by the Docker daemon")
+                        ),
                     );
 
                     // Handle the failure
@@ -314,71 +355,6 @@ impl Service {
                 }
             }
         };
-
-        // Write the log streams
-        if self.stdout.is_some() || self.stderr.is_some() {
-            let mut stdout = match &self.stdout {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stdout file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
-                None => None,
-            };
-
-            let mut stderr = match &self.stderr {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stderr file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
-                None => None,
-            };
-
-            let mut stream = self.client.logs(
-                &container_id,
-                Some(LogsOptions {
-                    stdout: self.stdout.is_some(),
-                    stderr: self.stderr.is_some(),
-                    ..Default::default()
-                }),
-            );
-
-            while let Some(result) = stream.next().await {
-                let output = result.map_err(Error::Docker)?;
-                match output {
-                    LogOutput::StdOut { message } => {
-                        stdout
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stdout file `{path}`: {e}",
-                                    path = self.stdout.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    LogOutput::StdErr { message } => {
-                        stderr
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stderr file `{path}`: {e}",
-                                    path = self.stderr.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    _ => {}
-                }
-            }
-        }
 
         // See WEXITSTATUS from wait(2) to explain the shift
         #[cfg(unix)]

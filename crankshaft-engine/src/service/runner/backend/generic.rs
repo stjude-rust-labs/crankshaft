@@ -11,9 +11,9 @@ use anyhow::Context as _;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
-use crankshaft_docker::events::send_event;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -179,13 +179,12 @@ impl crate::Backend for Backend {
                     started.send(()).ok();
                 }
 
-                // TODO(raj): fix this
-                let task_name = task.name().unwrap_or_default();
+                let task_name = task.name().unwrap_or_default().to_string();
                 send_event(
                     &event_sender,
-                    &task.name().unwrap().to_string(),
+                    &task_name,
                     EventType::TaskStarted,
-                    format!("Task {task_name} started"),
+                    format!("task `{task_name}` has started"),
                 );
 
                 // Monitoring the output.

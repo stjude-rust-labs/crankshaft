@@ -1,6 +1,5 @@
 //! Task runner services.
 
-use std::net::SocketAddr;
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -8,9 +7,10 @@ use std::sync::Mutex;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
-use crankshaft_monitor::start_monitoring;
+use crankshaft_monitor::proto::Event;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
+use tokio::sync::broadcast;
 use tokio::sync::oneshot::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
@@ -57,8 +57,8 @@ pub struct Runner {
     /// that may need names.
     name_generator: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 
-    /// The flag for monitoring
-    monitored: bool,
+    /// Whether or not to enable the monitoring server.
+    pub monitored: bool,
 }
 
 impl Runner {
@@ -101,7 +101,12 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
+    pub fn spawn(
+        &self,
+        mut task: Task,
+        event_sender: Option<broadcast::Sender<Event>>,
+        token: CancellationToken,
+    ) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -110,36 +115,15 @@ impl Runner {
 
         if backend.default_name() == "docker" && task.name.is_none() {
             let mut generator = self.name_generator.lock().unwrap();
-            // SAFETY: this generator should _never_ run out of entries.
             task.name = Some(generator.next().unwrap());
         }
-        let is_monitored = self.monitored;
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
 
-            if is_monitored {
-                let socketaddr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-                let (event_sender, _handle) = start_monitoring(socketaddr).unwrap();
-                let result = backend
-                    .clone()
-                    .run(task, None, Some(event_sender), token)?
-                    .await;
+            let result = backend.clone().run(task, None, event_sender, token)?.await;
 
-                // NOTE: if the send does not succeed, that is almost certainly
-                // because the receiver was dropped. That is a relatively standard
-                // practice if you don't specifically _want_ to keep a handle to the
-                // returned result, so we ignore any errors related to that.
-                let _ = tx.send(result);
-            } else {
-                let result = backend.clone().run(task, None, None, token)?.await;
-
-                // NOTE: if the send does not succeed, that is almost certainly
-                // because the receiver was dropped. That is a relatively standard
-                // practice if you don't specifically _want_ to keep a handle to the
-                // returned result, so we ignore any errors related to that.
-                let _ = tx.send(result);
-            }
+            let _ = tx.send(result);
             drop(_permit);
             anyhow::Ok(())
         });

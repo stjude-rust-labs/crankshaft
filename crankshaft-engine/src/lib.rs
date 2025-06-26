@@ -26,9 +26,9 @@ use crate::service::runner::TaskHandle;
 pub struct Engine {
     /// The task runner(s).
     runners: IndexMap<String, Runner>,
-    /// The monitoring server sender, if monitoring is enabled.
-    monitoring_sender: Option<broadcast::Sender<Event>>,
-    /// The monitoring server task handle, if monitoring is enabled.
+    /// The event sender, if monitoring is enabled.
+    event_sender: Option<broadcast::Sender<Event>>,
+    /// The monitoring server task handle
     monitoring_handle: Option<JoinHandle<Result<(), tonic::transport::Error>>>,
 }
 
@@ -40,10 +40,10 @@ impl Engine {
         self.runners.insert(name, runner);
 
         // Start the monitoring server if any runner is monitored
-        if monitored && self.monitoring_sender.is_none() {
+        if monitored && self.event_sender.is_none() {
             let socketaddr: SocketAddr = "127.0.0.1:8080".parse()?;
             let (event_sender, handle) = start_monitoring(socketaddr)?;
-            self.monitoring_sender = Some(event_sender);
+            self.event_sender = Some(event_sender);
             self.monitoring_handle = Some(handle);
         }
 
@@ -83,7 +83,7 @@ impl Engine {
         );
 
         let event_sender = if backend.monitored {
-            self.monitoring_sender.clone()
+            self.event_sender.clone()
         } else {
             None
         };

@@ -137,7 +137,7 @@ async fn run(args: Args) -> Result<()> {
                 create_container(docker, image, tag, &name, command.remove(0), args).await?;
             let status = container.run(&name, None).await?;
 
-            println!("exit code: {}", status);
+            println!("exit code: {status}");
         }
         Command::RemoveContainer { name, force } => {
             let container = docker.container_from_name(name, None, None);

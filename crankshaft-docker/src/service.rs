@@ -155,11 +155,11 @@ impl Service {
                         id = self.id
                     );
 
-                    send_event(
+                    send_event!(
                         &event_sender,
                         &task_id,
                         EventType::Unspecified,
-                        "Task has not yet started".to_string(),
+                        "Task has not yet started",
                     );
 
                     // Query again after a delay
@@ -195,15 +195,13 @@ impl Service {
                         id = self.id
                     );
 
-                    send_event(
+                    send_event!(
                         &event_sender,
                         &task_id,
                         EventType::TaskStarted,
-                        format!(
-                            "Service `{id}` (task `{name}`) has started container `{container_id}`",
-                            id = self.id,
-                            container_id = container_id
-                        ),
+                        "Service `{id}` (task `{name}`) has started container `{container_id}`",
+                        id = self.id,
+                        container_id = container_id
                     );
 
                     while let Some(result) = logs.next().await {
@@ -305,15 +303,13 @@ impl Service {
                         id = self.id
                     );
 
-                    send_event(
+                    send_event!(
                         &event_sender,
                         &task_id,
                         EventType::TaskCompleted,
-                        format!(
-                            "container `{container_id}` for service `{id}` (task `{name}`) has \
-                             completed",
-                            id = self.id
-                        ),
+                        "container `{container_id}` for service `{id}` (task `{name}`) has \
+                         completed",
+                        id = self.id
                     );
 
                     break (
@@ -329,18 +325,16 @@ impl Service {
                 | Some(TaskState::REJECTED)
                 | Some(TaskState::ORPHANED)
                 | Some(TaskState::REMOVE) => {
-                    send_event(
+                    send_event!(
                         &event_sender,
                         &task_id,
                         EventType::TaskFailed,
-                        format!(
-                            "Docker task failed: {msg}",
-                            msg = status
-                                .err
-                                .as_deref()
-                                .or(status.message.as_deref())
-                                .unwrap_or("no error message was provided by the Docker daemon")
-                        ),
+                        "Docker task failed: {msg}",
+                        msg = status
+                            .err
+                            .as_deref()
+                            .or(status.message.as_deref())
+                            .unwrap_or("no error message was provided by the Docker daemon")
                     );
 
                     // Handle the failure

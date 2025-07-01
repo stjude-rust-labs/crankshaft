@@ -119,14 +119,12 @@ impl Backend {
                     State::Unknown | State::Queued | State::Initializing => {
                         // Task hasn't started yet
                         trace!("task `{task_id}` is not yet running; waiting before polling again");
-                        send_event(
+                        send_event!(
                             &event_sender,
-                            &task_id.into(),
+                            &task_id.to_string(),
                             EventType::Unspecified,
-                            format!(
-                                "task `{task_id}` is not yet running; waiting before polling again",
-                            ),
-                        );
+                            "task `{task_id}` is not yet running; waiting before polling again",
+                        )
                     }
                     State::Running | State::Paused => {
                         trace!("task `{task_id}` is running; waiting before polling again");
@@ -136,11 +134,11 @@ impl Backend {
                             info!("TES task `{task_id}` (task `{name}`) has started");
                             started.send(()).ok();
                         }
-                        send_event(
+                        send_event!(
                             &event_sender,
-                            &task_id.into(),
+                            &task_id.to_string(),
                             EventType::TaskStarted,
-                            format!("TES task `{task_id}` (task `{name}`) has started"),
+                            "TES task `{task_id}` (task `{name}`) has started",
                         );
                     }
                     State::Canceling => {
@@ -192,19 +190,19 @@ impl Backend {
                         // Task completed or had an error
                         if *state == State::Complete {
                             info!("TES task `{task_id}` (task `{name}`) has completed");
-                            send_event(
+                            send_event!(
                                 &event_sender,
-                                &task_id.into(),
+                                &task_id.to_string(),
                                 EventType::TaskCompleted,
-                                format!("TES task `{task_id}` (task `{name}`) has completed"),
+                                "TES task `{task_id}` (task `{name}`) has completed"
                             );
                         } else {
                             info!("TES task `{task_id}` (task `{name}`) has failed");
-                            send_event(
+                            send_event!(
                                 &event_sender,
-                                &task_id.into(),
+                                &task_id.to_string(),
                                 EventType::TaskFailed,
-                                format!("TES task `{task_id}` (task `{name}`) has failed"),
+                                "TES task `{task_id}` (task `{name}`) has failed"
                             )
                         }
 

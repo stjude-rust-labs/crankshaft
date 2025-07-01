@@ -36,7 +36,9 @@ pub fn start_monitoring(addr: SocketAddr) -> Result<(broadcast::Sender<Event>, J
     Ok((event_sender, server_handle))
 }
 
-/// Sends a Event through a braodcast channel
+/// Sends an event through a broadcast channel.
+///
+/// No event is sent If the specified broadcast channel is `None`.
 pub fn send_event(
     sender: &Option<broadcast::Sender<Event>>,
     task_id: &String,
@@ -54,9 +56,48 @@ pub fn send_event(
 }
 
 /// current timestamp as i64
-fn now_millis() -> i64 {
+pub fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("System time before UNIX epoch")
         .as_millis() as i64
+}
+
+/// Sends an event through a broadcast channel.
+///
+/// No event is sent If the specified broadcast channel is `None`.
+#[macro_export]
+macro_rules! send_event {
+    ($sender:expr, $task_id:expr, $event_type:expr, $message:literal) => {
+        if let Some(sender) = $sender.as_ref() {
+            let _ = sender.send($crate::proto::Event {
+                task_id: $task_id.to_owned(),
+                event_type: $event_type as i32,
+                timestamp: $crate::now_millis(),
+                message: $message.to_string(),
+            });
+        }
+    };
+    ($sender:expr, $task_id:expr, $event_type:expr, $fmt:literal, $($arg:tt)*) => {
+        if let Some(sender) = $sender.as_ref() {
+            let message = format!($fmt, $($arg)*);
+            let _ = sender.send($crate::proto::Event {
+                task_id: $task_id.to_owned(),
+                event_type: $event_type as i32,
+                timestamp: $crate::now_millis(),
+                message,
+            });
+        }
+    };
+    ($sender:expr, $task_id:expr, $event_type:expr, $($arg:tt)*) => {
+        if let Some(sender) = $sender.as_ref() {
+            let message = format!("{}",$($arg)*);
+            let _ = sender.send($crate::proto::Event {
+                task_id: $task_id.to_owned(),
+                event_type: $event_type as i32,
+                timestamp: $crate::now_millis(),
+                message,
+            });
+        }
+    };
 }

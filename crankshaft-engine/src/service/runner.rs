@@ -56,9 +56,6 @@ pub struct Runner {
     /// The unique name generator for tasks without names being sent to backends
     /// that may need names.
     name_generator: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-
-    /// Whether or not to enable the monitoring server.
-    pub monitored: bool,
 }
 
 impl Runner {
@@ -67,7 +64,6 @@ impl Runner {
         config: Kind,
         max_tasks: usize,
         defaults: Option<Defaults>,
-        monitored: bool,
     ) -> Result<Self> {
         let backend = match config {
             Kind::Docker(config) => {
@@ -90,7 +86,6 @@ impl Runner {
                 generator,
                 NAME_BUFFER_LEN,
             ))),
-            monitored,
         })
     }
 
@@ -115,14 +110,18 @@ impl Runner {
 
         if backend.default_name() == "docker" && task.name.is_none() {
             let mut generator = self.name_generator.lock().unwrap();
+            // SAFETY: this generator should _never_ run out of entries.
             task.name = Some(generator.next().unwrap());
         }
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-
             let result = backend.clone().run(task, None, event_sender, token)?.await;
 
+            // NOTE: if the send does not succeed, that is almost certainly
+            // because the receiver was dropped. That is a relatively standard
+            // practice if you don't specifically _want_ to keep a handle to the
+            // returned result, so we ignore any errors related to that.
             let _ = tx.send(result);
             drop(_permit);
             anyhow::Ok(())

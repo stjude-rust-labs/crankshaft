@@ -128,7 +128,9 @@ impl crate::Backend for Backend {
                 })
                 .transpose()?;
 
-            for execution in task.executions.clone() {
+            let task_name = task.name().unwrap_or_default().to_string();
+
+            for execution in task.executions {
                 if token.is_cancelled() {
                     return Err(TaskRunError::Canceled);
                 }
@@ -179,12 +181,11 @@ impl crate::Backend for Backend {
                     started.send(()).ok();
                 }
 
-                let task_name = task.name().unwrap_or_default().to_string();
-                send_event(
+                send_event!(
                     &event_sender,
                     &task_name,
                     EventType::TaskStarted,
-                    format!("task `{task_name}` has started"),
+                    "task `{task_name}` has started"
                 );
 
                 // Monitoring the output.

@@ -150,7 +150,7 @@ impl Container {
 
         info!("container `{id}` (task `{name}`) has started", id = self.id);
 
-        send_event(&event_sender, task_id, EventType::TaskStarted, "");
+        send_event!(&event_sender, task_id, EventType::TaskStarted, "");
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
@@ -191,13 +191,13 @@ impl Container {
                                 ))
                             })?;
 
-                        send_event(
+                        send_event!(
                             &event_sender,
                             task_id,
                             EventType::TaskLogs,
                             std::str::from_utf8(&message)
                                 .expect("Invalid UTF-8")
-                                .to_string(),
+                                .to_string()
                         );
                     }
                     LogOutput::StdErr { message } => {
@@ -213,7 +213,7 @@ impl Container {
                                 ))
                             })?;
 
-                        send_event(
+                        send_event!(
                             &event_sender,
                             task_id,
                             EventType::TaskLogs,

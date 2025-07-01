@@ -36,7 +36,7 @@ impl Engine {
     /// Adds a [`Backend`] to the engine.
     pub async fn with(mut self, config: Config) -> Result<Self> {
         let (name, kind, max_tasks, defaults, monitored) = config.into_parts();
-        let runner = Runner::initialize(kind, max_tasks, defaults, monitored).await?;
+        let runner = Runner::initialize(kind, max_tasks, defaults).await?;
         self.runners.insert(name, runner);
 
         // Start the monitoring server if any runner is monitored
@@ -82,13 +82,7 @@ impl Engine {
             name
         );
 
-        let event_sender = if backend.monitored {
-            self.event_sender.clone()
-        } else {
-            None
-        };
-
-        backend.spawn(task, event_sender, token)
+        backend.spawn(task, self.event_sender.clone(), token)
     }
 
     /// Starts an instrumentation loop.

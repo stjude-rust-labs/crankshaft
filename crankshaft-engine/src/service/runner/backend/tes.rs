@@ -144,9 +144,9 @@ impl Backend {
                     State::Canceling => {
                         // Task is canceling, wait for it to cancel
                         trace!("task `{task_id}` is canceling; waiting before polling again");
-                        send_event(
+                        send_event!(
                             &event_sender,
-                            &task_id.into(),
+                            &task_id.to_string(),
                             EventType::TaskStopped,
                             format!("task `{task_id}` is canceling; waiting before polling again"),
                         );
@@ -167,9 +167,9 @@ impl Backend {
                             .and_then(|l| l.system_logs.as_ref().map(|l| l.join("\n")))
                             .unwrap_or_default();
 
-                        send_event(
+                        send_event!(
                             &event_sender,
-                            &task_id.into(),
+                            &task_id.to_string(),
                             EventType::TaskFailed,
                             format!("task failed due to system error:\n\n{messages}"),
                         );

@@ -36,25 +36,6 @@ pub fn start_monitoring(addr: SocketAddr) -> Result<(broadcast::Sender<Event>, J
     Ok((event_sender, server_handle))
 }
 
-/// Sends an event through a broadcast channel.
-///
-/// No event is sent If the specified broadcast channel is `None`.
-pub fn send_event(
-    sender: &Option<broadcast::Sender<Event>>,
-    task_id: &String,
-    event_type: EventType,
-    message: impl Into<String>,
-) {
-    if let Some(sender) = sender {
-        let _ = sender.send(Event {
-            task_id: task_id.to_owned(),
-            event_type: event_type as i32,
-            timestamp: now_millis(),
-            message: message.into(),
-        });
-    }
-}
-
 /// current timestamp as i64
 pub fn now_millis() -> i64 {
     SystemTime::now()

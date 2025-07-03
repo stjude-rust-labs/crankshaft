@@ -208,7 +208,7 @@ impl Service {
                         let output = result.map_err(Error::Docker)?;
                         match output {
                             LogOutput::StdOut { message } => {
-                                send_event(
+                                send_event!(
                                     &event_sender,
                                     &task_id,
                                     EventType::TaskLogs,
@@ -226,7 +226,7 @@ impl Service {
                                 }
                             }
                             LogOutput::StdErr { message } => {
-                                send_event(
+                                send_event!(
                                     &event_sender,
                                     &task_id,
                                     EventType::TaskLogs,

@@ -9,8 +9,6 @@ use proto::monitor_server::MonitorServer;
 use server::MonitorService;
 use tokio::sync::broadcast;
 
-use crate::proto::EventType;
-
 pub mod proto;
 pub mod server;
 

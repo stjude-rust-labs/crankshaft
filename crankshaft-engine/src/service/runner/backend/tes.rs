@@ -29,7 +29,6 @@ use tes::v1::types::requests::View;
 use tes::v1::types::task::State;
 use tokio::select;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing::trace;

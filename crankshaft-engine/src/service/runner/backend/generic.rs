@@ -20,7 +20,6 @@ use nonempty::NonEmpty;
 use regex::Regex;
 use tokio::select;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 

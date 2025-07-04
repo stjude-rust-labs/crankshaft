@@ -27,7 +27,6 @@ use nonempty::NonEmpty;
 use tempfile::TempDir;
 use tokio::select;
 use tokio::sync::broadcast;
-use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;

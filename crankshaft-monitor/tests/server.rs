@@ -84,7 +84,7 @@ async fn test_start_server_and_subscribe_events() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Create a gRPC transport channel to connect to the server
-    let channel = tonic::transport::Channel::from_shared(format!("http://{}", addr))
+    let channel = tonic::transport::Channel::from_shared(format!("http://{addr}"))
         .expect("Invalid URI")
         .connect()
         .await

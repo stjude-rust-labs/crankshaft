@@ -162,7 +162,7 @@ impl Service {
                         format!(
                             "Docker task `{id}` is in the `{state}` state and has not yet started",
                             id = self.id,
-                            state = status.state
+                            state = status.state.unwrap_or(TaskState::NEW)
                         )
                     );
 

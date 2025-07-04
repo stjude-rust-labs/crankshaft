@@ -44,7 +44,7 @@ pub fn now_millis() -> i64 {
 
 /// Sends an event through a broadcast channel.
 ///
-/// No event is sent If the specified broadcast channel is `None`.
+/// No event is sent if the specified broadcast channel is `None`.
 #[macro_export]
 macro_rules! send_event {
     ($sender:expr, $task_id:expr, $event_type:expr, $message:literal) => {

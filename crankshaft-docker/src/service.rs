@@ -159,7 +159,7 @@ impl Service {
                         &event_sender,
                         &task_id,
                         EventType::Unspecified,
-                        "Task has not yet started",
+                        format!("Docker task `{id}` is in the `{state}` state and has not yet started", id = self.id, state = status.state)
                     );
 
                     // Query again after a delay

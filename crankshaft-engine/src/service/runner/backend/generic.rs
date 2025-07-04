@@ -105,7 +105,6 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        mut started: Option<oneshot::Sender<()>>,
         event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
@@ -175,11 +174,6 @@ impl crate::Backend for Backend {
                     .run(submit)
                     .await
                     .context("failed to run submit command")?;
-
-                // Notify that execution has started
-                if let Some(started) = started.take() {
-                    started.send(()).ok();
-                }
 
                 send_event!(
                     &event_sender,

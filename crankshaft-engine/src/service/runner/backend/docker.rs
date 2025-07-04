@@ -319,7 +319,6 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        mut _started: Option<oneshot::Sender<()>>,
         event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {

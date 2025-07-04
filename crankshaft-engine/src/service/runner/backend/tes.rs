@@ -94,7 +94,6 @@ impl Backend {
         task_id: &str,
         name: &str,
         interval: Duration,
-        mut started: Option<oneshot::Sender<()>>,
         event_sender: Option<broadcast::Sender<Event>>,
     ) -> Result<NonEmpty<ExitStatus>, TaskRunError> {
         info!("TES task `{task_id}` (task `{name}`) has been created; waiting for task to start");
@@ -129,11 +128,6 @@ impl Backend {
                     State::Running | State::Paused => {
                         trace!("task `{task_id}` is running; waiting before polling again");
 
-                        // Task is running (or was previously running but now paused), so notify
-                        if let Some(started) = started.take() {
-                            info!("TES task `{task_id}` (task `{name}`) has started");
-                            started.send(()).ok();
-                        }
                         send_event!(
                             &event_sender,
                             &task_id.to_string(),
@@ -206,11 +200,6 @@ impl Backend {
                             )
                         }
 
-                        // Task has completed, so notify that it started if we haven't already
-                        if let Some(started) = started.take() {
-                            started.send(()).ok();
-                        }
-
                         // There may be multiple task logs due to internal retries by the TES server
                         // Therefore, we're only interested in the last log
                         let logs = task.logs.unwrap_or_default();
@@ -257,7 +246,6 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Option<oneshot::Sender<()>>,
         event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
@@ -285,7 +273,7 @@ impl crate::Backend for Backend {
                         .context("failed to cancel task with TES server")?;
                     Err(TaskRunError::Canceled)
                 }
-                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started, event_sender) => {
+                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, event_sender) => {
                     res
                 }
             }

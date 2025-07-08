@@ -150,7 +150,12 @@ impl Container {
 
         info!("container `{id}` (task `{name}`) has started", id = self.id);
 
-        send_event!(&event_sender, task_id, EventType::TaskStarted, "");
+        send_event!(
+            &event_sender,
+            task_id,
+            EventType::TaskStarted,
+            format!("(task `{}`) has started", name),
+        );
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
@@ -216,7 +221,7 @@ impl Container {
                         send_event!(
                             &event_sender,
                             task_id,
-                            EventType::TaskLogs,
+                            EventType::TaskFailed,
                             std::str::from_utf8(&message)
                                 .expect("Invalid UTF-8")
                                 .to_string(),
@@ -266,6 +271,13 @@ impl Container {
                     .expect("Docker reported a finished contained without an exit code"),
             );
         }
+
+        send_event!(
+            &event_sender,
+            task_id,
+            EventType::TaskCompleted,
+            format!("Task `{}` has completed", name),
+        );
 
         // See WEXITSTATUS from wait(2) to explain the shift
         #[cfg(unix)]

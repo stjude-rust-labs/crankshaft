@@ -20,7 +20,12 @@ use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
 use crankshaft_docker::service::Service;
+use crankshaft_monitor::proto::ContainerResources;
 use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::proto::ServiceResources;
+use crankshaft_monitor::proto::event::Payload;
+use crankshaft_monitor::send_event;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -57,6 +62,27 @@ pub struct LocalResources {
     pub cpu: u64,
     /// The total memory available to the local Docker daemon, in bytes.
     pub memory: u64,
+}
+
+impl From<SwarmResources> for ServiceResources {
+    fn from(value: SwarmResources) -> Self {
+        Self {
+            nodes: value.nodes as f64,
+            cpu: value.cpu as f64,
+            memory: value.memory as f64,
+            max_cpu: value.max_cpu as f64,
+            max_memory: value.max_memory as f64,
+        }
+    }
+}
+
+impl From<LocalResources> for ContainerResources {
+    fn from(value: LocalResources) -> Self {
+        Self {
+            cpu: value.cpu as f64,
+            memory: value.memory as f64,
+        }
+    }
 }
 
 /// Represents information about Docker's available resources.
@@ -120,6 +146,13 @@ impl Resources {
         match self {
             Self::Local(_) => false,
             Self::Swarm(swarm) => swarm.nodes >= 2,
+        }
+    }
+
+    pub fn to_proto(&self) -> Option<Payload> {
+        match self {
+            Resources::Swarm(r) => Some(Payload::ServiceResources((*r).into())),
+            Resources::Local(r) => Some(Payload::ContainerResources((*r).into())),
         }
     }
 }
@@ -446,6 +479,11 @@ impl crate::Backend for Backend {
 
                     let service = Arc::new(builder.try_build(&name).await.map_err(|e| TaskRunError::Other(e.into()))?);
 
+
+                    if let Some(Payload::ServiceResources(payload)) = resources.to_proto() {
+                        send_event!(&event_sender, "Docker-swarm".to_string(), EventType::ServiceStarted, service_resource = payload);
+                    }
+
                     select! {
                         // Always poll the cancellation token first
                         biased;
@@ -486,6 +524,10 @@ impl crate::Backend for Backend {
                             .try_build(name.clone())
                             .await.map_err(|e| TaskRunError::Other(e.into()))?,
                     );
+
+                    if let Some(Payload::ContainerResources(payload)) = resources.to_proto() {
+                        send_event!(&event_sender, "Docker-container".to_string() , EventType::ContainerStarted, container_resource = payload);
+                    }
 
 
                     select! {

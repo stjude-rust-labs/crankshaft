@@ -45,18 +45,23 @@ pub fn now_millis() -> i64 {
 /// Sends an event through a broadcast channel.
 ///
 /// No event is sent if the specified broadcast channel is `None`.
+
 #[macro_export]
 macro_rules! send_event {
+    // Message literal
     ($sender:expr, $task_id:expr, $event_type:expr, $message:literal) => {
         if let Some(sender) = $sender.as_ref() {
+            let message = format!($message);
             let _ = sender.send($crate::proto::Event {
                 task_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
-                message: $message.to_string(),
+                payload: Some($crate::proto::event::Payload::Message(message)),
             });
         }
     };
+
+    // Message from format!
     ($sender:expr, $task_id:expr, $event_type:expr, $fmt:literal, $($arg:tt)*) => {
         if let Some(sender) = $sender.as_ref() {
             let message = format!($fmt, $($arg)*);
@@ -64,10 +69,35 @@ macro_rules! send_event {
                 task_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
-                message,
+                payload: Some($crate::proto::event::Payload::Message(message)),
             });
         }
     };
+
+    // ContainerResources payload
+    ($sender:expr, $task_id:expr, $event_type:expr, container_resource = $res:expr) => {
+        if let Some(sender) = $sender.as_ref() {
+            let _ = sender.send($crate::proto::Event {
+                task_id: $task_id.to_owned(),
+                event_type: $event_type as i32,
+                timestamp: $crate::now_millis(),
+                payload: Some($crate::proto::event::Payload::ContainerResources($res)),
+            });
+        }
+    };
+
+    // ServiceResources payload
+    ($sender:expr, $task_id:expr, $event_type:expr, service_resource = $res:expr) => {
+        if let Some(sender) = $sender.as_ref() {
+            let _ = sender.send($crate::proto::Event {
+                task_id: $task_id.to_owned(),
+                event_type: $event_type as i32,
+                timestamp: $crate::now_millis(),
+                payload: Some($crate::proto::event::Payload::ServiceResources($res)),
+            });
+        }
+    };
+
     ($sender:expr, $task_id:expr, $event_type:expr, $($arg:tt)*) => {
         if let Some(sender) = $sender.as_ref() {
             let message = format!("{}",$($arg)*);
@@ -75,7 +105,7 @@ macro_rules! send_event {
                 task_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
-                message,
+                payload: Some($crate::proto::event::Payload::Message(message)),
             });
         }
     };

@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
+use crankshaft_monitor::proto::event::Payload::Message;
 use crankshaft_monitor::proto::monitor_server::Monitor;
 use crankshaft_monitor::server::MonitorService;
 use crankshaft_monitor::start_monitoring;
@@ -25,13 +26,13 @@ async fn test_subscribe_events_streams_all_task_events() {
         task_id: "t1".to_string(),
         event_type: EventType::TaskStarted as i32,
         timestamp: 1625234567,
-        message: "Task t1 started".to_string(),
+        payload: Some(Message("Task t1 started".to_string())),
     };
     let event2 = Event {
         task_id: "t2".to_string(),
         event_type: EventType::TaskCompleted as i32,
         timestamp: 1625234568,
-        message: "Task t2 completed".to_string(),
+        payload: Some(Message("Task t2 completed".to_string())),
     };
     // wrap it in Request
     let request = Request::new(SubscribeEventsRequest {});
@@ -56,7 +57,10 @@ async fn test_subscribe_events_streams_all_task_events() {
     let received_event1 = received1.expect("Error in stream");
     assert_eq!(received_event1.task_id, "t1");
     assert_eq!(received_event1.event_type, EventType::TaskStarted as i32);
-    assert_eq!(received_event1.message, "Task t1 started");
+    assert_eq!(
+        received_event1.payload,
+        Some(Message("Task t1 started".to_string()))
+    );
 
     // Check the second event
     let received2 = timeout(Duration::from_secs(1), stream.next())
@@ -67,7 +71,10 @@ async fn test_subscribe_events_streams_all_task_events() {
     let received_event2 = received2.expect("Error in stream");
     assert_eq!(received_event2.task_id, "t2");
     assert_eq!(received_event2.event_type, EventType::TaskCompleted as i32);
-    assert_eq!(received_event2.message, "Task t2 completed");
+    assert_eq!(
+        received_event2.payload,
+        Some(Message("Task t2 completed".to_string()))
+    );
 }
 
 #[tokio::test]
@@ -104,13 +111,13 @@ async fn test_start_server_and_subscribe_events() {
         task_id: "t1".to_string(),
         event_type: EventType::TaskStarted as i32,
         timestamp: 1625234567,
-        message: "Task t1 started".to_string(),
+        payload: Some(Message("Task t1 started".to_string())),
     };
     let event2 = Event {
         task_id: "t2".to_string(),
         event_type: EventType::TaskFailed as i32,
         timestamp: 1625234568,
-        message: "Task t2 failed".to_string(),
+        payload: Some(Message("Task t2 failed".to_string())),
     };
     sender.send(event1.clone()).expect("Failed to send event1");
     sender.send(event2.clone()).expect("Failed to send event2");
@@ -123,7 +130,10 @@ async fn test_start_server_and_subscribe_events() {
     let received_event1 = received1.expect("Error in stream");
     assert_eq!(received_event1.task_id, "t1");
     assert_eq!(received_event1.event_type, EventType::TaskStarted as i32);
-    assert_eq!(received_event1.message, "Task t1 started");
+    assert_eq!(
+        received_event1.payload,
+        Some(Message("Task t1 started".to_string()))
+    );
 
     let received2 = timeout(Duration::from_secs(1), stream.next())
         .await
@@ -133,7 +143,10 @@ async fn test_start_server_and_subscribe_events() {
     let received_event2 = received2.expect("Error in stream");
     assert_eq!(received_event2.task_id, "t2");
     assert_eq!(received_event2.event_type, EventType::TaskFailed as i32);
-    assert_eq!(received_event2.message, "Task t2 failed");
+    assert_eq!(
+        received_event1.payload,
+        Some(Message("Task t2 failed".to_string()))
+    );
 
     server_handle.abort();
 }

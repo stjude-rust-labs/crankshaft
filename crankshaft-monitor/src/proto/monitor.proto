@@ -16,15 +16,36 @@ message Event {
   string task_id = 1;
   EventType event_type = 2;
   int64 timestamp = 3;
-  string message = 4; // description or log message
+
+  // Only set `engine_resources` when `event_type == ENGINE_STARTED`.
+  oneof payload {
+    string message = 4; // description or log message
+    ContainerResources container_resources = 5;
+    ServiceResources service_resources = 6;
+  }
 }
 
 // EventType defines the possible types of monitoring events.
 enum EventType {
   EVENT_TYPE_UNSPECIFIED = 0;
-  TASK_STARTED = 1;   // Task has started
-  TASK_COMPLETED = 2; // Task has completed successfully
-  TASK_FAILED = 3;    // Task has failed
-  TASK_STOPPED = 4;   // Task was stopped
-  TASK_LOGS = 5;      // Log message from a task
+  TASK_STARTED = 1;      // Task has started
+  TASK_COMPLETED = 2;    // Task has completed successfully
+  TASK_FAILED = 3;       // Task has failed
+  TASK_STOPPED = 4;      // Task was stopped
+  TASK_LOGS = 5;         // Log message from a task
+  CONTAINER_STARTED = 6; // Container has started
+  SERVICE_STARTED = 8;   // Service started
+}
+
+message ContainerResources {
+  double cpu = 1;
+  double memory = 2;
+}
+
+message ServiceResources {
+  double nodes = 1;
+  double cpu = 2;
+  double memory = 3;
+  double max_cpu = 4;
+  double max_memory = 5;
 }

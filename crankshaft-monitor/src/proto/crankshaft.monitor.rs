@@ -13,9 +13,46 @@ pub struct Event {
     pub event_type: i32,
     #[prost(int64, tag = "3")]
     pub timestamp: i64,
-    /// description or log message
-    #[prost(string, tag = "4")]
-    pub message: ::prost::alloc::string::String,
+    /// Only set `engine_resources` when `event_type == ENGINE_STARTED`.
+    #[prost(oneof = "event::Payload", tags = "4, 5, 6")]
+    pub payload: ::core::option::Option<event::Payload>,
+}
+/// Nested message and enum types in `Event`.
+pub mod event {
+    /// Only set `engine_resources` when `event_type == ENGINE_STARTED`.
+    #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Payload {
+        /// description or log message
+        #[prost(string, tag = "4")]
+        Message(::prost::alloc::string::String),
+        #[prost(message, tag = "5")]
+        ContainerResources(super::ContainerResources),
+        #[prost(message, tag = "6")]
+        ServiceResources(super::ServiceResources),
+    }
+}
+#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ContainerResources {
+    #[prost(double, tag = "1")]
+    pub cpu: f64,
+    #[prost(double, tag = "2")]
+    pub memory: f64,
+}
+#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ServiceResources {
+    #[prost(double, tag = "1")]
+    pub nodes: f64,
+    #[prost(double, tag = "2")]
+    pub cpu: f64,
+    #[prost(double, tag = "3")]
+    pub memory: f64,
+    #[prost(double, tag = "4")]
+    pub max_cpu: f64,
+    #[prost(double, tag = "5")]
+    pub max_memory: f64,
 }
 /// EventType defines the possible types of monitoring events.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
@@ -33,6 +70,10 @@ pub enum EventType {
     TaskStopped = 4,
     /// Log message from a task
     TaskLogs = 5,
+    /// Container has started
+    ContainerStarted = 6,
+    /// Service started
+    ServiceStarted = 8,
 }
 impl EventType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -47,6 +88,8 @@ impl EventType {
             Self::TaskFailed => "TASK_FAILED",
             Self::TaskStopped => "TASK_STOPPED",
             Self::TaskLogs => "TASK_LOGS",
+            Self::ContainerStarted => "CONTAINER_STARTED",
+            Self::ServiceStarted => "SERVICE_STARTED",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -58,6 +101,8 @@ impl EventType {
             "TASK_FAILED" => Some(Self::TaskFailed),
             "TASK_STOPPED" => Some(Self::TaskStopped),
             "TASK_LOGS" => Some(Self::TaskLogs),
+            "CONTAINER_STARTED" => Some(Self::ContainerStarted),
+            "SERVICE_STARTED" => Some(Self::ServiceStarted),
             _ => None,
         }
     }

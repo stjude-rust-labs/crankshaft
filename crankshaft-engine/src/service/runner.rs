@@ -7,8 +7,10 @@ use std::sync::Mutex;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
+use crankshaft_monitor::proto::Event;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
+use tokio::sync::broadcast;
 use tokio::sync::oneshot::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::trace;
@@ -94,7 +96,12 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(&self, mut task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
+    pub fn spawn(
+        &self,
+        mut task: Task,
+        event_sender: Option<broadcast::Sender<Event>>,
+        token: CancellationToken,
+    ) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -109,7 +116,7 @@ impl Runner {
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let result = backend.clone().run(task, None, token)?.await;
+            let result = backend.clone().run(task, event_sender, token)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

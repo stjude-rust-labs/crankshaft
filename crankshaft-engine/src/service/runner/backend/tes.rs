@@ -17,6 +17,9 @@ use anyhow::Result;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -25,7 +28,7 @@ use tes::v1::types::requests::GetTaskParams;
 use tes::v1::types::requests::View;
 use tes::v1::types::task::State;
 use tokio::select;
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing::trace;
@@ -90,7 +93,7 @@ impl Backend {
         task_id: &str,
         name: &str,
         interval: Duration,
-        mut started: Option<oneshot::Sender<()>>,
+        event_sender: Option<broadcast::Sender<Event>>,
     ) -> Result<NonEmpty<ExitStatus>, TaskRunError> {
         info!("TES task `{task_id}` (task `{name}`) has been created; waiting for task to start");
 
@@ -114,19 +117,32 @@ impl Backend {
                     State::Unknown | State::Queued | State::Initializing => {
                         // Task hasn't started yet
                         trace!("task `{task_id}` is not yet running; waiting before polling again");
+                        send_event!(
+                            &event_sender,
+                            &task_id.to_string(),
+                            EventType::Unspecified,
+                            "task `{task_id}` is not yet running; waiting before polling again",
+                        )
                     }
                     State::Running | State::Paused => {
                         trace!("task `{task_id}` is running; waiting before polling again");
 
-                        // Task is running (or was previously running but now paused), so notify
-                        if let Some(started) = started.take() {
-                            info!("TES task `{task_id}` (task `{name}`) has started");
-                            started.send(()).ok();
-                        }
+                        send_event!(
+                            &event_sender,
+                            &task_id.to_string(),
+                            EventType::TaskStarted,
+                            "TES task `{task_id}` (task `{name}`) has started",
+                        );
                     }
                     State::Canceling => {
                         // Task is canceling, wait for it to cancel
                         trace!("task `{task_id}` is canceling; waiting before polling again");
+                        send_event!(
+                            &event_sender,
+                            &task_id.to_string(),
+                            EventType::TaskStopped,
+                            format!("task `{task_id}` is canceling; waiting before polling again"),
+                        );
                     }
                     State::SystemError => {
                         // Repeat with a full request to get the system logs.
@@ -144,6 +160,13 @@ impl Backend {
                             .and_then(|l| l.system_logs.as_ref().map(|l| l.join("\n")))
                             .unwrap_or_default();
 
+                        send_event!(
+                            &event_sender,
+                            &task_id.to_string(),
+                            EventType::TaskFailed,
+                            format!("task failed due to system error:\n\n{messages}"),
+                        );
+
                         return Err(TaskRunError::Other(anyhow!(
                             "task failed due to system error:\n\n{messages}",
                         )));
@@ -160,13 +183,20 @@ impl Backend {
                         // Task completed or had an error
                         if *state == State::Complete {
                             info!("TES task `{task_id}` (task `{name}`) has completed");
+                            send_event!(
+                                &event_sender,
+                                &task_id.to_string(),
+                                EventType::TaskCompleted,
+                                "TES task `{task_id}` (task `{name}`) has completed"
+                            );
                         } else {
                             info!("TES task `{task_id}` (task `{name}`) has failed");
-                        }
-
-                        // Task has completed, so notify that it started if we haven't already
-                        if let Some(started) = started.take() {
-                            started.send(()).ok();
+                            send_event!(
+                                &event_sender,
+                                &task_id.to_string(),
+                                EventType::TaskFailed,
+                                "TES task `{task_id}` (task `{name}`) has failed"
+                            )
                         }
 
                         // There may be multiple task logs due to internal retries by the TES server
@@ -215,7 +245,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        started: Option<oneshot::Sender<()>>,
+        event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         let client = self.client.clone();
@@ -242,7 +272,7 @@ impl crate::Backend for Backend {
                         .context("failed to cancel task with TES server")?;
                     Err(TaskRunError::Canceled)
                 }
-                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, started) => {
+                res = Self::wait_task(&client, &task_id, name.as_deref().unwrap_or("<unnamed>"), interval, event_sender) => {
                     res
                 }
             }

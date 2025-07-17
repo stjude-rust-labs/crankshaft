@@ -11,9 +11,9 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
+use bollard::query_parameters::AttachContainerOptions;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::ListTasksOptions;
-use bollard::query_parameters::LogsOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use bollard::secret::TaskState;
@@ -21,9 +21,13 @@ use bollard::secret::TaskState;
 mod builder;
 
 pub use builder::Builder;
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use futures::StreamExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::debug;
 use tracing::info;
@@ -76,8 +80,31 @@ impl Service {
     }
 
     /// Runs a service and waits for the task execution to end.
-    pub async fn run(&self, name: &str, started: impl FnOnce()) -> Result<ExitStatus> {
-        let (container_id, exit_code) = loop {
+    pub async fn run(
+        &self,
+        name: &str,
+        event_sender: Option<broadcast::Sender<Event>>,
+    ) -> Result<ExitStatus> {
+        let mut stdout = match &self.stdout {
+            Some(path) => Some(File::create(path).await.map_err(|e| {
+                Error::Message(format!(
+                    "failed to create stdout file `{path}`: {e}",
+                    path = path.display()
+                ))
+            })?),
+            None => None,
+        };
+
+        let mut stderr = match &self.stderr {
+            Some(path) => Some(File::create(path).await.map_err(|e| {
+                Error::Message(format!(
+                    "failed to create stderr file `{path}`: {e}",
+                    path = path.display()
+                ))
+            })?),
+            None => None,
+        };
+        let (_container_id, exit_code) = loop {
             trace!(
                 "polling tasks for service `{id}` (task `{name}`)",
                 id = self.id
@@ -108,6 +135,8 @@ impl Service {
             );
 
             let task = tasks.into_iter().next().unwrap();
+
+            let task_id = task.id.expect("task should have and id");
             let status = task
                 .status
                 .expect("Docker daemon reported a task with no status");
@@ -126,6 +155,17 @@ impl Service {
                         id = self.id
                     );
 
+                    send_event!(
+                        &event_sender,
+                        &task_id,
+                        EventType::Unspecified,
+                        format!(
+                            "Docker task `{id}` is in the `{state}` state and has not yet started",
+                            id = self.id,
+                            state = status.state.unwrap_or(TaskState::NEW)
+                        )
+                    );
+
                     // Query again after a delay
                     // TODO: make this a variable delay so as to lessen a thundering herd
                     sleep(Duration::from_secs(1)).await;
@@ -141,14 +181,75 @@ impl Service {
                         .container_id
                         .expect("Docker reported a starting or running task with no container id");
 
+                    let mut logs = self
+                        .client
+                        .attach_container(
+                            &container_id,
+                            Some(AttachContainerOptions {
+                                stream: true,
+                                ..Default::default()
+                            }),
+                        )
+                        .await
+                        .unwrap()
+                        .output;
+
                     info!(
                         "service `{id}` (task `{name}`) has started container `{container_id}",
                         id = self.id
                     );
 
-                    // Notify that the task has started
-                    started();
+                    send_event!(
+                        &event_sender,
+                        &task_id,
+                        EventType::TaskStarted,
+                        "Service `{id}` (task `{name}`) has started container `{container_id}`",
+                        id = self.id,
+                        container_id = container_id
+                    );
 
+                    while let Some(result) = logs.next().await {
+                        let output = result.map_err(Error::Docker)?;
+                        match output {
+                            LogOutput::StdOut { message } => {
+                                send_event!(
+                                    &event_sender,
+                                    &task_id,
+                                    EventType::TaskLogs,
+                                    std::str::from_utf8(&message)
+                                        .expect("Invalid UTF-8")
+                                        .to_string(),
+                                );
+                                if let Some(stdout) = stdout.as_mut() {
+                                    stdout.write(&message).await.map_err(|e| {
+                                        Error::Message(format!(
+                                            "failed to write to stdout file `{path}`: {e}",
+                                            path = self.stdout.as_ref().unwrap().display()
+                                        ))
+                                    })?;
+                                }
+                            }
+                            LogOutput::StdErr { message } => {
+                                send_event!(
+                                    &event_sender,
+                                    &task_id,
+                                    EventType::TaskLogs,
+                                    std::str::from_utf8(&message)
+                                        .expect("Invalid UTF-8")
+                                        .to_string(),
+                                );
+                                if let Some(stderr) = stderr.as_mut() {
+                                    stderr.write(&message).await.map_err(|e| {
+                                        Error::Message(format!(
+                                            "failed to write to stderr file `{path}`: {e}",
+                                            path = self.stderr.as_ref().unwrap().display()
+                                        ))
+                                    })?;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
                     // Wait for the container to be completed.
                     let mut wait_stream = self
                         .client
@@ -206,8 +307,14 @@ impl Service {
                         id = self.id
                     );
 
-                    // Notify that the task has started (and has already completed)
-                    started();
+                    send_event!(
+                        &event_sender,
+                        &task_id,
+                        EventType::TaskCompleted,
+                        "container `{container_id}` for service `{id}` (task `{name}`) has \
+                         completed",
+                        id = self.id
+                    );
 
                     break (
                         container_id,
@@ -222,8 +329,17 @@ impl Service {
                 | Some(TaskState::REJECTED)
                 | Some(TaskState::ORPHANED)
                 | Some(TaskState::REMOVE) => {
-                    // Notify that the task has started (and has failed)
-                    started();
+                    send_event!(
+                        &event_sender,
+                        &task_id,
+                        EventType::TaskFailed,
+                        "Docker task failed: {msg}",
+                        msg = status
+                            .err
+                            .as_deref()
+                            .or(status.message.as_deref())
+                            .unwrap_or("no error message was provided by the Docker daemon")
+                    );
 
                     // Handle the failure
                     return Err(Error::Message(format!(
@@ -237,71 +353,6 @@ impl Service {
                 }
             }
         };
-
-        // Write the log streams
-        if self.stdout.is_some() || self.stderr.is_some() {
-            let mut stdout = match &self.stdout {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stdout file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
-                None => None,
-            };
-
-            let mut stderr = match &self.stderr {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stderr file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
-                None => None,
-            };
-
-            let mut stream = self.client.logs(
-                &container_id,
-                Some(LogsOptions {
-                    stdout: self.stdout.is_some(),
-                    stderr: self.stderr.is_some(),
-                    ..Default::default()
-                }),
-            );
-
-            while let Some(result) = stream.next().await {
-                let output = result.map_err(Error::Docker)?;
-                match output {
-                    LogOutput::StdOut { message } => {
-                        stdout
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stdout file `{path}`: {e}",
-                                    path = self.stdout.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    LogOutput::StdErr { message } => {
-                        stderr
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stderr file `{path}`: {e}",
-                                    path = self.stderr.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    _ => {}
-                }
-            }
-        }
 
         // See WEXITSTATUS from wait(2) to explain the shift
         #[cfg(unix)]

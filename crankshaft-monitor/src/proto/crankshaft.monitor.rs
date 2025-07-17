@@ -16,12 +16,6 @@ pub struct Event {
     /// description or log message
     #[prost(string, tag = "4")]
     pub message: ::prost::alloc::string::String,
-    /// Additional key-value metadata (e.g., resource usage)
-    #[prost(map = "string, string", tag = "5")]
-    pub metadata: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
 }
 /// EventType defines the possible types of monitoring events.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]

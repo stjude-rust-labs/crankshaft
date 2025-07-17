@@ -18,8 +18,12 @@ use bollard::query_parameters::StartContainerOptions;
 use bollard::query_parameters::UploadToContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::broadcast;
 use tokio_stream::StreamExt as _;
 use tracing::debug;
 use tracing::info;
@@ -102,7 +106,11 @@ impl Container {
     }
 
     /// Runs a container and waits for the execution to end.
-    pub async fn run(&self, name: &str, started: impl FnOnce()) -> Result<ExitStatus> {
+    pub async fn run(
+        &self,
+        name: &str,
+        event_sender: Option<broadcast::Sender<Event>>,
+    ) -> Result<ExitStatus> {
         // Attach to the container before we start it
         let stream = if self.stdout.is_some() || self.stderr.is_some() {
             debug!(
@@ -138,10 +146,16 @@ impl Container {
             .await
             .map_err(Error::Docker)?;
 
-        // Notify that the container has started
-        started();
+        let task_id = &self.id;
 
         info!("container `{id}` (task `{name}`) has started", id = self.id);
+
+        send_event!(
+            &event_sender,
+            task_id,
+            EventType::TaskStarted,
+            format!("(task `{}`) has started", name),
+        );
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
@@ -181,6 +195,15 @@ impl Container {
                                     path = self.stdout.as_ref().unwrap().display()
                                 ))
                             })?;
+
+                        send_event!(
+                            &event_sender,
+                            task_id,
+                            EventType::TaskLogs,
+                            std::str::from_utf8(&message)
+                                .expect("Invalid UTF-8")
+                                .to_string()
+                        );
                     }
                     LogOutput::StdErr { message } => {
                         stderr
@@ -194,6 +217,15 @@ impl Container {
                                     path = self.stderr.as_ref().unwrap().display()
                                 ))
                             })?;
+
+                        send_event!(
+                            &event_sender,
+                            task_id,
+                            EventType::TaskFailed,
+                            std::str::from_utf8(&message)
+                                .expect("Invalid UTF-8")
+                                .to_string(),
+                        );
                     }
                     _ => {}
                 }
@@ -239,6 +271,13 @@ impl Container {
                     .expect("Docker reported a finished contained without an exit code"),
             );
         }
+
+        send_event!(
+            &event_sender,
+            task_id,
+            EventType::TaskCompleted,
+            format!("Task `{}` has completed", name),
+        );
 
         // See WEXITSTATUS from wait(2) to explain the shift
         #[cfg(unix)]

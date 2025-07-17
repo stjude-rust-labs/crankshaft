@@ -18,16 +18,18 @@ use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use crankshaft::engine::task::Output;
 use crankshaft::engine::task::output::Type;
+use crankshaft_monitor::proto::SubscribeEventsRequest;
+use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
 use nonempty::NonEmpty;
 use tempfile::NamedTempFile;
 use tokio::select;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
+use tonic::Request;
+use tonic::transport::Channel;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt as _;
@@ -42,7 +44,7 @@ pub struct Args {
     max_tasks: usize,
 
     /// The number of jobs to submit in total.
-    #[arg(short, long, default_value_t = 1000)]
+    #[arg(short, long, default_value_t = 1)]
     n_jobs: usize,
 }
 
@@ -52,7 +54,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .name("docker")
         .kind(Kind::Docker(Config::builder().build()))
         .max_tasks(args.max_tasks)
-        .monitoring(false)
+        .monitoring(true)
         .build();
 
     let engine = Engine::default()
@@ -71,74 +73,66 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                         .to_string(),
                 )
                 .image("alpine")
-                .program("echo")
-                .args([String::from("hello, world!")])
+                .program("sh")
+                .args([
+                    String::from("-c"),
+                    String::from("for i in $(seq 10); do echo hello_world; sleep 1; done"),
+                ])
                 .stdout("/stdout")
                 .stderr("/stderr")
                 .build(),
         ))
         .build();
 
-    let mut tasks = (0..args.n_jobs)
-        .map(|_| {
-            let mut task = task.clone();
-            let stdout = NamedTempFile::new()?.into_temp_path();
-            let stderr = NamedTempFile::new()?.into_temp_path();
+    let mut did_start_polling = false;
+    let mut tasks = FuturesUnordered::new();
 
-            task.add_output(
-                Output::builder()
-                    .path("/stdout")
-                    .url(
-                        Url::from_file_path(&stdout)
-                            .map_err(|_| anyhow!("failed to get stdout URL"))?,
-                    )
-                    .ty(Type::File)
-                    .build(),
-            );
-            task.add_output(
-                Output::builder()
-                    .path("/stderr")
-                    .url(
-                        Url::from_file_path(&stderr)
-                            .map_err(|_| anyhow!("failed to get stderr URL"))?,
-                    )
-                    .ty(Type::File)
-                    .build(),
-            );
+    for _ in 0..args.n_jobs {
+        let mut task = task.clone();
+        let stdout = NamedTempFile::new()?.into_temp_path();
+        let stderr = NamedTempFile::new()?.into_temp_path();
 
-            let handle = engine.spawn("docker", task, token.clone())?;
-            Ok(handle
+        task.add_output(
+            Output::builder()
+                .path("/stdout")
+                .url(
+                    Url::from_file_path(&stdout)
+                        .map_err(|_| anyhow!("failed to get stdout URL"))?,
+                )
+                .ty(Type::File)
+                .build(),
+        );
+        task.add_output(
+            Output::builder()
+                .path("/stderr")
+                .url(
+                    Url::from_file_path(&stderr)
+                        .map_err(|_| anyhow!("failed to get stderr URL"))?,
+                )
+                .ty(Type::File)
+                .build(),
+        );
+
+        let handle = engine.spawn("docker", task, token.clone())?;
+
+        if !did_start_polling {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            start_polling();
+            did_start_polling = true;
+        }
+
+        tasks.push(
+            handle
                 .wait()
-                .map(|e| e.map(|e| (e.into_iter().next().unwrap(), stdout, stderr))))
-        })
-        .collect::<Result<FuturesUnordered<_>>>()?;
-
-    let progress = ProgressBar::new(tasks.len() as u64);
-    progress.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.cyan/blue} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos:>7}/{len:7} \
-             {msg}",
-        )
-        .unwrap()
-        .progress_chars("#>-"),
-    );
-
-    progress.enable_steady_tick(Duration::from_millis(100));
+                .map(|e| e.map(|e| (e.into_iter().next().unwrap(), stdout, stderr))),
+        );
+    }
 
     let mut results = Vec::new();
     while let Some(result) = tasks.next().await {
-        let failed = result.is_err();
+        let _failed = result.is_err();
         results.push(result);
-
-        progress.set_message(format!(
-            "task #{num} {status}",
-            num = results.len(),
-            status = if failed { "failed" } else { "completed" }
-        ));
-        progress.inc(1);
     }
-
-    drop(progress);
 
     for (i, result) in results.into_iter().enumerate() {
         match result {
@@ -159,6 +153,46 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// performs polling
+fn start_polling() {
+    tokio::spawn(async {
+        let addr = "http://127.0.0.1:8080";
+        let channel = match Channel::from_static(addr).connect().await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Failed to connect to monitor server: {e:#}");
+                return;
+            }
+        };
+
+        let mut client = MonitorClient::new(channel);
+
+        let request = Request::new(SubscribeEventsRequest {});
+
+        let response = match client.subscribe_events(request).await {
+            Ok(res) => {
+                println!("✅ gRPC client connected and subscribed to events");
+                res.into_inner()
+            }
+            Err(e) => {
+                eprintln!("Failed to subscribe to events: {e:#}");
+                return;
+            }
+        };
+
+        let mut stream = response;
+        while let Some(event) = stream.next().await {
+            match event {
+                Ok(ev) => println!("[task_id={}] {}", ev.task_id, ev.message),
+                Err(e) => {
+                    eprintln!("Error receiving event: {e:#}");
+                    break;
+                }
+            }
+        }
+    });
 }
 
 /// The main function.

@@ -20,12 +20,13 @@ use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
 use crankshaft_docker::service::Service;
+use crankshaft_monitor::proto::Event;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use tempfile::TempDir;
 use tokio::select;
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
@@ -317,7 +318,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        mut started: Option<oneshot::Sender<()>>,
+        event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         // Helper for cleanup
@@ -444,7 +445,6 @@ impl crate::Backend for Backend {
                     }
 
                     let service = Arc::new(builder.try_build(&name).await.map_err(|e| TaskRunError::Other(e.into()))?);
-                    let started = started.take();
 
                     select! {
                         // Always poll the cancellation token first
@@ -453,7 +453,7 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(TaskRunError::Canceled), Cleaner::Service(service))
                         }
-                        res = service.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
+                        res = service.run(&name,event_sender.clone()) => {
                             (res.context("failed to run Docker service").map_err(TaskRunError::Other), Cleaner::Service(service))
                         }
                     }
@@ -487,7 +487,6 @@ impl crate::Backend for Backend {
                             .await.map_err(|e| TaskRunError::Other(e.into()))?,
                     );
 
-                    let started = started.take();
 
                     select! {
                         // Always poll the cancellation token first
@@ -496,7 +495,7 @@ impl crate::Backend for Backend {
                         _ = token.cancelled() => {
                             (Err(TaskRunError::Canceled), Cleaner::Container(container))
                         }
-                        res = container.run(&name, || if let Some(started) = started { started.send(()).ok(); }) => {
+                        res = container.run(&name,event_sender.clone()) => {
                             (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleaner::Container(container))
                         }
                     }

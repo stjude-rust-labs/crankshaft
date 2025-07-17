@@ -33,6 +33,9 @@ pub struct Config {
     /// The execution defaults.
     #[builder(into)]
     defaults: Option<Defaults>,
+
+    /// Whether or not to enable the monitoring server.
+    monitoring: bool,
 }
 
 impl Config {
@@ -58,8 +61,14 @@ impl Config {
 
     /// Consumes `self` returns the constituent, owned parts of the
     /// configuration.
-    pub fn into_parts(self) -> (String, Kind, usize, Option<Defaults>) {
-        (self.name, self.kind, self.max_tasks, self.defaults)
+    pub fn into_parts(self) -> (String, Kind, usize, Option<Defaults>, bool) {
+        (
+            self.name,
+            self.kind,
+            self.max_tasks,
+            self.defaults,
+            self.monitoring,
+        )
     }
 }
 
@@ -74,6 +83,7 @@ mod tests {
             .kind(Kind::Generic(generic::demo()))
             .max_tasks(10)
             .defaults(Defaults::builder().cpu(1.0).ram(16.0).disk(250.0).build())
+            .monitoring(false)
             .build();
 
         assert_eq!(config.name(), "generic");

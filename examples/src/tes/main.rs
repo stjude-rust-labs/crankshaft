@@ -84,6 +84,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .name("tes")
         .kind(Kind::TES(config.http(http_config).build()))
         .max_tasks(args.max_tasks)
+        .monitoring(false)
         .build();
 
     let engine = Engine::default().with(config).await?;

@@ -9,4 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
+* Added utility `send_event!` macro ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
 * Added initial implementation ([#43](https://github.com/stjude-rust-labs/crankshaft/pull/43)).
+
+#### Changed
+
+* Removed unnecessary `metadata` field from `Event` ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).

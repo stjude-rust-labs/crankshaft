@@ -1,8 +1,14 @@
 //! The engine that powers Crankshaft.
 
+use std::net::SocketAddr;
+
 use anyhow::Result;
 use crankshaft_config::backend::Config;
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::start_monitoring;
 use indexmap::IndexMap;
+use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 
@@ -20,14 +26,27 @@ use crate::service::runner::TaskHandle;
 pub struct Engine {
     /// The task runner(s).
     runners: IndexMap<String, Runner>,
+    /// The event sender, if monitoring is enabled.
+    event_sender: Option<broadcast::Sender<Event>>,
+    /// The monitoring server task handle
+    monitoring_handle: Option<JoinHandle<Result<(), tonic::transport::Error>>>,
 }
 
 impl Engine {
     /// Adds a [`Backend`] to the engine.
     pub async fn with(mut self, config: Config) -> Result<Self> {
-        let (name, kind, max_tasks, defaults) = config.into_parts();
+        let (name, kind, max_tasks, defaults, monitored) = config.into_parts();
         let runner = Runner::initialize(kind, max_tasks, defaults).await?;
         self.runners.insert(name, runner);
+
+        // Start the monitoring server if any runner is monitored
+        if monitored && self.event_sender.is_none() {
+            let socketaddr: SocketAddr = "127.0.0.1:8080".parse()?;
+            let (event_sender, handle) = start_monitoring(socketaddr)?;
+            self.event_sender = Some(event_sender);
+            self.monitoring_handle = Some(handle);
+        }
+
         Ok(self)
     }
 
@@ -58,12 +77,12 @@ impl Engine {
             "submitting job{} to the `{}` backend",
             task.name
                 .as_ref()
-                .map(|name| format!(" with name `{}`", name))
+                .map(|name| format!(" with name `{name}`"))
                 .unwrap_or_default(),
             name
         );
 
-        backend.spawn(task, token)
+        backend.spawn(task, self.event_sender.clone(), token)
     }
 
     /// Starts an instrumentation loop.
@@ -81,5 +100,14 @@ impl Engine {
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             }
         });
+    }
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        if let Some(handle) = self.monitoring_handle.take() {
+            debug!("Shutting down monitoring server");
+            handle.abort();
+        }
     }
 }

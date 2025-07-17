@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Implemented starting a monitor server via the `Engine`; backends now send
+  events through the broadcast channel ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
+
 ### Changed
 
 * Adds configuration for TES client retries ([#42](https://github.com/stjude-rust-labs/crankshaft/pull/42)).

@@ -11,12 +11,15 @@ use anyhow::Context as _;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
+use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::EventType;
+use crankshaft_monitor::send_event;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use regex::Regex;
 use tokio::select;
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
@@ -101,7 +104,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        mut started: Option<oneshot::Sender<()>>,
+        event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         let driver = self.driver.clone();
@@ -122,6 +125,8 @@ impl crate::Backend for Backend {
                         .with_context(|| format!("job regex `{pattern}` is not valid"))
                 })
                 .transpose()?;
+
+            let task_name = task.name().unwrap_or_default().to_string();
 
             for execution in task.executions {
                 if token.is_cancelled() {
@@ -169,20 +174,19 @@ impl crate::Backend for Backend {
                     .await
                     .context("failed to run submit command")?;
 
-                // Notify that execution has started
-                if let Some(started) = started.take() {
-                    started.send(()).ok();
-                }
+                send_event!(
+                    &event_sender,
+                    &task_name,
+                    EventType::TaskStarted,
+                    "task `{task_name}` has started"
+                );
 
                 // Monitoring the output.
                 match job_id_regex {
                     Some(ref regex) => {
                         let stdout = String::from_utf8_lossy(&output.stdout);
                         let captures = regex.captures_iter(&stdout).next().unwrap_or_else(|| {
-                            panic!(
-                                "could not match the job id regex within stdout: `{}`",
-                                stdout
-                            )
+                            panic!("could not match the job id regex within stdout: `{stdout}`")
                         });
 
                         // SAFETY: this will always unwrap, as the group is

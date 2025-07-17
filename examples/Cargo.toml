@@ -12,6 +12,7 @@ rust-version.workspace = true
 [dependencies]
 anyhow.workspace = true
 crankshaft = { path = "../crankshaft" }
+crankshaft-monitor = { path = "../crankshaft-monitor" }
 clap.workspace = true
 dirs.workspace = true
 nonempty.workspace = true
@@ -20,6 +21,7 @@ tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
+tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
@@ -29,6 +31,10 @@ futures.workspace = true
 [[bin]]
 name = "docker"
 path = "src/docker/main.rs"
+
+[[bin]]
+name = "docker-rpc"
+path = "src/docker/docker_monitored.rs"
 
 [[bin]]
 name = "lsf"

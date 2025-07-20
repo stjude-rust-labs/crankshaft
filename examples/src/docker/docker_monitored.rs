@@ -185,7 +185,7 @@ fn start_polling() {
         let mut stream = response;
         while let Some(event) = stream.next().await {
             match event {
-                Ok(ev) => println!("[task_id={}] {}", ev.task_id, ev.message),
+                Ok(ev) => println!("[task_id={}]", ev.event_id),
                 Err(e) => {
                     eprintln!("Error receiving event: {e:#}");
                     break;

@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
 use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::GetServerStateRequest;
+use crankshaft_monitor::proto::Resources;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures_util::StreamExt;
@@ -23,6 +26,8 @@ enum State {
     Connected {
         client: MonitorClient<Channel>,
         update_stream: Box<Streaming<Event>>,
+        tasks: HashMap<String, i32>,
+        resources: Option<Resources>,
     },
     Disconnected(Duration),
 }
@@ -114,11 +119,22 @@ impl Connection {
                 };
                 let mut client = MonitorClient::new(channel);
                 let update_request = tonic::Request::new(SubscribeEventsRequest {});
+                let state_request = tonic::Request::new(GetServerStateRequest {});
+
                 let update_stream =
                     Box::new(client.subscribe_events(update_request).await?.into_inner());
+
+                let state = client.get_server_state(state_request).await?.into_inner();
+                let tasks = state.tasks;
+                // we know that resources is there , how to safley exit this option , this
+                // option is due to proto
+                let resources = state.resources;
+
                 Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected {
                     client,
                     update_stream,
+                    tasks,
+                    resources,
                 })
             };
             self.state = match try_connect.await {

@@ -5,11 +5,16 @@ mod state;
 mod term;
 mod view;
 
+use Event::*;
+use KeyCode::*;
 use anyhow::Result;
 use color_eyre::Section;
 use color_eyre::SectionExt;
 use color_eyre::eyre::eyre;
 use conn::Connection;
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
 use futures_util::StreamExt;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -36,7 +41,7 @@ async fn main() -> color_eyre::Result<()> {
     let styles = Styles::new();
 
     loop {
-        tokio::select! {biased;
+        tokio::select! {
             input = input.next() =>{
                 let input = input
                 .ok_or_else(|| eyre!("keyboard input stream ended early"))
@@ -50,7 +55,15 @@ async fn main() -> color_eyre::Result<()> {
                     return Ok(());
                 }
 
-
+                match input {
+                        Key(KeyEvent {
+                            code: Char('t'), ..
+                        }) => state.current_view = View::Tasks,
+                        Key(KeyEvent{
+                            code: Char('r'),..
+                        })=> state.current_view = View::Resources,
+                        _ => (),
+                    }
             },
             instrument_message = conn.next_message()=>{
                 state.update(&styles, view, instrument_message);
@@ -85,7 +98,7 @@ async fn main() -> color_eyre::Result<()> {
             f.render_widget(header, chunks[0]);
             f.render_widget(view_controls, chunks[1]);
 
-            view.render(f, &mut state);
+            state.current_view.render(f, &mut state);
         })?;
     }
 }

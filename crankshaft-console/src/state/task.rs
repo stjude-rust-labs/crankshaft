@@ -5,7 +5,7 @@ use crankshaft_monitor::proto::EventType;
 use crankshaft_monitor::proto::event::Payload::Message;
 
 #[derive(Debug, Default)]
-pub(crate) struct TasksState {
+pub struct TasksState {
     tasks: HashMap<String, Task>,
 }
 
@@ -21,8 +21,8 @@ impl TasksState {
     pub fn update(&mut self, message: Event) {
         let task = self
             .tasks
-            .entry(message.task_id.clone())
-            .or_insert_with(|| Task::new(message.task_id.clone()));
+            .entry(message.event_id.clone())
+            .or_insert_with(|| Task::new(message.event_id.clone()));
         task.event_type = EventType::try_from(message.event_type).unwrap_or(EventType::Unspecified);
         task.timestamp = message.timestamp;
         if let Some(Message(msg)) = message.payload {

@@ -20,10 +20,9 @@ use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
 use crankshaft_docker::service::Service;
-use crankshaft_monitor::proto::ContainerResources;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
-use crankshaft_monitor::proto::ServiceResources;
+use crankshaft_monitor::proto::Resources as ProtoResources;
 use crankshaft_monitor::proto::event::Payload;
 use crankshaft_monitor::send_event;
 use futures::FutureExt;
@@ -64,7 +63,7 @@ pub struct LocalResources {
     pub memory: u64,
 }
 
-impl From<SwarmResources> for ServiceResources {
+impl From<SwarmResources> for ProtoResources {
     fn from(value: SwarmResources) -> Self {
         Self {
             nodes: value.nodes as f64,
@@ -76,11 +75,14 @@ impl From<SwarmResources> for ServiceResources {
     }
 }
 
-impl From<LocalResources> for ContainerResources {
+impl From<LocalResources> for ProtoResources {
     fn from(value: LocalResources) -> Self {
         Self {
             cpu: value.cpu as f64,
             memory: value.memory as f64,
+            nodes: 1.0,
+            max_cpu: value.cpu as f64,
+            max_memory: value.memory as f64,
         }
     }
 }
@@ -151,8 +153,8 @@ impl Resources {
 
     pub fn to_proto(&self) -> Option<Payload> {
         match self {
-            Resources::Swarm(r) => Some(Payload::ServiceResources((*r).into())),
-            Resources::Local(r) => Some(Payload::ContainerResources((*r).into())),
+            Resources::Swarm(r) => Some(Payload::Resources((*r).into())),
+            Resources::Local(r) => Some(Payload::Resources((*r).into())),
         }
     }
 }
@@ -480,8 +482,8 @@ impl crate::Backend for Backend {
                     let service = Arc::new(builder.try_build(&name).await.map_err(|e| TaskRunError::Other(e.into()))?);
 
 
-                    if let Some(Payload::ServiceResources(payload)) = resources.to_proto() {
-                        send_event!(&event_sender, "Docker-swarm".to_string(), EventType::ServiceStarted, service_resource = payload);
+                    if let Some(Payload::Resources(payload)) = resources.to_proto() {
+                        send_event!(&event_sender, "Docker-swarm".to_string(), EventType::ServiceStarted, resource = payload);
                     }
 
                     select! {
@@ -525,8 +527,8 @@ impl crate::Backend for Backend {
                             .await.map_err(|e| TaskRunError::Other(e.into()))?,
                     );
 
-                    if let Some(Payload::ContainerResources(payload)) = resources.to_proto() {
-                        send_event!(&event_sender, "Docker-container".to_string() , EventType::ContainerStarted, container_resource = payload);
+                    if let Some(Payload::Resources(payload)) = resources.to_proto() {
+                        send_event!(&event_sender, "Docker-container".to_string() , EventType::ContainerStarted, resource = payload);
                     }
 
 

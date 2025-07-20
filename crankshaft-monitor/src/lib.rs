@@ -1,5 +1,6 @@
 //! Crate for monitoring crankshaft events.
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -7,7 +8,10 @@ use anyhow::Result;
 use proto::Event;
 use proto::monitor_server::MonitorServer;
 use server::MonitorService;
+use tokio::sync::RwLock;
 use tokio::sync::broadcast;
+
+use crate::server::ServerState;
 
 pub mod proto;
 pub mod server;
@@ -22,7 +26,8 @@ pub type JoinHandle = tokio::task::JoinHandle<Result<(), tonic::transport::Error
 /// The main external API to start the Crankshaft monitor.
 pub fn start_monitoring(addr: SocketAddr) -> Result<(broadcast::Sender<Event>, JoinHandle)> {
     let (event_sender, event_receiver) = broadcast::channel(DEFAULT_CHANNEL_CAPACITY);
-    let monitor_service = MonitorService::new(event_receiver);
+    let state = Arc::new(RwLock::new(ServerState::default()));
+    let monitor_service = MonitorService::new(event_receiver, state);
     let server = MonitorServer::new(monitor_service);
 
     let server_handle = tokio::spawn(async move {
@@ -53,7 +58,7 @@ macro_rules! send_event {
         if let Some(sender) = $sender.as_ref() {
             let message = format!($message);
             let _ = sender.send($crate::proto::Event {
-                task_id: $task_id.to_owned(),
+                event_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
                 payload: Some($crate::proto::event::Payload::Message(message)),
@@ -66,7 +71,7 @@ macro_rules! send_event {
         if let Some(sender) = $sender.as_ref() {
             let message = format!($fmt, $($arg)*);
             let _ = sender.send($crate::proto::Event {
-                task_id: $task_id.to_owned(),
+                event_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
                 payload: Some($crate::proto::event::Payload::Message(message)),
@@ -74,26 +79,14 @@ macro_rules! send_event {
         }
     };
 
-    // ContainerResources payload
-    ($sender:expr, $task_id:expr, $event_type:expr, container_resource = $res:expr) => {
+    // Resources payload
+    ($sender:expr, $task_id:expr, $event_type:expr, resource = $res:expr) => {
         if let Some(sender) = $sender.as_ref() {
             let _ = sender.send($crate::proto::Event {
-                task_id: $task_id.to_owned(),
+                event_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
-                payload: Some($crate::proto::event::Payload::ContainerResources($res)),
-            });
-        }
-    };
-
-    // ServiceResources payload
-    ($sender:expr, $task_id:expr, $event_type:expr, service_resource = $res:expr) => {
-        if let Some(sender) = $sender.as_ref() {
-            let _ = sender.send($crate::proto::Event {
-                task_id: $task_id.to_owned(),
-                event_type: $event_type as i32,
-                timestamp: $crate::now_millis(),
-                payload: Some($crate::proto::event::Payload::ServiceResources($res)),
+                payload: Some($crate::proto::event::Payload::Resources($res)),
             });
         }
     };
@@ -102,11 +95,18 @@ macro_rules! send_event {
         if let Some(sender) = $sender.as_ref() {
             let message = format!("{}",$($arg)*);
             let _ = sender.send($crate::proto::Event {
-                task_id: $task_id.to_owned(),
+                event_id: $task_id.to_owned(),
                 event_type: $event_type as i32,
                 timestamp: $crate::now_millis(),
                 payload: Some($crate::proto::event::Payload::Message(message)),
             });
         }
+    };
+}
+
+#[macro_export]
+macro_rules! update_resources {
+    () => {
+        
     };
 }

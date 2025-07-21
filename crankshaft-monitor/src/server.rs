@@ -38,21 +38,15 @@ pub struct Resource {
 
 /// The TaskId
 pub type Taskid = String;
-/// The taskState type
 
 /// The ServerState struct represents the Resource and Tasks state of the server
+#[derive(Default)]
 pub struct ServerState {
+    /// resources info  about the server
     resources: Resource,
-    tasks: HashMap<Taskid, i32>,
-}
 
-impl Default for ServerState {
-    fn default() -> Self {
-        Self {
-            resources: Resource::default(),
-            tasks: HashMap::new(),
-        }
-    }
+    /// tasks is a hashmap for taskId -> TaskState
+    tasks: HashMap<Taskid, i32>,
 }
 
 /// The MonitorService struct represents a gRPC service for monitoring events.

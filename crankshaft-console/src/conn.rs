@@ -14,27 +14,39 @@ use tonic::transport::Channel;
 use tonic::transport::Endpoint;
 use tonic::transport::Uri;
 
+/// Connection struct that holds the state of tui and Address of server
 #[derive(Debug)]
 pub struct Connection {
+    /// the server's addr
     target: Uri,
+    /// the state of tui (connected or disconnected)
     state: State,
 }
 
+/// State of the connection
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum State {
+    /// Connected state
     Connected {
-        client: MonitorClient<Channel>,
+        /// The client connection to the server
+        _client: MonitorClient<Channel>,
+        /// The stream of events from the server
         update_stream: Box<Streaming<Event>>,
-        tasks: HashMap<String, i32>,
-        resources: Option<Resources>,
+        /// The tasks currently running on the server
+        _tasks: HashMap<String, i32>,
+        /// The resources currently available on the server
+        _resources: Option<Resources>,
     },
+    /// Disconnected state
     Disconnected(Duration),
 }
 
 impl Connection {
+    /// backoff duration
     const BACKOFF: Duration = Duration::from_millis(500);
 
+    /// create a new connection
     pub fn new(target: Uri) -> Self {
         Self {
             target,
@@ -42,7 +54,9 @@ impl Connection {
         }
     }
 
+    /// connect to the server
     async fn connect(&mut self) {
+        /// max backoff duration
         const MAX_BACKOFF: Duration = Duration::from_secs(5);
 
         while let State::Disconnected(backoff) = self.state {
@@ -131,10 +145,10 @@ impl Connection {
                 let resources = state.resources;
 
                 Ok::<State, Box<dyn Error + Send + Sync>>(State::Connected {
-                    client,
+                    _client: client,
                     update_stream,
-                    tasks,
-                    resources,
+                    _tasks: tasks,
+                    _resources: resources,
                 })
             };
             self.state = match try_connect.await {
@@ -147,6 +161,7 @@ impl Connection {
         }
     }
 
+    /// next message
     pub async fn next_message(&mut self) -> Event {
         loop {
             match &mut self.state {
@@ -164,7 +179,17 @@ impl Connection {
         }
     }
 
-    pub fn render(&self, styles: &crate::view::styles::Styles) -> ratatui::text::Line {
+    pub fn initial_state(&self) -> Option<(&HashMap<String, i32>, &Option<Resources>)> {
+        match &self.state {
+            State::Connected {
+                _tasks, _resources, ..
+            } => Some((_tasks, _resources)),
+            _ => None,
+        }
+    }
+
+    /// render
+    pub fn render(&self, styles: &crate::view::styles::Styles) -> ratatui::text::Line<'_> {
         use ratatui::style::Color;
         use ratatui::style::Modifier;
         use ratatui::text::Line;
@@ -179,7 +204,7 @@ impl Connection {
                 styles.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
             State::Disconnected(d) => Span::styled(
-                format!("(RECONNECTING IN {:?})", d),
+                format!("(RECONNECTING IN {d:?})"),
                 styles.fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
         };

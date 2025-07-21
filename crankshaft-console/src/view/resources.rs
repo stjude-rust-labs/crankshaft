@@ -31,17 +31,9 @@ pub(crate) fn render_resource(frame: &mut Frame<'_>, resource_state: &ResourceSt
         });
     let header = Row::new(headers).height(1).bottom_margin(1);
 
-    let rows = resource_state.resources().values().map(|r| {
-        let row = vec![
-            r.id.clone(),
-            r.cpu.map_or("—".into(), |v| format!("{:.2}", v)),
-            r.max_cpu.map_or("—".into(), |v| format!("{:.2}", v)),
-            r.memory.map_or("—".into(), |v| format!("{:.2}", v)),
-            r.max_memory.map_or("—".into(), |v| format!("{:.2}", v)),
-            r.nodes.map_or("—".into(), |v| format!("{:.0}", v)),
-        ];
-        Row::new(row.into_iter().map(Cell::from))
-    });
+    let r = resource_state.resources();
+    let row = vec![r.cpu, r.max_cpu, r.memory, r.max_memory, r.nodes];
+    let rows = vec![Row::new(row.into_iter().map(Cell::from)).height(1)];
 
     let table = Table::new(
         rows,

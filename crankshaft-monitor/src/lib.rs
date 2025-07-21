@@ -50,7 +50,6 @@ pub fn now_millis() -> i64 {
 /// Sends an event through a broadcast channel.
 ///
 /// No event is sent if the specified broadcast channel is `None`.
-
 #[macro_export]
 macro_rules! send_event {
     // Message literal
@@ -101,12 +100,5 @@ macro_rules! send_event {
                 payload: Some($crate::proto::event::Payload::Message(message)),
             });
         }
-    };
-}
-
-#[macro_export]
-macro_rules! update_resources {
-    () => {
-        
     };
 }

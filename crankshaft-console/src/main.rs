@@ -1,13 +1,18 @@
 //! The Binary of the console TUI
+
+#[allow(clippy::missing_docs_in_private_items)]
 mod conn;
+#[allow(clippy::missing_docs_in_private_items)]
 mod input;
+#[allow(clippy::missing_docs_in_private_items)]
 mod state;
+#[allow(clippy::missing_docs_in_private_items)]
 mod term;
+#[allow(clippy::missing_docs_in_private_items)]
 mod view;
 
 use Event::*;
 use KeyCode::*;
-use anyhow::Result;
 use color_eyre::Section;
 use color_eyre::SectionExt;
 use color_eyre::eyre::eyre;
@@ -39,6 +44,12 @@ async fn main() -> color_eyre::Result<()> {
     let view = View::Tasks;
     let mut input = Box::pin(input::EventStream::new());
     let styles = Styles::new();
+    if let Some((tasks, resources)) = conn.initial_state() {
+        state.tasks_state.set_initial(tasks);
+        if let Some(r) = resources {
+            state.resource_state.set_initial(r);
+        }
+    }
 
     loop {
         tokio::select! {

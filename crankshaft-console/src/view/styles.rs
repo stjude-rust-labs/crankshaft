@@ -6,7 +6,7 @@ pub struct Styles;
 
 impl Styles {
     pub fn new() -> Self {
-        return Styles;
+        Styles
     }
 
     pub fn fg(&self, color: Color) -> Style {

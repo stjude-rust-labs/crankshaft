@@ -11,8 +11,8 @@ pub mod task;
 
 #[derive(Debug, Default)]
 pub struct State {
-    tasks_state: TasksState,
-    resource_state: ResourceState,
+    pub tasks_state: TasksState,
+    pub resource_state: ResourceState,
     pub current_view: View,
 }
 

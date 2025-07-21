@@ -15,6 +15,7 @@ pub fn should_ignore_key_event(input: &Event) -> bool {
     )
 }
 
+/// function to check if quit keys are pressed
 pub fn should_quit(input: &Event) -> bool {
     use Event::*;
     use KeyCode::*;
@@ -33,70 +34,5 @@ pub fn should_quit(input: &Event) -> bool {
             ..
         }) if modifiers.contains(KeyModifiers::CONTROL) => true,
         _ => false,
-    }
-}
-
-pub(crate) fn is_space(input: &Event) -> bool {
-    matches!(
-        input,
-        Event::Key(KeyEvent {
-            code: KeyCode::Char(' '),
-            ..
-        })
-    )
-}
-
-pub(crate) fn is_help_toggle(event: &Event) -> bool {
-    matches!(
-        event,
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('?'),
-            ..
-        })
-    )
-}
-
-pub(crate) fn is_esc(event: &Event) -> bool {
-    matches!(
-        event,
-        Event::Key(KeyEvent {
-            code: KeyCode::Esc,
-            ..
-        })
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ignore_key_repeat_and_release_events() {
-        let event = Event::Key(KeyEvent {
-            code: KeyCode::Char('a'),
-            modifiers: KeyModifiers::empty(),
-            kind: KeyEventKind::Press,
-            state: KeyEventState::empty(),
-        });
-
-        assert!(!should_ignore_key_event(&event));
-
-        let event = Event::Key(KeyEvent {
-            code: KeyCode::Char('a'),
-            modifiers: KeyModifiers::empty(),
-            kind: KeyEventKind::Release,
-            state: KeyEventState::empty(),
-        });
-
-        assert!(should_ignore_key_event(&event));
-
-        let event = Event::Key(KeyEvent {
-            code: KeyCode::Char('a'),
-            modifiers: KeyModifiers::empty(),
-            kind: KeyEventKind::Repeat,
-            state: KeyEventState::empty(),
-        });
-
-        assert!(should_ignore_key_event(&event));
     }
 }

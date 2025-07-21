@@ -10,7 +10,9 @@ pub mod resources;
 pub mod styles;
 pub mod tasks;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Default)]
 pub enum View {
+    #[default]
     Tasks,
     Resources,
 }
@@ -28,8 +30,3 @@ pub(crate) fn bold<'a>(text: impl Into<Cow<'a, str>>) -> Span<'a> {
     Span::styled(text, Style::default())
 }
 
-impl Default for View {
-    fn default() -> Self {
-        View::Tasks
-    }
-}

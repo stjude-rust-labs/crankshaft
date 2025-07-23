@@ -1,3 +1,4 @@
+//! Renders the resources view.
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -13,6 +14,7 @@ use ratatui::widgets::Table;
 
 use crate::state::resource::ResourceState;
 
+/// Renders the resources view.
 pub(crate) fn render_resource(frame: &mut Frame<'_>, resource_state: &ResourceState) {
     let area = Layout::default()
         .direction(Direction::Vertical)

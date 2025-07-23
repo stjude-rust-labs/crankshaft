@@ -1,7 +1,7 @@
-//! The module for keyboard input handling.
+//! The `input` module handles keyboard input.
 pub use crossterm::event::*;
 
-/// function to check if the key event is a release or repeat event
+/// Returns true if the key event should be ignored.
 pub fn should_ignore_key_event(input: &Event) -> bool {
     matches!(
         input,
@@ -12,7 +12,7 @@ pub fn should_ignore_key_event(input: &Event) -> bool {
     )
 }
 
-/// function to check if quit keys are pressed
+/// Returns true if the quit keys are pressed.
 pub fn should_quit(input: &Event) -> bool {
     use Event::*;
     use KeyCode::*;

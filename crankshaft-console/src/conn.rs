@@ -1,4 +1,4 @@
-//! The module for handling connections to the crankshaft server.
+//! The `conn` module handles connections to the crankshaft server.
 use std::error::Error;
 use std::time::Duration;
 
@@ -7,7 +7,6 @@ use crankshaft_monitor::proto::GetServerStateRequest;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures_util::StreamExt;
-use tokio::net::UnixStream;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
@@ -15,37 +14,37 @@ use tonic::transport::Uri;
 
 use crate::state::State as TuiState;
 
-/// exponential backoff duration
+/// The exponential backoff duration.
 const BACKOFF: Duration = Duration::from_millis(500);
-/// maximum backoff duration
+/// The maximum backoff duration.
 const MAX_BACKOFF: Duration = Duration::from_secs(5);
 
-/// Connection struct that holds the state of tui and Address of server
+/// The `Connection` struct holds the state of the TUI and the server address.
 #[derive(Debug)]
 pub struct Connection {
-    /// the server's addr
+    /// The server's address.
     target: Uri,
-    /// the state of tui (connected or disconnected)
+    /// The state of the connection.
     state: ConnectionState,
 }
 
-/// State of the connection
+/// The state of the connection.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum ConnectionState {
-    /// Connected state
+    /// The connected state.
     Connected {
-        /// The client connection to the server
+        /// The client connection to the server.
         _client: MonitorClient<Channel>,
-        /// The stream of events from the server
+        /// The stream of events from the server.
         update_stream: Box<Streaming<Event>>,
     },
-    /// Disconnected state
+    /// The disconnected state.
     Disconnected(Duration),
 }
 
 impl Connection {
-    /// create a new connection
+    /// Creates a new connection.
     pub fn new(target: Uri) -> Self {
         Self {
             target,
@@ -53,41 +52,15 @@ impl Connection {
         }
     }
 
-    /// connect to the server
+    /// Connects to the server.
     pub async fn connect(&mut self, state: &mut TuiState) {
         while let ConnectionState::Disconnected(backoff) = self.state {
             if backoff > Duration::from_secs(0) {
                 tokio::time::sleep(backoff).await;
             }
             let try_connect = async {
-                let channel = match self.target.scheme_str() {
-                    #[cfg(unix)]
-                    Some("file") => {
-                        use tonic::transport::Endpoint;
-
-                        if !matches!(self.target.host(), None | Some("localhost")) {
-                            return Err("cannot connect to non-localhost unix domain socket".into());
-                        }
-                        let path = self.target.path().to_owned();
-                        let endpoint = Endpoint::from_static("http://localhost");
-                        endpoint
-                            .connect_with_connector(tower::service_fn(move |_| {
-                                use futures_util::TryFutureExt;
-                                use hyper_util::rt::TokioIo;
-
-                                UnixStream::connect(path.clone()).map_ok(TokioIo::new)
-                            }))
-                            .await?
-                    }
-                    _ => {
-                        let endpoint = Endpoint::from(self.target.clone());
-                        endpoint.connect().await?
-                    }
-                    #[cfg(not(unix))]
-                    Some("file") => {
-                        return Err("unix domain sockets are not supported on this platform".into());
-                    }
-                };
+                let endpoint = Endpoint::from(self.target.clone());
+                let channel = endpoint.connect().await?;
                 let mut client = MonitorClient::new(channel);
                 let update_request = tonic::Request::new(SubscribeEventsRequest {});
                 let state_request = tonic::Request::new(GetServerStateRequest {});
@@ -115,7 +88,7 @@ impl Connection {
         }
     }
 
-    /// next message
+    /// Returns the next message from the server.
     pub async fn next_message(&mut self, state: &mut TuiState) -> Event {
         loop {
             match &mut self.state {
@@ -135,7 +108,7 @@ impl Connection {
         }
     }
 
-    /// render
+    /// Renders the connection state.
     pub fn render(&self, styles: &crate::view::styles::Styles) -> ratatui::text::Line<'_> {
         use ratatui::style::Color;
         use ratatui::style::Modifier;

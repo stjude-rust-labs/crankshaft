@@ -1,36 +1,39 @@
+//! The task module contains the state of the tasks.
 use std::collections::HashMap;
 
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
 use crankshaft_monitor::proto::event::Payload::Message;
 
-/// TasksState
+/// The `TuiTasksState` struct holds the state of the tasks.
 #[derive(Debug, Default)]
 pub struct TuiTasksState {
-    /// tasksmap
+    /// A map of tasks.
     tasks: HashMap<String, Task>,
 }
 
+/// The `Tasklogs` struct holds the logs of a task.
 #[derive(Debug)]
 pub(crate) struct Tasklogs {
-    /// timestamp
+    /// The timestamp of the log.
     pub timestamp: i64,
-    /// message
+    /// The message of the log.
     pub message: String,
 }
-/// TasksState
+
+/// The `Task` struct holds the state of a task.
 #[derive(Debug)]
 pub(crate) struct Task {
-    /// id
+    /// The id of the task.
     id: String,
-    /// progress
+    /// The progress of the task.
     progress: i32,
-    /// message
+    /// The logs of the task.
     logs: Vec<Tasklogs>,
 }
 
 impl TuiTasksState {
-    /// Updates the state with a new event
+    /// Updates the state with a new event.
     pub fn update(&mut self, message: Event) {
         let task = self
             .tasks
@@ -50,6 +53,7 @@ impl TuiTasksState {
         &self.tasks
     }
 
+    /// Sets the initial state of the tasks.
     pub fn set_initial(&mut self, tasks: HashMap<String, i32>) {
         self.tasks = tasks
             .into_iter()
@@ -71,18 +75,11 @@ impl Task {
     }
 
     /// Returns the event type of the task.
-    pub fn progress(&self) -> i32 {
-        self.progress
-    }
-
-    pub fn logs(&self) -> &[Tasklogs] {
-        &self.logs
-    }
-
     pub fn event_type(&self) -> EventType {
-        EventType::from_i32(self.progress).unwrap_or(EventType::Unspecified)
+        EventType::try_from(self.progress).unwrap_or(EventType::Unspecified)
     }
 
+    /// Returns the latest log of the task.
     pub fn latest_log(&self) -> Option<&Tasklogs> {
         self.logs.last()
     }

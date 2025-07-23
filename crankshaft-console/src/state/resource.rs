@@ -1,16 +1,17 @@
+//! The resource module contains the state of the resources.
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::Resources as ProtoResource;
 use crankshaft_monitor::proto::event::Payload::Resources;
 
-/// The `ResourceState` struct represents the state of resources in the system.
+/// The `ResourceState` struct holds the state of the resources.
 #[derive(Debug, Default)]
 pub struct ResourceState {
-    /// The `resources` field has the same type as `ProtoResource`.
+    /// The resources.
     resources: ProtoResource,
 }
 
 impl ResourceState {
-    /// Update resource state based on event payload.
+    /// Updates the resource state.
     pub fn update(&mut self, message: Event) {
         let payload = match message.payload {
             Some(p) => p,
@@ -28,11 +29,12 @@ impl ResourceState {
         }
     }
 
-    /// Get a reference to the resources map.
+    /// Returns the resources.
     pub(crate) fn resources(&self) -> &ProtoResource {
         &self.resources
     }
 
+    /// Sets the initial resource state.
     pub fn set_initial(&mut self, resources: Option<ProtoResource>) {
         if let Some(r) = resources {
             self.resources = r;

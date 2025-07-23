@@ -1,16 +1,14 @@
-//! The Binary of the console TUI
+//! The main binary for the console TUI.
 
-/// The `conn` module provides functionality for establishing and managing
-/// connections.
+/// The `conn` module handles connections to the crankshaft server.
 mod conn;
-/// The `input` module provides functionality for handling user input.
+/// The `input` module handles keyboard input.
 mod input;
-/// The `state` module provides functionality for managing application state.
+/// The `state` module manages the application state.
 mod state;
-/// The `term` module provides functionality for initializing and managing the
-/// terminal.
+/// The `term` module handles terminal initialization and cleanup.
 mod term;
-/// The `view` module provides functionality for rendering the user interface.
+/// The `view` module renders the user interface.
 mod view;
 
 use Event::*;
@@ -38,6 +36,7 @@ use view::styles::Styles;
 
 use crate::view::bold;
 
+/// The main function.
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let (mut terminal, _cleanup) = init_crossterm().unwrap();

@@ -1,3 +1,4 @@
+//! Renders the tasks view.
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -13,6 +14,7 @@ use ratatui::widgets::Table;
 
 use crate::state::task::TuiTasksState;
 
+/// Renders the tasks view.
 pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &TuiTasksState) {
     let area = Layout::default()
         .direction(Direction::Vertical)

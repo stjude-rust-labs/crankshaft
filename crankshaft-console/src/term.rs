@@ -1,3 +1,4 @@
+//! The `term` module handles terminal initialization and cleanup.
 use std::io::Write;
 use std::io::{self};
 
@@ -10,6 +11,7 @@ use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 
+/// Initializes the terminal.
 pub(crate) fn init_crossterm() -> Result<(
     ratatui::Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>,
     Cleanup,
@@ -25,9 +27,11 @@ pub(crate) fn init_crossterm() -> Result<(
     Ok((terminal, Cleanup))
 }
 
+/// A cleanup struct that restores the terminal state when dropped.
 pub(crate) struct Cleanup;
 
 impl Drop for Cleanup {
+    /// Restores the terminal state.
     fn drop(&mut self) {
         let mut stdout = io::stdout();
         let _ = stdout.execute(DisableMouseCapture);

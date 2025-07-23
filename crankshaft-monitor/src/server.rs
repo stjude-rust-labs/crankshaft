@@ -42,10 +42,10 @@ pub type Taskid = String;
 #[derive(Default)]
 pub struct ServerState {
     /// resources info  about the server
-    resources: Resource,
+    pub resources: Resource,
 
     /// tasks is a hashmap for taskId -> TaskState
-    tasks: HashMap<Taskid, i32>,
+    pub tasks: HashMap<Taskid, i32>,
 }
 
 /// The MonitorService struct represents a gRPC service for monitoring events.

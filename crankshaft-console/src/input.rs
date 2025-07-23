@@ -1,10 +1,7 @@
-// TODO(eliza): support Ratatui backends other than crossterm?
-// This would probably involve using `spawn_blocking` to drive their blocking
-// input-handling mechanisms in the background...
+//! The module for keyboard input handling.
 pub use crossterm::event::*;
 
-/// Crossterm on windows reports key release and repeat events which have the
-/// effect of duplicating key presses. This function filters out those events.
+/// function to check if the key event is a release or repeat event
 pub fn should_ignore_key_event(input: &Event) -> bool {
     matches!(
         input,

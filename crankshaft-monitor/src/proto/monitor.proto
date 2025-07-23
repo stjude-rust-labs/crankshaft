@@ -16,16 +16,7 @@ message GetServerStateRequest {}
 // ServerStateResponse represents the server state.
 message ServerStateResponse {
   Resources resources = 1;
-  map<string, TaskState> tasks = 2;
-}
-
-enum TaskState {
-  TASK_STATE_UNSPECIFIED = 0;
-  TASK_STATE_QUEUED = 1;
-  TASK_STATE_STARTED = 2;
-  TASK_STATE_COMPLETED = 3;
-  TASK_STATE_FAILED = 4;
-  TASK_STATE_STOPPED = 5;
+  map<string, EventType> tasks = 2;
 }
 
 // SubscribeEventsRequest is a minimal request to subscribe to all task events.
@@ -36,9 +27,8 @@ message Event {
   string event_id = 1;
   EventType event_type = 2;
   int64 timestamp = 3;
-  // Only set `engine_resources` when `event_type == ENGINE_STARTED`.
   oneof payload {
-    string message = 4; // description or log message
+    string message = 4;
     Resources resources = 6;
   }
 }

@@ -9,7 +9,7 @@ pub struct GetServerStateRequest {}
 pub struct ServerStateResponse {
     #[prost(message, optional, tag = "1")]
     pub resources: ::core::option::Option<Resources>,
-    #[prost(map = "string, enumeration(TaskState)", tag = "2")]
+    #[prost(map = "string, enumeration(EventType)", tag = "2")]
     pub tasks: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
 }
 /// SubscribeEventsRequest is a minimal request to subscribe to all task events.
@@ -26,17 +26,14 @@ pub struct Event {
     pub event_type: i32,
     #[prost(int64, tag = "3")]
     pub timestamp: i64,
-    /// Only set `engine_resources` when `event_type == ENGINE_STARTED`.
     #[prost(oneof = "event::Payload", tags = "4, 6")]
     pub payload: ::core::option::Option<event::Payload>,
 }
 /// Nested message and enum types in `Event`.
 pub mod event {
-    /// Only set `engine_resources` when `event_type == ENGINE_STARTED`.
     #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Payload {
-        /// description or log message
         #[prost(string, tag = "4")]
         Message(::prost::alloc::string::String),
         #[prost(message, tag = "6")]
@@ -56,45 +53,6 @@ pub struct Resources {
     pub max_cpu: f64,
     #[prost(double, tag = "5")]
     pub max_memory: f64,
-}
-#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum TaskState {
-    Unspecified = 0,
-    Queued = 1,
-    Started = 2,
-    Completed = 3,
-    Failed = 4,
-    Stopped = 5,
-}
-impl TaskState {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "TASK_STATE_UNSPECIFIED",
-            Self::Queued => "TASK_STATE_QUEUED",
-            Self::Started => "TASK_STATE_STARTED",
-            Self::Completed => "TASK_STATE_COMPLETED",
-            Self::Failed => "TASK_STATE_FAILED",
-            Self::Stopped => "TASK_STATE_STOPPED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "TASK_STATE_UNSPECIFIED" => Some(Self::Unspecified),
-            "TASK_STATE_QUEUED" => Some(Self::Queued),
-            "TASK_STATE_STARTED" => Some(Self::Started),
-            "TASK_STATE_COMPLETED" => Some(Self::Completed),
-            "TASK_STATE_FAILED" => Some(Self::Failed),
-            "TASK_STATE_STOPPED" => Some(Self::Stopped),
-            _ => None,
-        }
-    }
 }
 /// EventType defines the possible types of monitoring events.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]

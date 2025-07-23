@@ -4,41 +4,44 @@ use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::EventType;
 use crankshaft_monitor::proto::event::Payload::Message;
 
-/// so this type is not named accurately but this will be the task-state that is the
-/// proto version
-type TaskProgress = i32;
-
 /// TasksState
 #[derive(Debug, Default)]
-pub struct TasksState {
+pub struct TuiTasksState {
     /// tasksmap
-    tasks: HashMap<String, TaskProgress>,
+    tasks: HashMap<String, Task>,
 }
 
+#[derive(Debug)]
+pub(crate) struct Tasklogs {
+    /// timestamp
+    pub timestamp: i64,
+    /// message
+    pub message: String,
+}
 /// TasksState
 #[derive(Debug)]
 pub(crate) struct Task {
     /// id
     id: String,
-    /// event_type
-    event_type: EventType,
-    /// timestamp
-    timestamp: i64,
+    /// progress
+    progress: i32,
     /// message
-    message: String,
+    logs: Vec<Tasklogs>,
 }
 
-impl TasksState {
+impl TuiTasksState {
     /// Updates the state with a new event
     pub fn update(&mut self, message: Event) {
         let task = self
             .tasks
             .entry(message.event_id.clone())
-            .or_insert_with(|| Task::new(message.event_id.clone()));
-        task.event_type = EventType::try_from(message.event_type).unwrap_or(EventType::Unspecified);
-        task.timestamp = message.timestamp;
+            .or_insert_with(|| Task::new(message.event_id.clone(), EventType::TaskQueued as i32));
+        task.progress = message.event_type;
         if let Some(Message(msg)) = message.payload {
-            task.message = msg;
+            task.logs.push(Tasklogs {
+                timestamp: message.timestamp,
+                message: msg,
+            });
         }
     }
 
@@ -47,20 +50,19 @@ impl TasksState {
         &self.tasks
     }
 
-    pub set_initial(&mut self, tasks: HashMap<String, i32>) {
-        self.tasks = tasks;
+    pub fn set_initial(&mut self, tasks: HashMap<String, i32>) {
+        self.tasks = tasks
+            .into_iter()
+            .map(|(id, progress)| (id.clone(), Task::new(id, progress)))
+            .collect();
     }
 }
 
 impl Task {
     /// Creates a new Task instance.
-    pub fn new(id: String) -> Self {
-        Self {
-            id,
-            event_type: EventType::Unspecified,
-            timestamp: 0,
-            message: "".to_string(),
-        }
+    pub fn new(id: String, progress: i32) -> Self {
+        let logs = Vec::new();
+        Self { id, progress, logs }
     }
 
     /// Returns the id of the task.
@@ -69,17 +71,19 @@ impl Task {
     }
 
     /// Returns the event type of the task.
-    pub fn event_type(&self) -> &EventType {
-        &self.event_type
+    pub fn progress(&self) -> i32 {
+        self.progress
     }
 
-    /// Returns the timestamp of the task.
-    pub fn timestamp(&self) -> i64 {
-        self.timestamp
+    pub fn logs(&self) -> &[Tasklogs] {
+        &self.logs
     }
 
-    /// Returns the message of the task.
-    pub fn message(&self) -> &str {
-        &self.message
+    pub fn event_type(&self) -> EventType {
+        EventType::from_i32(self.progress).unwrap_or(EventType::Unspecified)
+    }
+
+    pub fn latest_log(&self) -> Option<&Tasklogs> {
+        self.logs.last()
     }
 }

@@ -17,7 +17,6 @@ use crate::proto::GetServerStateRequest;
 use crate::proto::Resources;
 use crate::proto::ServerStateResponse;
 use crate::proto::SubscribeEventsRequest;
-use crate::proto::TaskState;
 use crate::proto::event::Payload;
 use crate::proto::monitor_server::Monitor;
 
@@ -99,23 +98,23 @@ impl Monitor for MonitorService {
                     },
                     EventType::TaskQueued => {
                         let mut state = state.write().await;
-                        state.tasks.insert(event.event_id.clone(), TaskState::Queued as i32);
+                        state.tasks.insert(event.event_id.clone(), EventType::TaskQueued as i32 );
                     }
-                    EventType::TaskStarted => {
+                    EventType::TaskStarted =>  {
                         let mut state = state.write().await;
-                        state.tasks.insert(event.event_id.clone(), TaskState::Started as i32);
+                        state.tasks.insert(event.event_id.clone(), EventType::TaskStarted as i32 );
                     }
                     EventType::TaskCompleted => {
                         let mut state = state.write().await;
-                        state.tasks.insert(event.event_id.clone(), TaskState::Completed as i32);
+                        state.tasks.insert(event.event_id.clone(), EventType::TaskCompleted as i32);
                     }
                     EventType::TaskFailed => {
                         let mut state = state.write().await;
-                        state.tasks.insert(event.event_id.clone(), TaskState::Failed as i32);
+                        state.tasks.insert(event.event_id.clone(), EventType::TaskFailed as i32 );
                     }
                     EventType::TaskStopped => {
                         let mut state = state.write().await;
-                        state.tasks.insert(event.event_id.clone(), TaskState::Stopped as i32);
+                        state.tasks.insert(event.event_id.clone(), EventType::TaskStopped as i32);
                     }
                     _ => (),
                 }

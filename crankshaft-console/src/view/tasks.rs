@@ -11,9 +11,9 @@ use ratatui::widgets::Cell;
 use ratatui::widgets::Row;
 use ratatui::widgets::Table;
 
-use crate::state::task::TasksState;
+use crate::state::task::TuiTasksState;
 
-pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &TasksState) {
+pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &TuiTasksState) {
     let area = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -32,11 +32,16 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &TasksState) {
     let header = Row::new(headers).height(1).bottom_margin(1);
 
     let rows = tasks_state.tasks().values().map(|task| {
+        let (timestamp, message) = task
+            .latest_log()
+            .map(|log| (log.timestamp.to_string(), log.message.clone()))
+            .unwrap_or_else(|| ("-".into(), "-".into()));
+
         let row = vec![
             task.id().to_string(),
             format!("{:?}", task.event_type()),
-            task.timestamp().to_string(),
-            task.message().to_string(),
+            timestamp,
+            message,
         ];
         Row::new(row.into_iter().map(Cell::from))
     });

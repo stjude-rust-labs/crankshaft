@@ -1,14 +1,16 @@
 //! The Binary of the console TUI
 
-#[allow(clippy::missing_docs_in_private_items)]
+/// The `conn` module provides functionality for establishing and managing
+/// connections.
 mod conn;
-#[allow(clippy::missing_docs_in_private_items)]
+/// The `input` module provides functionality for handling user input.
 mod input;
-#[allow(clippy::missing_docs_in_private_items)]
+/// The `state` module provides functionality for managing application state.
 mod state;
-#[allow(clippy::missing_docs_in_private_items)]
+/// The `term` module provides functionality for initializing and managing the
+/// terminal.
 mod term;
-#[allow(clippy::missing_docs_in_private_items)]
+/// The `view` module provides functionality for rendering the user interface.
 mod view;
 
 use Event::*;
@@ -44,15 +46,9 @@ async fn main() -> color_eyre::Result<()> {
     let view = View::Tasks;
     let mut input = Box::pin(input::EventStream::new());
     let styles = Styles::new();
-    if let Some((tasks, resources)) = conn.initial_state() {
-        state.tasks_state.set_initial(tasks);
-        if let Some(r) = resources {
-            state.resource_state.set_initial(r);
-        }
-    }
 
     loop {
-        tokio::select! {
+        tokio::select! {biased;
             input = input.next() =>{
                 let input = input
                 .ok_or_else(|| eyre!("keyboard input stream ended early"))
@@ -76,7 +72,7 @@ async fn main() -> color_eyre::Result<()> {
                         _ => (),
                     }
             },
-            instrument_message = conn.next_message()=>{
+            instrument_message = conn.next_message(&mut state)=>{
                 state.update(&styles, view, instrument_message);
             }
         };

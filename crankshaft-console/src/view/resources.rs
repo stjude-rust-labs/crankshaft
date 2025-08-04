@@ -34,14 +34,14 @@ pub(crate) fn render_resource(frame: &mut Frame<'_>, resource_state: &ResourceSt
     let header = Row::new(headers).height(1).bottom_margin(1);
 
     let r = resource_state.resources();
-    let row = vec![
-        r.cpu.to_string(),
-        r.max_cpu.to_string(),
-        r.memory.to_string(),
-        r.max_memory.to_string(),
-        r.nodes.to_string(),
+    let row = [
+        Cell::from(r.cpu.to_string()),
+        Cell::from(r.max_cpu.to_string()),
+        Cell::from(r.memory.to_string()),
+        Cell::from(r.max_memory.to_string()),
+        Cell::from(r.nodes.to_string()),
     ];
-    let rows = vec![Row::new(row.into_iter().map(Cell::from)).height(1)];
+    let rows = [Row::new(row).height(1)];
 
     let table = Table::new(
         rows,

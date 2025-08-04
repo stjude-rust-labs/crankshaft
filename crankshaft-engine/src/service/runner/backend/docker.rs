@@ -151,7 +151,7 @@ impl Resources {
         }
     }
 
-    /// helper method to convert local resource type to proto Resource
+    /// Helper method to convert local resource type to proto `Resource`
     pub fn to_proto(&self) -> Option<Payload> {
         match self {
             Resources::Swarm(r) => Some(Payload::Resources((*r).into())),

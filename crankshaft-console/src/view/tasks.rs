@@ -39,13 +39,13 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &TuiTasksState) {
             .map(|log| (log.timestamp.to_string(), log.message.clone()))
             .unwrap_or_else(|| ("-".into(), "-".into()));
 
-        let row = vec![
-            task.id().to_string(),
-            format!("{:?}", task.event_type()),
-            timestamp,
-            message,
+        let row = [
+            Cell::from(task.id().to_string()),
+            Cell::from(format!("{:?}", task.event_type())),
+            Cell::from(timestamp),
+            Cell::from(message),
         ];
-        Row::new(row.into_iter().map(Cell::from))
+        Row::new(row)
     });
 
     let table = Table::new(

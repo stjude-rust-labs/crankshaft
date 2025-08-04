@@ -1,21 +1,14 @@
 //! The main binary for the console TUI.
-
-/// The `conn` module handles connections to the crankshaft server.
 mod conn;
-/// The `input` module handles keyboard input.
 mod input;
-/// The `state` module manages the application state.
 mod state;
-/// The `term` module handles terminal initialization and cleanup.
 mod term;
-/// The `view` module renders the user interface.
 mod view;
 
 use Event::*;
 use KeyCode::*;
-use color_eyre::Section;
-use color_eyre::SectionExt;
-use color_eyre::eyre::eyre;
+use anyhow::Context;
+use anyhow::Result;
 use conn::Connection;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
@@ -38,8 +31,8 @@ use crate::view::bold;
 
 /// The main function.
 #[tokio::main]
-async fn main() -> color_eyre::Result<()> {
-    let (mut terminal, _cleanup) = init_crossterm().unwrap();
+async fn main() -> Result<()> {
+    let (mut terminal, _cleanup) = init_crossterm().context("failed to initialize terminal")?;
     let mut conn = Connection::new(Uri::from_static("http://localhost:8080"));
     let mut state = State::default();
     let view = View::Tasks;
@@ -49,9 +42,7 @@ async fn main() -> color_eyre::Result<()> {
     loop {
         tokio::select! {biased;
             input = input.next() =>{
-                let input = input
-                .ok_or_else(|| eyre!("keyboard input stream ended early"))
-                .with_section(|| "this is probably a bug".header("Note:"))??;
+                let input = input.context("keyboard input stream ended early")??;
 
                 if input::should_ignore_key_event(&input){
                     continue;
@@ -71,7 +62,7 @@ async fn main() -> color_eyre::Result<()> {
                         _ => (),
                     }
             },
-            instrument_message = conn.next_message(&mut state)=>{
+            instrument_message = conn.next_message(&mut state)=> {
                 state.update(&styles, view, instrument_message);
             }
         };

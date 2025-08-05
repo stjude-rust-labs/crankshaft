@@ -82,6 +82,7 @@ impl Connection {
                 Ok(connected) => connected,
                 Err(_error) => {
                     let backoff = std::cmp::max(backoff + BACKOFF, MAX_BACKOFF);
+                    tracing::warn!("Failed to connect to server, retrying in {backoff:?} seconds");
                     ConnectionState::Disconnected(backoff)
                 }
             };

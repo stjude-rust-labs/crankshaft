@@ -39,8 +39,8 @@ pub(crate) fn render_resource(frame: &mut Frame<'_>, resource_state: &ResourceSt
     let row = [
         Cell::from(format!("{:.2} cores", r.cpu)),
         Cell::from(format!("{:.2} cores", r.max_cpu)),
-        Cell::from(format!("{:.2} GB", memory)),
-        Cell::from(format!("{:.2} GB", max_memory)),
+        Cell::from(format!("{memory:.2} GB")),
+        Cell::from(format!("{max_memory:.2} GB")),
         Cell::from(r.nodes.to_string()),
     ];
     let rows = [Row::new(row).height(1)];

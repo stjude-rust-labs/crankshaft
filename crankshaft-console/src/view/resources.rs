@@ -22,7 +22,7 @@ pub(crate) fn render_resource(frame: &mut Frame<'_>, resource_state: &ResourceSt
         .constraints([Constraint::Min(0)])
         .split(frame.size());
 
-    let headers = ["Task ID", "CPU", "Max CPU", "Memory", "Max Memory", "Nodes"]
+    let headers = ["CPU", "Max CPU", "Memory", "Max Memory", "Nodes"]
         .iter()
         .map(|h| {
             Cell::from(*h).style(
@@ -34,11 +34,13 @@ pub(crate) fn render_resource(frame: &mut Frame<'_>, resource_state: &ResourceSt
     let header = Row::new(headers).height(1).bottom_margin(1);
 
     let r = resource_state.resources();
+    let memory = r.memory / (1024.0 * 1024.0 * 1024.0);
+    let max_memory = r.max_memory / (1024.0 * 1024.0 * 1024.0);
     let row = [
-        Cell::from(r.cpu.to_string()),
-        Cell::from(r.max_cpu.to_string()),
-        Cell::from(r.memory.to_string()),
-        Cell::from(r.max_memory.to_string()),
+        Cell::from(format!("{:.2} cores", r.cpu)),
+        Cell::from(format!("{:.2} cores", r.max_cpu)),
+        Cell::from(format!("{:.2} GB", memory)),
+        Cell::from(format!("{:.2} GB", max_memory)),
         Cell::from(r.nodes.to_string()),
     ];
     let rows = [Row::new(row).height(1)];

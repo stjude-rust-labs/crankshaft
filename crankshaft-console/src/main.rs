@@ -32,6 +32,7 @@ use crate::view::bold;
 /// The main function.
 #[tokio::main]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
     let (mut terminal, _cleanup) = init_crossterm().context("failed to initialize terminal")?;
     let mut conn = Connection::new(Uri::from_static("http://localhost:8080"));
     let mut state = State::default();

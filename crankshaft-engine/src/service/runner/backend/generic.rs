@@ -18,6 +18,7 @@ use regex::Regex;
 use tokio::select;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
+use tracing::trace;
 use tracing::warn;
 
 use super::TaskRunError;
@@ -219,8 +220,32 @@ impl crate::Backend for Backend {
                             }
 
                             let output = result?;
-                            if !output.status.success() {
-                                statuses.push(output.status);
+                            if output.status.success() {
+                                let get_exit_code = config
+                                    .resolve_get_exit_code(&substitutions)
+                                    .context("failed to resolve get_exit_code command")?;
+                                let get_exit_code_out = driver
+                                    .run(get_exit_code)
+                                    .await
+                                    .context("failed to run get_exit_code command")?;
+                                let get_exit_code_stdout =
+                                    String::from_utf8(get_exit_code_out.stdout)
+                                        .context("exit code output was not valid UTF-8")?
+                                        .trim()
+                                        .to_owned();
+                                trace!(get_exit_code_stdout);
+                                cfg_if::cfg_if! {
+                                    if #[cfg(unix)] {
+                                        use std::os::unix::process::ExitStatusExt;
+                                        let job_status = ExitStatus::from_raw(
+                                            get_exit_code_stdout.parse::<i32>()
+                                                .context("exit code output was not a valid i32")? << 8
+                                        );
+                                    } else {
+                                        compile_error!("unsupported platform")
+                                    }
+                                }
+                                statuses.push(job_status);
                                 break;
                             }
 

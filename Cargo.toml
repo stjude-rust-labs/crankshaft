@@ -23,6 +23,7 @@ async-trait = "0.1.88"
 base64 = "0.22"
 bollard = "0.19.0"
 bon = "3.6.3"
+cfg-if = "^1.0.1"
 clap = { version = "4.5.39", features = ["derive"] }
 clap-verbosity-flag = "3.0.3"
 config = "0.15.11"

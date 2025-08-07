@@ -74,11 +74,23 @@ pub struct Config {
     job_id_regex: Option<String>,
 
     /// The script used to monitor a submitted job.
+    ///
+    /// The exit code of this script should be `0` (success) while the job is
+    /// running, and nonzero once the job is no longer running.
     #[builder(into)]
     monitor: String,
 
     /// The frequency in seconds that the job status will be queried.
     monitor_frequency: Option<u64>,
+
+    /// The script used to get the exit code of a completed job after the
+    /// `monitor` script returns successfully.
+    ///
+    /// This script should write the job's exit code as a decimal integer to
+    /// `stdout`, and then exit. The exit code should be `0` (success)
+    /// unless the exit code cannot be determined.
+    #[builder(into)]
+    get_exit_code: String,
 
     /// The script used to kill a job.
     #[builder(into)]
@@ -178,6 +190,14 @@ impl Config {
         substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
     ) -> ResolveResult {
         self.resolve(&self.monitor, substitutions)
+    }
+
+    /// Gets the `get_exit_code` command with all of the substitutions resolved.
+    pub fn resolve_get_exit_code(
+        &self,
+        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+    ) -> ResolveResult {
+        self.resolve(&self.get_exit_code, substitutions)
     }
 
     /// Gets the kill command with all of the substitutions resolved.

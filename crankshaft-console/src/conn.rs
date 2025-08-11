@@ -97,6 +97,9 @@ impl Connection {
                     match update_stream.next().await {
                         Some(Ok(update)) => return update,
                         Some(Err(_status)) => {
+                            tracing::warn!(
+                                "Failed to connect to server, retrying in {BACKOFF:?} seconds"
+                            );
                             self.state = ConnectionState::Disconnected(BACKOFF);
                         }
                         None => {

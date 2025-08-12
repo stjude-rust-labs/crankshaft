@@ -176,6 +176,11 @@ impl Config {
         &self.attributes
     }
 
+    /// Gets a mutable reference to the runtime attributes.
+    pub fn attributes_mut(&mut self) -> &mut HashMap<Cow<'static, str>, Cow<'static, str>> {
+        &mut self.attributes
+    }
+
     /// Gets the submit command with all of the substitutions resolved.
     pub fn resolve_submit(
         &self,

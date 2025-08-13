@@ -184,6 +184,7 @@ impl crate::Backend for Backend {
                 // Monitoring the output.
                 match job_id_regex {
                     Some(ref regex) => {
+                        trace!(regex = regex.as_str(), "looking for job_id with regex");
                         let stdout = String::from_utf8_lossy(&output.stdout);
                         let captures = regex.captures_iter(&stdout).next().unwrap_or_else(|| {
                             panic!(
@@ -195,6 +196,7 @@ impl crate::Backend for Backend {
                         // SAFETY: this will always unwrap, as the group is
                         // _required_ for the pattern to match.
                         let id = captures.get(1).map(|c| c.as_str()).unwrap();
+                        trace!(id, "job_id found");
                         substitutions.insert("job_id".into(), id.into());
 
                         loop {

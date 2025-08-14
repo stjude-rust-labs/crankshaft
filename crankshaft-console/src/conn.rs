@@ -96,9 +96,10 @@ impl Connection {
                 ConnectionState::Connected { update_stream, .. } => {
                     match update_stream.next().await {
                         Some(Ok(update)) => return update,
-                        Some(Err(_status)) => {
+                        Some(Err(status)) => {
                             tracing::warn!(
-                                "Failed to connect to server, retrying in {BACKOFF:?} seconds"
+                                "Failed to receive update from server: {status:?}. Retrying in \
+                                 {BACKOFF:?} seconds"
                             );
                             self.state = ConnectionState::Disconnected(BACKOFF);
                         }

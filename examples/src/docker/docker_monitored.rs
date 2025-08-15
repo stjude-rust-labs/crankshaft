@@ -44,7 +44,7 @@ pub struct Args {
     max_tasks: usize,
 
     /// The number of jobs to submit in total.
-    #[arg(short, long, default_value_t = 1)]
+    #[arg(short, long, default_value_t = 10)]
     n_jobs: usize,
 }
 
@@ -76,7 +76,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                 .program("sh")
                 .args([
                     String::from("-c"),
-                    String::from("for i in $(seq 10); do echo hello_world; sleep 1; done"),
+                    String::from("for i in $(seq 100); do echo hello_world; sleep 1; done"),
                 ])
                 .stdout("/stdout")
                 .stderr("/stderr")
@@ -185,7 +185,7 @@ fn start_polling() {
         let mut stream = response;
         while let Some(event) = stream.next().await {
             match event {
-                Ok(ev) => println!("[task_id={}] {}", ev.task_id, ev.message),
+                Ok(ev) => println!("[task_id={}]", ev.event_id),
                 Err(e) => {
                     eprintln!("Error receiving event: {e:#}");
                     break;

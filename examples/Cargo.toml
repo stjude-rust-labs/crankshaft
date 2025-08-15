@@ -27,6 +27,7 @@ tracing-subscriber.workspace = true
 url.workspace = true
 indicatif.workspace = true
 futures.workspace = true
+rand.workspace = true
 
 [[bin]]
 name = "docker"
@@ -43,6 +44,10 @@ path = "src/lsf/main.rs"
 [[bin]]
 name = "tes"
 path = "src/tes/main.rs"
+
+[[bin]]
+name = "local_example"
+path = "src/local_example/local_example.rs"
 
 [lints]
 workspace = true

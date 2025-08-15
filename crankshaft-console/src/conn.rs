@@ -80,9 +80,11 @@ impl Connection {
             };
             self.state = match try_connect.await {
                 Ok(connected) => connected,
-                Err(_error) => {
+                Err(error) => {
                     let backoff = std::cmp::max(backoff + BACKOFF, MAX_BACKOFF);
-                    tracing::warn!("Failed to connect to server, retrying in {backoff:?} seconds");
+                    tracing::warn!(
+                        "failed to connect to server: {error} (retrying in {backoff:?} seconds)"
+                    );
                     ConnectionState::Disconnected(backoff)
                 }
             };

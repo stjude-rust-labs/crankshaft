@@ -125,14 +125,17 @@ async fn test_subscribe_events_streams_all_task_events() {
 #[tokio::test]
 async fn test_get_server_state() {
     // Arrange: Set up the server state
-    let mut state = ServerState::default();
-    state.resources = crankshaft_monitor::server::Resource {
-        nodes: 1.0,
-        cpu: 50.0,
-        memory: 1024.0,
-        max_cpu: 100.0,
-        max_memory: 2048.0,
+    let mut state = ServerState {
+        resources: crankshaft_monitor::server::Resource {
+            nodes: 1.0,
+            cpu: 50.0,
+            memory: 1024.0,
+            max_cpu: 100.0,
+            max_memory: 2048.0,
+        },
+        ..Default::default()
     };
+
     state
         .tasks
         .insert("task1".to_string(), EventType::TaskStarted as i32);

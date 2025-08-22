@@ -3,6 +3,7 @@
 //! Generic backends are intended to be relatively malleable and configurable by
 //! the end user without requiring the need to write Rust code.
 
+use std::borrow::Cow;
 use std::process::ExitStatus;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,6 +12,7 @@ use anyhow::Context as _;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
+use crankshaft_config::backend::generic::SubValue;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -108,10 +110,43 @@ impl crate::Backend for Backend {
         let driver = self.driver.clone();
         let config = self.config.clone();
 
-        let default_substitutions = self
+        let mut default_substitutions = self
             .resolve_resources(task.resources.as_ref())
             .map(|resources| resources.to_hashmap())
             .unwrap_or_default();
+        for input in task.inputs() {
+            let inputs = default_substitutions
+                .entry(Cow::Borrowed("inputs"))
+                .or_insert_with(|| SubValue::Array(vec![]))
+                .as_array_mut()
+                .expect("inputs array was not an array");
+            let host_path = match input.contents() {
+                crate::task::input::Contents::Url(_) => unimplemented!(),
+                crate::task::input::Contents::Literal(_) => unimplemented!(),
+                crate::task::input::Contents::Path(path) => path.display().to_string(),
+            };
+            let pair = serde_json::json!({
+                "host_path": host_path,
+                "guest_path": input.path()
+            });
+            inputs.push(pair);
+        }
+        for output in task.outputs() {
+            let outputs = default_substitutions
+                .entry(Cow::Borrowed("outputs"))
+                .or_insert_with(|| SubValue::Array(vec![]))
+                .as_array_mut()
+                .expect("outputs array was not an array");
+            if output.url().scheme() != "file" {
+                unimplemented!("non-file outputs unsupported");
+            };
+            let host_path = output.url().to_file_path().expect("failed to make output url into a path");
+            let pair = serde_json::json!({
+                "host_path": host_path,
+                "guest_path": output.path()
+            });
+            outputs.push(pair);
+        }
 
         Ok(async move {
             let mut statuses = Vec::new();
@@ -156,7 +191,7 @@ impl crate::Backend for Backend {
                 };
 
                 if let Some(cwd) = &execution.work_dir {
-                    if substitutions.insert("cwd".into(), cwd.into()).is_some() {
+                    if substitutions.insert("cwd".into(), cwd.as_str().into()).is_some() {
                         unreachable!("the `cwd` key should not be present here");
                     };
                 }

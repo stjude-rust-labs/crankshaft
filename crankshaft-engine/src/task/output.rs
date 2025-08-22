@@ -49,9 +49,14 @@ impl Output {
         self.description.as_deref()
     }
 
-    /// The URL to place the file when the task completes.
-    pub fn url(&self) -> &str {
+    /// The URL to place the file when the task completes, as a string.
+    pub fn url_str(&self) -> &str {
         self.url.as_ref()
+    }
+
+    /// The URL to place the file when the task completes.
+    pub fn url(&self) -> &Url {
+        &self.url
     }
 
     /// The path to the file within the container.

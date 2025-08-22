@@ -41,11 +41,15 @@ static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"~\{([^}]*)\}").unwrap()
 });
 
+pub type SubValue = serde_json::Value;
+
 /// Replaces placeholders within a generic configuration value.
-pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, Cow<'_, str>>) -> String {
-    trace!(input);
-    Handlebars::new()
-        .render_template(input, replacements)
+pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, SubValue>) -> String {
+    trace!(input, replacements = ?replacements);
+    let mut handlebars = Handlebars::new();
+    handlebars.set_strict_mode(true);
+    handlebars
+        .render_template(input, &replacements)
         .unwrap_or_else(|e| {
             eprintln!("{e}");
             panic!("handlebars rendering failed: {e}")
@@ -96,7 +100,7 @@ pub struct Config {
     /// The runtime attributes.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     #[builder(into, default)]
-    attributes: HashMap<Cow<'static, str>, Cow<'static, str>>,
+    attributes: HashMap<Cow<'static, str>, SubValue>,
 }
 
 impl Config {
@@ -117,11 +121,11 @@ impl Config {
     fn resolve(
         &self,
         command: &str,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+        substitutions: &HashMap<Cow<'_, str>, SubValue>,
     ) -> ResolveResult {
-        // TODO ACF 2025-08-22: clean up unnecessary cloning here; temporary hacks required to only
-        // call `substitute` once
-        let substitutions = if !self.attributes.is_empty() {
+        // TODO ACF 2025-08-22: clean up unnecessary cloning here; temporary hacks
+        // required to only call `substitute` once
+        let substitutions = if self.attributes.is_empty() {
             Cow::Borrowed(substitutions)
         } else {
             let mut combined = substitutions.clone();
@@ -174,27 +178,24 @@ impl Config {
     }
 
     /// Gets the runtime attributes.
-    pub fn attributes(&self) -> &HashMap<Cow<'static, str>, Cow<'static, str>> {
+    pub fn attributes(&self) -> &HashMap<Cow<'static, str>, SubValue> {
         &self.attributes
     }
 
     /// Gets a mutable reference to the runtime attributes.
-    pub fn attributes_mut(&mut self) -> &mut HashMap<Cow<'static, str>, Cow<'static, str>> {
+    pub fn attributes_mut(&mut self) -> &mut HashMap<Cow<'static, str>, SubValue> {
         &mut self.attributes
     }
 
     /// Gets the submit command with all of the substitutions resolved.
-    pub fn resolve_submit(
-        &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
-    ) -> ResolveResult {
+    pub fn resolve_submit(&self, substitutions: &HashMap<Cow<'_, str>, SubValue>) -> ResolveResult {
         self.resolve(&self.submit, substitutions)
     }
 
     /// Gets the monitor command with all of the substitutions resolved.
     pub fn resolve_monitor(
         &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+        substitutions: &HashMap<Cow<'_, str>, SubValue>,
     ) -> ResolveResult {
         self.resolve(&self.monitor, substitutions)
     }
@@ -202,16 +203,13 @@ impl Config {
     /// Gets the `get_exit_code` command with all of the substitutions resolved.
     pub fn resolve_get_exit_code(
         &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+        substitutions: &HashMap<Cow<'_, str>, SubValue>,
     ) -> ResolveResult {
         self.resolve(&self.get_exit_code, substitutions)
     }
 
     /// Gets the kill command with all of the substitutions resolved.
-    pub fn resolve_kill(
-        &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
-    ) -> ResolveResult {
+    pub fn resolve_kill(&self, substitutions: &HashMap<Cow<'_, str>, SubValue>) -> ResolveResult {
         self.resolve(&self.kill, substitutions)
     }
 }

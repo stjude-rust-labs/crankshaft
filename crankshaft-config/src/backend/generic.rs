@@ -6,11 +6,13 @@ use std::sync::LazyLock;
 
 use bon::Builder;
 use bon::builder;
+use handlebars::Handlebars;
 use regex::Captures;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+use tracing::trace;
 
 pub mod driver;
 
@@ -41,18 +43,13 @@ static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 
 /// Replaces placeholders within a generic configuration value.
 pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, Cow<'_, str>>) -> String {
-    PLACEHOLDER_REGEX
-        .replace_all(input, |captures: &Captures<'_>| {
-            // SAFETY: the `PLACEHOLDER_REGEX` above is hardcoded to ensure a group
-            // is included. This is tested statically below.
-            let key = &captures.get(1).unwrap();
-
-            replacements
-                .get(key.as_str())
-                .map(|r| r.as_ref().to_string())
-                .unwrap_or_else(|| format!("~{{{key}}}", key = key.as_str()))
+    trace!(input);
+    Handlebars::new()
+        .render_template(input, replacements)
+        .unwrap_or_else(|e| {
+            eprintln!("{e}");
+            panic!("handlebars rendering failed: {e}")
         })
-        .to_string()
 }
 
 /// A configuration object for a generic execution backend.
@@ -122,11 +119,16 @@ impl Config {
         command: &str,
         substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
     ) -> ResolveResult {
-        let mut result = substitute(command, substitutions);
-
-        if !self.attributes.is_empty() {
-            result = substitute(&result, &self.attributes);
-        }
+        // TODO ACF 2025-08-22: clean up unnecessary cloning here; temporary hacks required to only
+        // call `substitute` once
+        let substitutions = if !self.attributes.is_empty() {
+            Cow::Borrowed(substitutions)
+        } else {
+            let mut combined = substitutions.clone();
+            combined.extend(self.attributes.clone());
+            Cow::Owned(combined)
+        };
+        let result = substitute(command, substitutions.as_ref());
 
         // NOTE: this is just to help clean up some of the output. The intention
         // is to remove line breaks and multiple spaces that make it easier to

@@ -14,9 +14,11 @@ base64.workspace = true
 bon.workspace = true
 config.workspace = true
 dirs.workspace = true
+handlebars.workspace = true
 regex.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 url.workspace = true
 
 [lints]

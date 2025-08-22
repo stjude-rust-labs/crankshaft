@@ -30,6 +30,7 @@ config = "0.15.11"
 dirs = "6.0.0"
 futures = "0.3.31"
 growable-bloom-filter = "2.1.1"
+handlebars = "^6.3.2"
 indexmap = { version = "2.9.0", features = ["serde"] }
 indicatif = "0.17.11"
 nonempty = "0.11.0"

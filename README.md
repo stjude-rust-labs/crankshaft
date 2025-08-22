@@ -80,7 +80,9 @@ Once you've added `crankshaft` to your dependencies, you should head over to the
 
 ### Prerequisites
 
-A protobuf compiler is required to build Crankshaft. Please follow the [installation guide](https://protobuf.dev/installation/) to install the compiler.
+A protobuf compiler is required to build Crankshaft with the `monitoring` 
+feature enabled. Please follow the [installation guide](https://protobuf.dev/installation/)
+to install the compiler.
 
 ### Building
 

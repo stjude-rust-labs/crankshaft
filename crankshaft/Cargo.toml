@@ -9,14 +9,15 @@ homepage.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-[dependencies]
-crankshaft-config = { path = "../crankshaft-config", version = "0.3.0" }
-crankshaft-engine = { path = "../crankshaft-engine", version = "0.4.0" }
-
 [features]
 default = ["config", "engine"]
-config = []
-engine = []
+config = ["dep:crankshaft-config"]
+engine = ["dep:crankshaft-engine"]
+monitoring = ["dep:crankshaft-engine", "crankshaft-engine/monitoring"]
+
+[dependencies]
+crankshaft-config = { path = "../crankshaft-config", version = "0.3.0", optional = true }
+crankshaft-engine = { path = "../crankshaft-engine", version = "0.4.0", optional = true }
 
 [lints]
 workspace = true

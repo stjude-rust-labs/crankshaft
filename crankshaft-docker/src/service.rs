@@ -21,9 +21,8 @@ use bollard::secret::TaskState;
 mod builder;
 
 pub use builder::Builder;
-use crankshaft_monitor::proto::Event;
-use crankshaft_monitor::proto::EventType;
-use crankshaft_monitor::send_event;
+use crankshaft_events::Event;
+use crankshaft_events::send_event;
 use futures::StreamExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -51,7 +50,7 @@ pub struct Service {
     client: Docker,
 
     /// The name of the service.
-    id: String,
+    name: String,
 
     /// The path to the file to write the container's stdout stream to.
     stdout: Option<PathBuf>,
@@ -67,23 +66,30 @@ impl Service {
     /// name externally from a user (say, on the command line as an argument).
     pub fn new(
         client: Docker,
-        id: String,
+        name: String,
         stdout: Option<PathBuf>,
         stderr: Option<PathBuf>,
     ) -> Self {
         Self {
             client,
-            id,
+            name,
             stdout,
             stderr,
         }
     }
 
+    /// Gets the name of the service.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// Runs a service and waits for the task execution to end.
     pub async fn run(
         &self,
-        name: &str,
-        event_sender: Option<broadcast::Sender<Event>>,
+        task_id: u64,
+        task_name: &str,
+        events: Option<broadcast::Sender<Event>>,
+        send_start_event: bool,
     ) -> Result<ExitStatus> {
         let mut stdout = match &self.stdout {
             Some(path) => Some(File::create(path).await.map_err(|e| {
@@ -104,10 +110,11 @@ impl Service {
             })?),
             None => None,
         };
-        let (_container_id, exit_code) = loop {
+
+        let (container_id, exit_code) = loop {
             trace!(
-                "polling tasks for service `{id}` (task `{name}`)",
-                id = self.id
+                "polling tasks for service `{name}` (task `{task_name}`)",
+                name = self.name
             );
 
             // Get the list of tasks for the service (there should be only one)
@@ -116,7 +123,7 @@ impl Service {
                 .list_tasks(Some(ListTasksOptions {
                     filters: Some(HashMap::from_iter([(
                         String::from("service"),
-                        vec![self.id.to_owned()],
+                        vec![self.name.to_owned()],
                     )])),
                 }))
                 .await
@@ -136,7 +143,6 @@ impl Service {
 
             let task = tasks.into_iter().next().unwrap();
 
-            let task_id = task.id.expect("task should have and id");
             let status = task
                 .status
                 .expect("Docker daemon reported a task with no status");
@@ -151,19 +157,8 @@ impl Service {
                 | Some(TaskState::PREPARING)
                 | None => {
                     trace!(
-                        "task has not yet started for service `{id}` (task `{name}`)",
-                        id = self.id
-                    );
-
-                    send_event!(
-                        &event_sender,
-                        &task_id,
-                        EventType::Unspecified,
-                        format!(
-                            "Docker task `{id}` is in the `{state}` state and has not yet started",
-                            id = self.id,
-                            state = status.state.unwrap_or(TaskState::NEW)
-                        )
+                        "task has not yet started for service `{name}` (task `{task_name}`)",
+                        name = self.name
                     );
 
                     // Query again after a delay
@@ -181,6 +176,14 @@ impl Service {
                         .container_id
                         .expect("Docker reported a starting or running task with no container id");
 
+                    send_event!(
+                        events,
+                        Event::TaskContainerCreated {
+                            id: task_id,
+                            container: container_id.clone()
+                        }
+                    );
+
                     let mut logs = self
                         .client
                         .attach_container(
@@ -195,31 +198,19 @@ impl Service {
                         .output;
 
                     info!(
-                        "service `{id}` (task `{name}`) has started container `{container_id}",
-                        id = self.id
+                        "service `{name}` (task `{task_name}`) has started container \
+                         `{container_id}",
+                        name = self.name
                     );
 
-                    send_event!(
-                        &event_sender,
-                        &task_id,
-                        EventType::TaskStarted,
-                        "Service `{id}` (task `{name}`) has started container `{container_id}`",
-                        id = self.id,
-                        container_id = container_id
-                    );
+                    if send_start_event {
+                        send_event!(events, Event::TaskStarted { id: task_id });
+                    }
 
                     while let Some(result) = logs.next().await {
                         let output = result.map_err(Error::Docker)?;
                         match output {
                             LogOutput::StdOut { message } => {
-                                send_event!(
-                                    &event_sender,
-                                    &task_id,
-                                    EventType::TaskLogs,
-                                    std::str::from_utf8(&message)
-                                        .expect("Invalid UTF-8")
-                                        .to_string(),
-                                );
                                 if let Some(stdout) = stdout.as_mut() {
                                     stdout.write(&message).await.map_err(|e| {
                                         Error::Message(format!(
@@ -228,16 +219,16 @@ impl Service {
                                         ))
                                     })?;
                                 }
+
+                                send_event!(
+                                    events,
+                                    Event::TaskStdout {
+                                        id: task_id,
+                                        message
+                                    }
+                                );
                             }
                             LogOutput::StdErr { message } => {
-                                send_event!(
-                                    &event_sender,
-                                    &task_id,
-                                    EventType::TaskLogs,
-                                    std::str::from_utf8(&message)
-                                        .expect("Invalid UTF-8")
-                                        .to_string(),
-                                );
                                 if let Some(stderr) = stderr.as_mut() {
                                     stderr.write(&message).await.map_err(|e| {
                                         Error::Message(format!(
@@ -246,6 +237,14 @@ impl Service {
                                         ))
                                     })?;
                                 }
+
+                                send_event!(
+                                    events,
+                                    Event::TaskStderr {
+                                        id: task_id,
+                                        message
+                                    }
+                                );
                             }
                             _ => {}
                         }
@@ -301,21 +300,6 @@ impl Service {
                         .container_id
                         .expect("Docker reported a completed task with no container id");
 
-                    info!(
-                        "container `{container_id}` for service `{id}` (task `{name}`) has \
-                         completed",
-                        id = self.id
-                    );
-
-                    send_event!(
-                        &event_sender,
-                        &task_id,
-                        EventType::TaskCompleted,
-                        "container `{container_id}` for service `{id}` (task `{name}`) has \
-                         completed",
-                        id = self.id
-                    );
-
                     break (
                         container_id,
                         // Use the exit code already provided to us
@@ -329,19 +313,6 @@ impl Service {
                 | Some(TaskState::REJECTED)
                 | Some(TaskState::ORPHANED)
                 | Some(TaskState::REMOVE) => {
-                    send_event!(
-                        &event_sender,
-                        &task_id,
-                        EventType::TaskFailed,
-                        "Docker task failed: {msg}",
-                        msg = status
-                            .err
-                            .as_deref()
-                            .or(status.message.as_deref())
-                            .unwrap_or("no error message was provided by the Docker daemon")
-                    );
-
-                    // Handle the failure
                     return Err(Error::Message(format!(
                         "Docker task failed: {msg}",
                         msg = status
@@ -361,14 +332,29 @@ impl Service {
         #[cfg(windows)]
         let status = ExitStatus::from_raw(exit_code as u32);
 
+        info!(
+            "container `{container_id}` for service `{name}` (task `{task_name}`) has exited with \
+             {status}",
+            name = self.name
+        );
+
+        send_event!(
+            events,
+            Event::TaskContainerExited {
+                id: task_id,
+                container: container_id,
+                exit_status: status,
+            }
+        );
+
         Ok(status)
     }
 
     /// Deletes a service.
     pub async fn delete(&self) -> Result<()> {
-        debug!("deleting Docker service `{id}`", id = self.id);
+        debug!("deleting Docker service `{name}`", name = self.name);
         self.client
-            .delete_service(&self.id)
+            .delete_service(&self.name)
             .await
             .map_err(Error::Docker)?;
 

@@ -7,7 +7,6 @@ use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::CreateContainerOptions;
 use bollard::secret::HostConfig;
 use indexmap::IndexMap;
-use tracing::info;
 use tracing::warn;
 
 use crate::Container;
@@ -169,17 +168,15 @@ impl Builder {
             .await
             .map_err(Error::Docker)?;
 
-        info!("created container `{id}` (task `{name}`)", id = response.id);
-
         for warning in &response.warnings {
             warn!("{warning}");
         }
 
-        Ok(Container {
-            client: self.client,
-            id: response.id,
-            stdout: self.stdout,
-            stderr: self.stderr,
-        })
+        Ok(Container::new(
+            self.client,
+            response.id,
+            self.stdout,
+            self.stderr,
+        ))
     }
 }

@@ -1,279 +1,202 @@
 //! Tests for the gRPC server are written here
-use std::net::SocketAddr;
-use std::sync::Arc;
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt as _;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt as _;
+use std::process::ExitStatus;
+use std::time::Duration;
 
-use crankshaft_monitor::proto::Event;
-use crankshaft_monitor::proto::EventType;
-use crankshaft_monitor::proto::GetServerStateRequest;
-use crankshaft_monitor::proto::Resources;
+use crankshaft_events::Event as CrankshaftEvent;
+use crankshaft_monitor::Monitor;
+use crankshaft_monitor::proto::ServiceStateRequest;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
-use crankshaft_monitor::proto::event::Payload::Message;
-use crankshaft_monitor::proto::event::Payload::Resources as ResourcesPayload;
+use crankshaft_monitor::proto::event::EventKind;
+use crankshaft_monitor::proto::exit_status::ExitStatusKind;
 use crankshaft_monitor::proto::monitor_client::MonitorClient;
-use crankshaft_monitor::proto::monitor_server::Monitor;
-use crankshaft_monitor::server::MonitorService;
-use crankshaft_monitor::server::ServerState;
-use crankshaft_monitor::start_monitoring;
 use futures_util::StreamExt;
-use tokio::sync::RwLock;
+use nonempty::NonEmpty;
 use tokio::sync::broadcast;
-use tokio::time::Duration;
-use tokio::time::timeout;
-use tonic::Request;
+use tokio::time::sleep;
 
 #[tokio::test]
-async fn test_subscribe_events_streams_all_task_events() {
-    // Set up a broadcast channel
-    let (tx, rx) = broadcast::channel::<Event>(16);
-    let state = Arc::new(RwLock::new(ServerState::default()));
-    // create a new server instance
-    let service = MonitorService::new(rx, state.clone());
+async fn test_subscribe_events() {
+    let (tx, rx) = broadcast::channel(16);
 
-    // Create test events for different tasks
-    let event1 = Event {
-        event_id: "t1".to_string(),
-        event_type: EventType::TaskStarted as i32,
-        timestamp: 1625234567,
-        payload: Some(Message("Task t1 started".to_string())),
-    };
-    let event2 = Event {
-        event_id: "t2".to_string(),
-        event_type: EventType::TaskCompleted as i32,
-        timestamp: 1625234568,
-        payload: Some(Message("Task t2 completed".to_string())),
-    };
-    let event3 = Event {
-        event_id: "resource_update".to_string(),
-        event_type: EventType::ContainerStarted as i32,
-        timestamp: 1625234569,
-        payload: Some(ResourcesPayload(Resources {
-            nodes: 2.0,
-            cpu: 75.0,
-            memory: 2048.0,
-            max_cpu: 150.0,
-            max_memory: 4096.0,
-        })),
-    };
-    // wrap it in Request
-    let request = Request::new(SubscribeEventsRequest {});
+    let monitor = Monitor::start("127.0.0.1:32000".parse().unwrap(), rx);
 
-    // we need to have a subscriber to even send a message in broadcast channel
-    let response = service
-        .subscribe_events(request)
+    // Sleep to allow the server to start
+    // TODO: make this more robust
+    sleep(Duration::from_secs(1)).await;
+
+    let mut client = MonitorClient::connect("http://127.0.0.1:32000")
         .await
-        .expect("Stream failed");
-    let mut stream = response.into_inner();
-
-    // Send events after subscription
-    tx.send(event1.clone()).expect("Failed to send event1");
-    tx.send(event2.clone()).expect("Failed to send event2");
-    tx.send(event3.clone()).expect("Failed to send event3");
-
-    // Check the first event
-    let received1 = timeout(Duration::from_secs(1), stream.next())
+        .expect("failed to connect to monitor");
+    let mut events = client
+        .subscribe_events(SubscribeEventsRequest {})
         .await
-        .expect("Timeout waiting for event")
-        .expect("No event received");
+        .expect("failed to subscribe to events")
+        .into_inner();
 
-    let received_event1 = received1.expect("Error in stream");
-    assert_eq!(received_event1.event_id, "t1");
-    assert_eq!(received_event1.event_type, EventType::TaskStarted as i32);
-    assert_eq!(
-        received_event1.payload,
-        Some(Message("Task t1 started".to_string()))
-    );
+    // Send some dummy events at the start
+    tx.send(CrankshaftEvent::TaskCreated {
+        id: 0,
+        name: "first".into(),
+        tes_id: None,
+    })
+    .ok();
+    tx.send(CrankshaftEvent::TaskStarted { id: 0 }).ok();
+    tx.send(CrankshaftEvent::TaskCompleted {
+        id: 0,
+        exit_statuses: NonEmpty::new(ExitStatus::from_raw(0)),
+    })
+    .ok();
+    tx.send(CrankshaftEvent::TaskCreated {
+        id: 1,
+        name: "second".into(),
+        tes_id: Some("tes".into()),
+    })
+    .ok();
+    tx.send(CrankshaftEvent::TaskStarted { id: 1 }).ok();
 
-    // Check the second event
-    let received2 = timeout(Duration::from_secs(1), stream.next())
+    // Read the events back from the client
+    let event = events
+        .next()
         .await
-        .expect("Timeout waiting for event")
-        .expect("No event received");
+        .expect("failed to read event")
+        .expect("failed to read event");
+    match event.event_kind {
+        Some(EventKind::Created(event)) => {
+            assert_eq!(event.id, 0);
+            assert_eq!(event.name, "first");
+            assert!(event.tes_id.is_none());
+        }
+        _ => panic!("unexpected event"),
+    }
 
-    let received_event2 = received2.expect("Error in stream");
-    assert_eq!(received_event2.event_id, "t2");
-    assert_eq!(received_event2.event_type, EventType::TaskCompleted as i32);
-    assert_eq!(
-        received_event2.payload,
-        Some(Message("Task t2 completed".to_string()))
-    );
-
-    // Check the third event
-    let received3 = timeout(Duration::from_secs(1), stream.next())
+    let event = events
+        .next()
         .await
-        .expect("Timeout waiting for event")
-        .expect("No event received");
+        .expect("failed to read event")
+        .expect("failed to read event");
+    match event.event_kind {
+        Some(EventKind::Started(event)) => {
+            assert_eq!(event.id, 0);
+        }
+        _ => panic!("unexpected event"),
+    }
 
-    let received_event3 = received3.expect("Error in stream");
-    assert_eq!(received_event3.event_id, "resource_update");
-    assert_eq!(
-        received_event3.event_type,
-        EventType::ContainerStarted as i32
-    );
+    let event = events
+        .next()
+        .await
+        .expect("failed to read event")
+        .expect("failed to read event");
+    match event.event_kind {
+        Some(EventKind::Completed(event)) => {
+            assert_eq!(event.id, 0);
+            assert_eq!(event.exit_statuses.len(), 1);
+            assert_eq!(
+                event.exit_statuses[0].exit_status_kind,
+                Some(ExitStatusKind::Code(0))
+            );
+        }
+        _ => panic!("unexpected event"),
+    }
 
-    // Assert state changes
-    let s = state.read().await;
-    assert_eq!(s.tasks.get("t1").unwrap(), &(EventType::TaskStarted as i32));
-    assert_eq!(
-        s.tasks.get("t2").unwrap(),
-        &(EventType::TaskCompleted as i32)
-    );
-    assert_eq!(s.resources.nodes, 2.0);
-    assert_eq!(s.resources.cpu, 75.0);
-    assert_eq!(s.resources.memory, 2048.0);
+    let event = events
+        .next()
+        .await
+        .expect("failed to read event")
+        .expect("failed to read event");
+    match event.event_kind {
+        Some(EventKind::Created(event)) => {
+            assert_eq!(event.id, 1);
+            assert_eq!(event.name, "second");
+            assert_eq!(event.tes_id.as_deref(), Some("tes"));
+        }
+        _ => panic!("unexpected event"),
+    }
+
+    let event = events
+        .next()
+        .await
+        .expect("failed to read event")
+        .expect("failed to read event");
+    match event.event_kind {
+        Some(EventKind::Started(event)) => {
+            assert_eq!(event.id, 1);
+        }
+        _ => panic!("unexpected event"),
+    }
+
+    drop(tx);
+    monitor.stop().await;
+    assert!(events.next().await.is_none());
 }
 
 #[tokio::test]
-async fn test_get_server_state() {
-    // Arrange: Set up the server state
-    let mut state = ServerState {
-        resources: crankshaft_monitor::server::Resource {
-            nodes: 1.0,
-            cpu: 50.0,
-            memory: 1024.0,
-            max_cpu: 100.0,
-            max_memory: 2048.0,
-        },
-        ..Default::default()
-    };
+async fn test_service_state() {
+    let (tx, rx) = broadcast::channel(16);
 
-    state
-        .tasks
-        .insert("task1".to_string(), EventType::TaskStarted as i32);
-    let state = Arc::new(RwLock::new(state));
+    // Send some dummy events before the server starts
+    // These events will be persisted in the service state
+    tx.send(CrankshaftEvent::TaskCreated {
+        id: 0,
+        name: "first".into(),
+        tes_id: None,
+    })
+    .ok();
+    tx.send(CrankshaftEvent::TaskStarted { id: 0 }).ok();
+    tx.send(CrankshaftEvent::TaskCompleted {
+        id: 0,
+        exit_statuses: NonEmpty::new(ExitStatus::from_raw(0)),
+    })
+    .ok();
+    tx.send(CrankshaftEvent::TaskCreated {
+        id: 1,
+        name: "second".into(),
+        tes_id: Some("tes".into()),
+    })
+    .ok();
+    tx.send(CrankshaftEvent::TaskStarted { id: 1 }).ok();
 
-    let (_tx, rx) = broadcast::channel::<Event>(16);
-    let service = MonitorService::new(rx, state.clone());
+    let monitor = Monitor::start("127.0.0.1:32001".parse().unwrap(), rx);
 
-    // Act: Call get_server_state
-    let request = Request::new(GetServerStateRequest {});
-    let response = service
-        .get_server_state(request)
+    // Sleep to allow the server to start
+    // TODO: make this more robust
+    sleep(Duration::from_secs(1)).await;
+
+    let mut client = MonitorClient::connect("http://127.0.0.1:32001")
         .await
-        .expect("get_server_state failed");
+        .expect("failed to connect to monitor");
 
-    // Assert: Check the response
-    let server_state = response.into_inner();
-    assert_eq!(server_state.resources.as_ref().unwrap().nodes, 1.0);
-    assert_eq!(server_state.resources.as_ref().unwrap().cpu, 50.0);
-    assert_eq!(
-        server_state.tasks.get("task1").unwrap(),
-        &(EventType::TaskStarted as i32)
-    );
-}
-
-#[tokio::test]
-async fn test_start_server_and_subscribe_events() {
-    // Arrange: Set up the broadcast channel and start the server
-    let addr = "127.0.0.1:8081"
-        .parse::<SocketAddr>()
-        .expect("Invalid address");
-
-    let (sender, server_handle) = start_monitoring(addr).expect("Failed to start server");
-
-    // we have to introduce a little delay to allow the server to start otherwise
-    // the connection is refused
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Create a gRPC transport channel to connect to the server
-    let channel = tonic::transport::Channel::from_shared(format!("http://{addr}"))
-        .expect("Invalid URI")
-        .connect()
+    let state = client
+        .get_service_state(ServiceStateRequest {})
         .await
-        .expect("Failed to connect");
-
-    let mut client = MonitorClient::new(channel);
-
-    //  request to subscribe to all events
-    let request = Request::new(SubscribeEventsRequest {});
-    let mut stream = client
-        .subscribe_events(request)
-        .await
-        .expect("Failed to start stream")
+        .expect("failed to get service state")
         .into_inner();
 
-    let event1 = Event {
-        event_id: "t1".to_string(),
-        event_type: EventType::TaskStarted as i32,
-        timestamp: 1625234567,
-        payload: Some(Message("Task t1 started".to_string())),
-    };
-    let event2 = Event {
-        event_id: "t2".to_string(),
-        event_type: EventType::TaskFailed as i32,
-        timestamp: 1625234568,
-        payload: Some(Message("Task t2 failed".to_string())),
-    };
-    sender.send(event1.clone()).expect("Failed to send event1");
-    sender.send(event2.clone()).expect("Failed to send event2");
+    // There should be one task in the state because the first task finished
+    assert_eq!(state.tasks.len(), 1);
 
-    let received1 = timeout(Duration::from_secs(1), stream.next())
-        .await
-        .expect("Timeout waiting for event")
-        .expect("No event received");
+    let task = state.tasks.get(&1).expect("should have a task with id 1");
+    assert_eq!(task.events.len(), 2);
 
-    let received_event1 = received1.expect("Error in stream");
-    assert_eq!(received_event1.event_id, "t1");
-    assert_eq!(received_event1.event_type, EventType::TaskStarted as i32);
+    match &task.events[0].event_kind {
+        Some(EventKind::Created(event)) => {
+            assert_eq!(event.id, 1);
+            assert_eq!(event.name, "second");
+            assert_eq!(event.tes_id.as_deref(), Some("tes"));
+        }
+        _ => panic!("unexpected event"),
+    }
 
-    let received2 = timeout(Duration::from_secs(1), stream.next())
-        .await
-        .expect("Timeout waiting for event")
-        .expect("No event received");
+    match &task.events[1].event_kind {
+        Some(EventKind::Started(event)) => {
+            assert_eq!(event.id, 1);
+        }
+        _ => panic!("unexpected event"),
+    }
 
-    let received_event2 = received2.expect("Error in stream");
-    assert_eq!(received_event2.event_id, "t2");
-    assert_eq!(received_event2.event_type, EventType::TaskFailed as i32);
-
-    // Now, let's get server state and verify
-    let state_request = Request::new(GetServerStateRequest {});
-    let state_response = client
-        .get_server_state(state_request)
-        .await
-        .expect("get_server_state failed")
-        .into_inner();
-
-    assert_eq!(
-        state_response.tasks.get("t1").unwrap(),
-        &(EventType::TaskStarted as i32)
-    );
-    assert_eq!(
-        state_response.tasks.get("t2").unwrap(),
-        &(EventType::TaskFailed as i32)
-    );
-
-    // I can also send a resource update event and check that.
-    let resource_event = Event {
-        event_id: "resource_update".to_string(),
-        event_type: EventType::ServiceStarted as i32,
-        timestamp: 1625234569,
-        payload: Some(ResourcesPayload(Resources {
-            nodes: 4.0,
-            cpu: 10.0,
-            memory: 100.0,
-            max_cpu: 20.0,
-            max_memory: 200.0,
-        })),
-    };
-    sender
-        .send(resource_event.clone())
-        .expect("Failed to send resource_event");
-
-    // We need to consume this event from the stream
-    let _received3 = timeout(Duration::from_secs(1), stream.next())
-        .await
-        .expect("Timeout waiting for event")
-        .expect("No event received");
-
-    // Now, get state again
-    let state_request = Request::new(GetServerStateRequest {});
-    let state_response = client
-        .get_server_state(state_request)
-        .await
-        .expect("get_server_state failed")
-        .into_inner();
-
-    assert_eq!(state_response.resources.as_ref().unwrap().nodes, 4.0);
-    assert_eq!(state_response.resources.as_ref().unwrap().cpu, 10.0);
-
-    server_handle.abort();
+    drop(tx);
+    monitor.stop().await;
 }

@@ -13,7 +13,6 @@ use bollard::secret::TaskSpecResources;
 use bollard::secret::TaskSpecRestartPolicy;
 use bollard::secret::TaskSpecRestartPolicyConditionEnum;
 use indexmap::IndexMap;
-use tracing::info;
 use tracing::warn;
 
 use super::Service;
@@ -190,16 +189,13 @@ impl Builder {
             .await
             .map_err(Error::Docker)?;
 
-        let id = response.id.expect("service must have an identifier");
-        info!("created service `{id}` (task `{name}`)");
-
         for warning in response.warnings.unwrap_or_default() {
             warn!("Docker daemon: {warning}");
         }
 
         Ok(Service {
             client: self.client,
-            id,
+            name,
             stdout: self.stdout,
             stderr: self.stderr,
         })

@@ -61,19 +61,29 @@ pub struct Backend {
 }
 
 impl Backend {
-    /// AttemptsCreates a new [`Backend`].
+    /// Creates a new TES [`Backend`].
     ///
     /// # Examples
     ///
     /// ```
+    /// use std::sync::Arc;
+    /// use std::sync::Mutex;
+    ///
     /// use crankshaft_config::backend::tes::Config;
+    /// use crankshaft_engine::service::name::GeneratorIterator;
+    /// use crankshaft_engine::service::name::UniqueAlphanumeric;
     /// use crankshaft_engine::service::runner::backend::tes::Backend;
     /// use url::Url;
     ///
     /// let url = "http://localhost:8000".parse::<Url>()?;
     /// let config = Config::builder().url(url).build();
     ///
-    /// let backend = Backend::initialize(config);
+    /// let names = Arc::new(Mutex::new(GeneratorIterator::new(
+    ///     UniqueAlphanumeric::default_with_expected_generations(4096),
+    ///     4096,
+    /// )));
+    ///
+    /// let backend = Backend::initialize(config, names, None);
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```

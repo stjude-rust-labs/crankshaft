@@ -11,7 +11,6 @@ use clap::Subcommand;
 use clap_verbosity_flag::Verbosity;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
-use crankshaft_events::next_task_id;
 use tracing_log::AsTrace;
 use tracing_subscriber::EnvFilter;
 
@@ -136,7 +135,7 @@ async fn run(args: Args) -> Result<()> {
 
             let container =
                 create_container(docker, image, tag, &name, command.remove(0), args).await?;
-            let status = container.run(next_task_id(), &name, None, true).await?;
+            let status = container.run(&name, None).await?;
 
             println!("exit code: {status}");
         }

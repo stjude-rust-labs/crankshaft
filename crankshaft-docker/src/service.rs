@@ -22,17 +22,16 @@ mod builder;
 
 pub use builder::Builder;
 use crankshaft_events::Event;
-use crankshaft_events::send_event;
 use futures::StreamExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::debug;
 use tracing::info;
 use tracing::trace;
 
 use crate::Error;
+use crate::EventOptions;
 use crate::Result;
 
 /// A docker service.
@@ -84,13 +83,7 @@ impl Service {
     }
 
     /// Runs a service and waits for the task execution to end.
-    pub async fn run(
-        &self,
-        task_id: u64,
-        task_name: &str,
-        events: Option<broadcast::Sender<Event>>,
-        send_start_event: bool,
-    ) -> Result<ExitStatus> {
+    pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
         let mut stdout = match &self.stdout {
             Some(path) => Some(File::create(path).await.map_err(|e| {
                 Error::Message(format!(
@@ -176,13 +169,15 @@ impl Service {
                         .container_id
                         .expect("Docker reported a starting or running task with no container id");
 
-                    send_event!(
-                        events,
-                        Event::TaskContainerCreated {
-                            id: task_id,
-                            container: container_id.clone()
-                        }
-                    );
+                    if let Some(events) = &events {
+                        events
+                            .sender
+                            .send(Event::TaskContainerCreated {
+                                id: events.task_id,
+                                container: container_id.clone(),
+                            })
+                            .ok();
+                    }
 
                     let mut logs = self
                         .client
@@ -203,8 +198,13 @@ impl Service {
                         name = self.name
                     );
 
-                    if send_start_event {
-                        send_event!(events, Event::TaskStarted { id: task_id });
+                    if let Some(events) = &events {
+                        if events.send_start {
+                            events
+                                .sender
+                                .send(Event::TaskStarted { id: events.task_id })
+                                .ok();
+                        }
                     }
 
                     while let Some(result) = logs.next().await {
@@ -220,13 +220,15 @@ impl Service {
                                     })?;
                                 }
 
-                                send_event!(
-                                    events,
-                                    Event::TaskStdout {
-                                        id: task_id,
-                                        message
-                                    }
-                                );
+                                if let Some(events) = &events {
+                                    events
+                                        .sender
+                                        .send(Event::TaskStdout {
+                                            id: events.task_id,
+                                            message,
+                                        })
+                                        .ok();
+                                }
                             }
                             LogOutput::StdErr { message } => {
                                 if let Some(stderr) = stderr.as_mut() {
@@ -238,13 +240,15 @@ impl Service {
                                     })?;
                                 }
 
-                                send_event!(
-                                    events,
-                                    Event::TaskStderr {
-                                        id: task_id,
-                                        message
-                                    }
-                                );
+                                if let Some(events) = &events {
+                                    events
+                                        .sender
+                                        .send(Event::TaskStderr {
+                                            id: events.task_id,
+                                            message,
+                                        })
+                                        .ok();
+                                }
                             }
                             _ => {}
                         }
@@ -338,14 +342,16 @@ impl Service {
             name = self.name
         );
 
-        send_event!(
-            events,
-            Event::TaskContainerExited {
-                id: task_id,
-                container: container_id,
-                exit_status: status,
-            }
-        );
+        if let Some(events) = &events {
+            events
+                .sender
+                .send(Event::TaskContainerExited {
+                    id: events.task_id,
+                    container: container_id,
+                    exit_status: status,
+                })
+                .ok();
+        }
 
         Ok(status)
     }

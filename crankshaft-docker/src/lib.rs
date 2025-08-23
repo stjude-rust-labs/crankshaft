@@ -12,7 +12,9 @@ pub mod service;
 
 use bollard::secret::Node;
 use bollard::secret::SystemInfo;
+use crankshaft_events::Event;
 use thiserror::Error;
+use tokio::sync::broadcast;
 
 pub use crate::container::Container;
 use crate::images::*;
@@ -162,6 +164,17 @@ impl Docker {
     pub async fn info(&self) -> Result<SystemInfo> {
         self.0.info().await.map_err(Into::into)
     }
+}
+
+/// Represents options for sending events.
+#[derive(Debug, Clone)]
+pub struct EventOptions {
+    /// The sender for sending events.
+    pub sender: broadcast::Sender<Event>,
+    /// The task id for the events.
+    pub task_id: u64,
+    /// Whether or not send the task started event.
+    pub send_start: bool,
 }
 
 #[cfg(test)]

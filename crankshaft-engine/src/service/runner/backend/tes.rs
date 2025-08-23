@@ -117,7 +117,7 @@ impl Backend {
     /// Waits for a task to complete.
     async fn wait_task(
         client: &Client,
-        task_id2: u64,
+        task_id: u64,
         task_name: &str,
         tes_id: &str,
         interval: Duration,
@@ -154,7 +154,7 @@ impl Backend {
                     }
                     State::Running | State::Paused => {
                         trace!("TES task `{tes_id}` is running; waiting before polling again");
-                        send_event!(events, Event::TaskStarted { id: task_id2 });
+                        send_event!(events, Event::TaskStarted { id: task_id });
                     }
                     State::Canceling => {
                         // Task is canceling, wait for it to cancel

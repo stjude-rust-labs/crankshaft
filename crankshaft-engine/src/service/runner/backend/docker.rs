@@ -20,6 +20,7 @@ use bollard::secret::NodeState;
 use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
+use crankshaft_docker::EventOptions;
 use crankshaft_docker::service::Service;
 use crankshaft_events::Event;
 use crankshaft_events::next_task_id;
@@ -444,7 +445,7 @@ impl crate::Backend for Backend {
 
                     }).transpose()?;
 
-                    let send_start_event = i == 0;
+                    let options = events.clone().map(|sender| EventOptions { sender, task_id, send_start: i == 0});
 
                     // Generate a name for the service or container
                     let name = {
@@ -485,7 +486,7 @@ impl crate::Backend for Backend {
                             _ = token.cancelled() => {
                                 (Err(TaskRunError::Canceled), Cleanup::Service(service))
                             }
-                            res = service.run(task_id, &task_name, events.clone(), send_start_event) => {
+                            res = service.run(&task_name, options) => {
                                 (res.context("failed to run Docker service").map_err(TaskRunError::Other), Cleanup::Service(service))
                             }
                         }
@@ -528,7 +529,7 @@ impl crate::Backend for Backend {
                             _ = token.cancelled() => {
                                 (Err(TaskRunError::Canceled), Cleanup::Container(container))
                             }
-                            res = container.run(task_id, &task_name, events.clone(), send_start_event) => {
+                            res = container.run(&task_name, options) => {
                                 (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleanup::Container(container))
                             }
                         }

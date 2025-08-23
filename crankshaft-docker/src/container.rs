@@ -19,15 +19,14 @@ use bollard::query_parameters::UploadToContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use crankshaft_events::Event;
-use crankshaft_events::send_event;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::broadcast;
 use tokio_stream::StreamExt as _;
 use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::EventOptions;
 use crate::Result;
 
 mod builder;
@@ -110,20 +109,16 @@ impl Container {
     }
 
     /// Runs a container and waits for the execution to end.
-    pub async fn run(
-        &self,
-        task_id: u64,
-        task_name: &str,
-        events: Option<broadcast::Sender<Event>>,
-        send_start_event: bool,
-    ) -> Result<ExitStatus> {
-        send_event!(
-            events,
-            Event::TaskContainerCreated {
-                id: task_id,
-                container: self.name.clone()
-            }
-        );
+    pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
+        if let Some(events) = &events {
+            events
+                .sender
+                .send(Event::TaskContainerCreated {
+                    id: events.task_id,
+                    container: self.name.clone(),
+                })
+                .ok();
+        }
 
         // Attach to the container before we start it
         let stream = if self.stdout.is_some() || self.stderr.is_some() {
@@ -168,8 +163,13 @@ impl Container {
             name = self.name
         );
 
-        if send_start_event {
-            send_event!(events, Event::TaskStarted { id: task_id },);
+        if let Some(events) = &events {
+            if events.send_start {
+                events
+                    .sender
+                    .send(Event::TaskStarted { id: events.task_id })
+                    .ok();
+            }
         }
 
         // Write the log streams
@@ -211,13 +211,15 @@ impl Container {
                                 ))
                             })?;
 
-                        send_event!(
-                            events,
-                            Event::TaskStdout {
-                                id: task_id,
-                                message
-                            }
-                        );
+                        if let Some(events) = &events {
+                            events
+                                .sender
+                                .send(Event::TaskStdout {
+                                    id: events.task_id,
+                                    message,
+                                })
+                                .ok();
+                        }
                     }
                     LogOutput::StdErr { message } => {
                         stderr
@@ -232,13 +234,15 @@ impl Container {
                                 ))
                             })?;
 
-                        send_event!(
-                            events,
-                            Event::TaskStderr {
-                                id: task_id,
-                                message
-                            }
-                        );
+                        if let Some(events) = &events {
+                            events
+                                .sender
+                                .send(Event::TaskStderr {
+                                    id: events.task_id,
+                                    message,
+                                })
+                                .ok();
+                        }
                     }
                     _ => {}
                 }
@@ -297,14 +301,16 @@ impl Container {
             name = self.name
         );
 
-        send_event!(
-            events,
-            Event::TaskContainerExited {
-                id: task_id,
-                container: self.name.clone(),
-                exit_status: status,
-            }
-        );
+        if let Some(events) = &events {
+            events
+                .sender
+                .send(Event::TaskContainerExited {
+                    id: events.task_id,
+                    container: self.name.clone(),
+                    exit_status: status,
+                })
+                .ok();
+        }
 
         Ok(status)
     }

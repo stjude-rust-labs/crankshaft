@@ -53,15 +53,11 @@ async fn main() -> Result<()> {
                     return Ok(());
                 }
 
-                match input {
-                        Key(KeyEvent {
+                if let Key(KeyEvent {
                             code: Char('t'), ..
-                        }) => state.current_view = View::Tasks,
-                        Key(KeyEvent{
-                            code: Char('r'),..
-                        })=> state.current_view = View::Resources,
-                        _ => (),
-                    }
+                        }) = input {
+                    state.current_view = View::Tasks;
+                }
             },
             instrument_message = conn.next_message(&mut state)=> {
                 state.update(&styles, view, instrument_message);
@@ -80,7 +76,7 @@ async fn main() -> Result<()> {
                     ]
                     .as_ref(),
                 )
-                .split(f.size());
+                .split(f.area());
 
             let header_text = conn.render(&styles);
             let header = Paragraph::new(header_text).wrap(Wrap { trim: true });

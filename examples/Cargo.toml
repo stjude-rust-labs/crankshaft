@@ -9,12 +9,35 @@ homepage.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "docker"
+path = "src/docker/main.rs"
+
+[[bin]]
+name = "docker-monitored"
+path = "src/docker/monitored.rs"
+required-features = ["monitoring"]
+
+[[bin]]
+name = "lsf"
+path = "src/lsf/main.rs"
+
+[[bin]]
+name = "tes"
+path = "src/tes/main.rs"
+
+[features]
+default = []
+monitoring = ["dep:crankshaft-monitor", "crankshaft/monitoring"]
+
 [dependencies]
 anyhow.workspace = true
-crankshaft = { path = "../crankshaft" }
-crankshaft-monitor = { path = "../crankshaft-monitor" }
 clap.workspace = true
+crankshaft = { path = "../crankshaft" }
+crankshaft-monitor = { path = "../crankshaft-monitor", optional = true }
 dirs.workspace = true
+futures.workspace = true
+indicatif.workspace = true
 nonempty.workspace = true
 serde_yaml.workspace = true
 tempfile.workspace = true
@@ -25,24 +48,6 @@ tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 url.workspace = true
-indicatif.workspace = true
-futures.workspace = true
-
-[[bin]]
-name = "docker"
-path = "src/docker/main.rs"
-
-[[bin]]
-name = "docker-rpc"
-path = "src/docker/docker_monitored.rs"
-
-[[bin]]
-name = "lsf"
-path = "src/lsf/main.rs"
-
-[[bin]]
-name = "tes"
-path = "src/tes/main.rs"
 
 [lints]
 workspace = true

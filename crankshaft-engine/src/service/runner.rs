@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use anyhow::Result;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::Kind;
-use crankshaft_monitor::proto::Event;
+use crankshaft_events::Event;
 use nonempty::NonEmpty;
 use tokio::sync::Semaphore;
 use tokio::sync::broadcast;
@@ -49,13 +49,8 @@ impl TaskHandle {
 pub struct Runner {
     /// The task runner itself.
     backend: Arc<dyn Backend>,
-
     /// The task lock.
     lock: Arc<tokio::sync::Semaphore>,
-
-    /// The unique name generator for tasks without names being sent to backends
-    /// that may need names.
-    name_generator: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 }
 
 impl Runner {
@@ -64,28 +59,29 @@ impl Runner {
         config: Kind,
         max_tasks: usize,
         defaults: Option<Defaults>,
+        events: Option<broadcast::Sender<Event>>,
     ) -> Result<Self> {
+        let names = Arc::new(Mutex::new(GeneratorIterator::new(
+            UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
+            NAME_BUFFER_LEN,
+        )));
+
         let backend = match config {
             Kind::Docker(config) => {
-                let backend = docker::Backend::initialize_default_with(config).await?;
+                let backend =
+                    docker::Backend::initialize_default_with(config, names, events).await?;
                 Arc::new(backend) as Arc<dyn Backend>
             }
             Kind::Generic(config) => {
-                let backend = generic::Backend::initialize(config, defaults).await?;
+                let backend = generic::Backend::initialize(config, defaults, names, events).await?;
                 Arc::new(backend)
             }
-            Kind::TES(config) => Arc::new(tes::Backend::initialize(config)),
+            Kind::TES(config) => Arc::new(tes::Backend::initialize(config, names, events)),
         };
-
-        let generator = UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN);
 
         Ok(Self {
             backend,
             lock: Arc::new(Semaphore::new(max_tasks)),
-            name_generator: Arc::new(Mutex::new(GeneratorIterator::new(
-                generator,
-                NAME_BUFFER_LEN,
-            ))),
         })
     }
 
@@ -96,27 +92,16 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(
-        &self,
-        mut task: Task,
-        event_sender: Option<broadcast::Sender<Event>>,
-        token: CancellationToken,
-    ) -> anyhow::Result<TaskHandle> {
+    pub fn spawn(&self, task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         let backend = self.backend.clone();
         let lock = self.lock.clone();
 
-        if backend.default_name() == "docker" && task.name.is_none() {
-            let mut generator = self.name_generator.lock().unwrap();
-            // SAFETY: this generator should _never_ run out of entries.
-            task.name = Some(generator.next().unwrap());
-        }
-
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let result = backend.clone().run(task, event_sender, token)?.await;
+            let result = backend.clone().run(task, token)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

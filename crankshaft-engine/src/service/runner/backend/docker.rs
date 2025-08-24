@@ -4,6 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -19,12 +20,11 @@ use bollard::secret::NodeState;
 use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
+use crankshaft_docker::EventOptions;
 use crankshaft_docker::service::Service;
-use crankshaft_monitor::proto::Event;
-use crankshaft_monitor::proto::EventType;
-use crankshaft_monitor::proto::Resources as ProtoResources;
-use crankshaft_monitor::proto::event::Payload;
-use crankshaft_monitor::send_event;
+use crankshaft_events::Event;
+use crankshaft_events::next_task_id;
+use crankshaft_events::send_event;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
@@ -37,6 +37,8 @@ use tracing::info;
 
 use super::TaskRunError;
 use crate::Task;
+use crate::service::name::GeneratorIterator;
+use crate::service::name::UniqueAlphanumeric;
 use crate::task::Input;
 
 /// Represents resource information about a Docker swarm.
@@ -61,30 +63,6 @@ pub struct LocalResources {
     pub cpu: u64,
     /// The total memory available to the local Docker daemon, in bytes.
     pub memory: u64,
-}
-
-impl From<SwarmResources> for ProtoResources {
-    fn from(value: SwarmResources) -> Self {
-        Self {
-            nodes: value.nodes as f64,
-            cpu: value.cpu as f64,
-            memory: value.memory as f64,
-            max_cpu: value.max_cpu as f64,
-            max_memory: value.max_memory as f64,
-        }
-    }
-}
-
-impl From<LocalResources> for ProtoResources {
-    fn from(value: LocalResources) -> Self {
-        Self {
-            cpu: value.cpu as f64,
-            memory: value.memory as f64,
-            nodes: 1.0,
-            max_cpu: value.cpu as f64,
-            max_memory: value.memory as f64,
-        }
-    }
 }
 
 /// Represents information about Docker's available resources.
@@ -150,14 +128,6 @@ impl Resources {
             Self::Swarm(swarm) => swarm.nodes >= 2,
         }
     }
-
-    /// Helper method to convert local resource type to proto `Resource`
-    pub fn to_proto(&self) -> Option<Payload> {
-        match self {
-            Resources::Swarm(r) => Some(Payload::Resources((*r).into())),
-            Resources::Local(r) => Some(Payload::Resources((*r).into())),
-        }
-    }
 }
 
 /// A local execution backend.
@@ -169,6 +139,10 @@ pub struct Backend {
     config: Config,
     /// The available resources reported by Docker.
     resources: Resources,
+    /// The events sender for the backend.
+    events: Option<broadcast::Sender<Event>>,
+    /// The unique name generator for tasks without names.
+    names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 }
 
 impl Backend {
@@ -177,7 +151,11 @@ impl Backend {
     ///
     /// Note that, currently, we connect [using defaults](Docker::with_defaults)
     /// when attempting to connect to the Docker daemon.
-    pub async fn initialize_default_with(config: Config) -> Result<Self> {
+    pub async fn initialize_default_with(
+        config: Config,
+        names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
+        events: Option<broadcast::Sender<Event>>,
+    ) -> Result<Self> {
         let client =
             Docker::with_defaults().context("failed to connect to the local Docker daemon")?;
 
@@ -327,6 +305,8 @@ impl Backend {
             client,
             config,
             resources,
+            events,
+            names,
         })
     }
 
@@ -335,13 +315,46 @@ impl Backend {
     ///
     /// Note that, currently, we connect [using defaults](Docker::with_defaults)
     /// when attempting to connect to the Docker daemon.
-    pub async fn initialize_default() -> Result<Self> {
-        Self::initialize_default_with(Config::default()).await
+    pub async fn initialize_default(
+        names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
+        events: Option<broadcast::Sender<Event>>,
+    ) -> Result<Self> {
+        Self::initialize_default_with(Config::default(), names, events).await
     }
 
     /// Gets information about the resources available to the Docker backend.
     pub fn resources(&self) -> &Resources {
         &self.resources
+    }
+}
+
+/// Helper for cleaning up a container or service.
+enum Cleanup {
+    /// The cleanup is for a container.
+    Container(Arc<Container>),
+    /// The cleanup is for a service.
+    Service(Arc<Service>),
+}
+
+impl Cleanup {
+    /// Runs cleanup.
+    async fn run(&self, canceled: bool) -> Result<()> {
+        match self {
+            Self::Container(container) => {
+                if canceled {
+                    container
+                        .force_remove()
+                        .await
+                        .context("failed to force remove container")
+                } else {
+                    container
+                        .remove()
+                        .await
+                        .context("failed to remove container")
+                }
+            }
+            Self::Service(service) => service.delete().await.context("failed to delete service"),
+        }
     }
 }
 
@@ -354,208 +367,223 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        event_sender: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
-        // Helper for cleanup
-        enum Cleaner {
-            /// The cleanup is for a container.
-            Container(Arc<Container>),
-            /// The cleanup is for a service.
-            Service(Arc<Service>),
-        }
-
-        impl Cleaner {
-            /// Runs cleanup.
-            async fn cleanup(&self, canceled: bool) -> Result<()> {
-                match self {
-                    Self::Container(container) => {
-                        if canceled {
-                            container
-                                .force_remove()
-                                .await
-                                .context("failed to force remove container")
-                        } else {
-                            container
-                                .remove()
-                                .await
-                                .context("failed to remove container")
-                        }
-                    }
-                    Self::Service(service) => {
-                        service.delete().await.context("failed to delete service")
-                    }
-                }
-            }
-        }
-
+        let task_id = next_task_id();
         let client = self.client.clone();
-        let cleanup = self.config.cleanup();
-        let resources = self.resources;
+        let run_cleanup = self.config.cleanup();
+        let use_service = self.resources.use_service();
+        let events = self.events.clone();
+        let names = self.names.clone();
 
         Ok(async move {
-            let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
+            // Generate a name of the task if one wasn't provided
+            let task_name = task.name.unwrap_or_else(|| {
+                let mut generator = names.lock().unwrap();
+                // SAFETY: the name generator should _never_ run out of entries.
+                generator.next().unwrap()
+            });
 
-            let mut mounts = Vec::new();
-            add_input_mounts(task.inputs, tempdir.path(), &mut mounts).await?;
-            add_shared_mounts(task.volumes, tempdir.path(), &mut mounts)?;
-            let mut outputs = Vec::new();
+            let run = async {
+                let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
 
-            let name = task
-                    .name
-                    .context("task requires a name to run on the Docker backend")?;
+                let mut mounts = Vec::new();
+                add_input_mounts(task.inputs, tempdir.path(), &mut mounts).await?;
+                add_shared_mounts(task.volumes, tempdir.path(), &mut mounts)?;
+                let mut outputs = Vec::new();
 
-            for execution in task.executions {
-                if token.is_cancelled() {
-                    return Err(TaskRunError::Canceled);
+                for (i, execution) in task.executions.into_iter().enumerate() {
+                    if token.is_cancelled() {
+                        return Err(TaskRunError::Canceled);
+                    }
+
+                    // First ensure the execution's image exists
+                    client
+                        .ensure_image(&execution.image)
+                        .await
+                        .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?;
+
+                    // Look for the path where the caller wants stdout saved to
+                    let stdout = execution.stdout.as_ref().and_then(|p| {
+                        let url = task.outputs.iter().find_map(|o| if o.path == *p {
+                            Some(&o.url)
+                        } else {
+                            None
+                        })?;
+
+                        match url.scheme() {
+                            "file" => {
+                                Some(url.to_file_path().map_err(|_| {
+                                    anyhow!(
+                                        "stdout URL `{url}` has a file scheme but cannot be represented as a file path"
+                                    )
+                                }))
+                            }
+                            _ => Some(Err(anyhow!("unsupported scheme for stdout URL `{url}`")))
+                        }
+
+                    }).transpose()?;
+
+                    // Look for the path where the caller wants stderr saved to
+                    let stderr = execution.stderr.as_ref().and_then(|p| {
+                        let url = task.outputs.iter().find_map(|o| if o.path == *p {
+                            Some(&o.url)
+                        } else {
+                            None
+                        })?;
+
+                        match url.scheme() {
+                            "file" => {
+                                Some(url.to_file_path().map_err(|_| {
+                                    anyhow!(
+                                        "stderr URL `{url}` has a file scheme but cannot be represented as a file path"
+                                    )
+                                }))
+                            }
+                            _ => Some(Err(anyhow!("unsupported scheme for stderr URL `{url}`")))
+                        }
+
+                    }).transpose()?;
+
+                    let options = events.clone().map(|sender| EventOptions { sender, task_id, send_start: i == 0});
+
+                    // Generate a name for the service or container
+                    let name = {
+                        let mut generator = names.lock().unwrap();
+                        // SAFETY: the name generator should _never_ run out of entries.
+                        generator.next().unwrap()
+                    };
+
+                    // Check to see if we should use the service API for running the task
+                    let (result, cleanup) = if use_service {
+                        let mut builder = client
+                            .service_builder()
+                            .image(execution.image)
+                            .program(execution.program)
+                            .args(execution.args)
+                            .envs(execution.env)
+                            .resources(task.resources.as_ref().map(Into::into).unwrap_or_default());
+
+                        if let Some(stdout) = stdout {
+                            builder = builder.stdout(stdout);
+                        }
+
+                        if let Some(stderr) = stderr {
+                            builder = builder.stderr(stderr);
+                        }
+
+                        if let Some(work_dir) = execution.work_dir {
+                            builder = builder.work_dir(work_dir);
+                        }
+
+                        let service = Arc::new(builder.try_build(name).await.map_err(|e| TaskRunError::Other(e.into()))?);
+                        info!("created service `{name}` (task `{task_name}`)", name = service.name());
+
+                        select! {
+                            // Always poll the cancellation token first
+                            biased;
+
+                            _ = token.cancelled() => {
+                                (Err(TaskRunError::Canceled), Cleanup::Service(service))
+                            }
+                            res = service.run(&task_name, options) => {
+                                (res.context("failed to run Docker service").map_err(TaskRunError::Other), Cleanup::Service(service))
+                            }
+                        }
+                    } else {
+                        let mut builder = client
+                            .container_builder()
+                            .image(execution.image)
+                            .program(execution.program)
+                            .args(execution.args)
+                            .envs(execution.env)
+                            .host_config(HostConfig {
+                                mounts: Some(mounts.clone()),
+                                ..task.resources.as_ref().map(|r| r.into()).unwrap_or_default()
+                            });
+
+                        if let Some(stdout) = stdout {
+                            builder = builder.stdout(stdout);
+                        }
+
+                        if let Some(stderr) = stderr {
+                            builder = builder.stderr(stderr);
+                        }
+
+                        if let Some(work_dir) = execution.work_dir {
+                            builder = builder.work_dir(work_dir);
+                        }
+
+                        let container = Arc::new(
+                            builder
+                                .try_build(name)
+                                .await.map_err(|e| TaskRunError::Other(e.into()))?,
+                        );
+
+                        info!("created container `{name}` (task `{task_name}`)", name = container.name());
+
+                        select! {
+                            // Always poll the cancellation token first
+                            biased;
+
+                            _ = token.cancelled() => {
+                                (Err(TaskRunError::Canceled), Cleanup::Container(container))
+                            }
+                            res = container.run(&task_name, options) => {
+                                (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleanup::Container(container))
+                            }
+                        }
+                    };
+
+                    if run_cleanup {
+                        cleanup.run(token.is_cancelled()).await?;
+                    }
+
+                    outputs.push(result?);
                 }
 
-                // First ensure the execution's image exists
-                client
-                    .ensure_image(&execution.image)
-                    .await
-                    .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?;
+                // SAFETY: each task _must_ have at least one execution, so at least one
+                // execution result _must_ exist at this stage. Thus, this will always unwrap.
+                Ok(NonEmpty::from_vec(outputs).unwrap())
+            };
 
-                // Look for the path where the caller wants stdout saved to
-                let stdout = execution.stdout.as_ref().and_then(|p| {
-                    let url = task.outputs.iter().find_map(|o| if o.path == *p {
-                        Some(&o.url)
-                    } else {
-                        None
-                    })?;
+            // Send the created event
+            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: None });
 
-                    match url.scheme() {
-                        "file" => {
-                            Some(url.to_file_path().map_err(|_| {
-                                anyhow!(
-                                    "stdout URL `{url}` has a file scheme but cannot be represented as a file path"
-                                )
-                            }))
-                        }
-                        _ => Some(Err(anyhow!("unsupported scheme for stdout URL `{url}`")))
+            // Run the task to completion
+            let result = run.await;
+
+            // Send an event for the result
+            match &result {
+                Ok(statuses) => send_event!(
+                    events,
+                    Event::TaskCompleted {
+                        id: task_id,
+                        exit_statuses: statuses.clone(),
                     }
-
-                }).transpose()?;
-
-                // Look for the path where the caller wants stderr saved to
-                let stderr = execution.stderr.as_ref().and_then(|p| {
-                    let url = task.outputs.iter().find_map(|o| if o.path == *p {
-                        Some(&o.url)
-                    } else {
-                        None
-                    })?;
-
-                    match url.scheme() {
-                        "file" => {
-                            Some(url.to_file_path().map_err(|_| {
-                                anyhow!(
-                                    "stderr URL `{url}` has a file scheme but cannot be represented as a file path"
-                                )
-                            }))
-                        }
-                        _ => Some(Err(anyhow!("unsupported scheme for stderr URL `{url}`")))
+                ),
+                Err(TaskRunError::Canceled) => send_event!(
+                    events,
+                    Event::TaskCanceled {
+                        id: task_id
                     }
-
-                }).transpose()?;
-
-                // Check to see if we should use the service API for running the task
-                let (result, cleaner) = if resources.use_service() {
-                    let mut builder = client
-                        .service_builder()
-                        .image(execution.image)
-                        .program(execution.program)
-                        .args(execution.args)
-                        .envs(execution.env)
-                        .resources(task.resources.as_ref().map(Into::into).unwrap_or_default());
-
-                    if let Some(stdout) = stdout {
-                        builder = builder.stdout(stdout);
+                ),
+                Err(TaskRunError::Preempted) => send_event!(
+                    events,
+                    Event::TaskPreempted {
+                        id: task_id
                     }
-
-                    if let Some(stderr) = stderr {
-                        builder = builder.stderr(stderr);
+                ),
+                Err(TaskRunError::Other(e)) => send_event!(
+                    events,
+                    Event::TaskFailed {
+                        id: task_id,
+                        message: format!("{e:#}")
                     }
-
-                    if let Some(work_dir) = execution.work_dir {
-                        builder = builder.work_dir(work_dir);
-                    }
-
-                    let service = Arc::new(builder.try_build(&name).await.map_err(|e| TaskRunError::Other(e.into()))?);
-
-
-                    if let Some(Payload::Resources(payload)) = resources.to_proto() {
-                        send_event!(&event_sender, "Docker-swarm".to_string(), EventType::ServiceStarted, resource = payload);
-                    }
-
-                    select! {
-                        // Always poll the cancellation token first
-                        biased;
-
-                        _ = token.cancelled() => {
-                            (Err(TaskRunError::Canceled), Cleaner::Service(service))
-                        }
-                        res = service.run(&name,event_sender.clone()) => {
-                            (res.context("failed to run Docker service").map_err(TaskRunError::Other), Cleaner::Service(service))
-                        }
-                    }
-                } else {
-                   let mut builder = client
-                        .container_builder()
-                        .image(execution.image)
-                        .program(execution.program)
-                        .args(execution.args)
-                        .envs(execution.env)
-                        .host_config(HostConfig {
-                            mounts: Some(mounts.clone()),
-                            ..task.resources.as_ref().map(|r| r.into()).unwrap_or_default()
-                        });
-
-                    if let Some(stdout) = stdout {
-                        builder = builder.stdout(stdout);
-                    }
-
-                    if let Some(stderr) = stderr {
-                        builder = builder.stderr(stderr);
-                    }
-
-                    if let Some(work_dir) = execution.work_dir {
-                        builder = builder.work_dir(work_dir);
-                    }
-
-                    let container = Arc::new(
-                        builder
-                            .try_build(name.clone())
-                            .await.map_err(|e| TaskRunError::Other(e.into()))?,
-                    );
-
-                    if let Some(Payload::Resources(payload)) = resources.to_proto() {
-                        send_event!(&event_sender, "Docker-container".to_string() , EventType::ContainerStarted, resource = payload);
-                    }
-
-
-                    select! {
-                        // Always poll the cancellation token first
-                        biased;
-
-                        _ = token.cancelled() => {
-                            (Err(TaskRunError::Canceled), Cleaner::Container(container))
-                        }
-                        res = container.run(&name,event_sender.clone()) => {
-                            (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleaner::Container(container))
-                        }
-                    }
-                };
-
-                if cleanup {
-                    cleaner.cleanup(token.is_cancelled()).await?;
-                }
-
-                outputs.push(result?);
+                ),
             }
 
-            // SAFETY: each task _must_ have at least one execution, so at least one
-            // execution result _must_ exist at this stage. Thus, this will always unwrap.
-            Ok(NonEmpty::from_vec(outputs).unwrap())
+            result
         }
         .boxed())
     }

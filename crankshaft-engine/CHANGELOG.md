@@ -10,11 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+* Added `monitoring` compile-time feature for enabling support for monitoring
+  in `Engine` ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).
 * Implemented starting a monitor server via the `Engine`; backends now send
   events through the broadcast channel ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
 
 ### Changed
 
+* Based events on `crankshaft-events` ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).
 * Adds configuration for TES client retries ([#42](https://github.com/stjude-rust-labs/crankshaft/pull/42)).
 
 ## 0.4.0 - 06-04-2025

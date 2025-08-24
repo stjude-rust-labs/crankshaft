@@ -28,7 +28,6 @@ use tempfile::NamedTempFile;
 use tokio::select;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
-use tonic::Request;
 use tonic::transport::Channel;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
@@ -54,10 +53,9 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .name("docker")
         .kind(Kind::Docker(Config::builder().build()))
         .max_tasks(args.max_tasks)
-        .monitoring(true)
         .build();
 
-    let engine = Engine::default()
+    let engine = Engine::new_with_monitoring("127.0.0.1:8080".parse().unwrap())
         .with(config)
         .await
         .context("initializing Docker backend")?;
@@ -87,11 +85,12 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let mut did_start_polling = false;
     let mut tasks = FuturesUnordered::new();
 
-    for _ in 0..args.n_jobs {
+    for i in 0..args.n_jobs {
         let mut task = task.clone();
         let stdout = NamedTempFile::new()?.into_temp_path();
         let stderr = NamedTempFile::new()?.into_temp_path();
 
+        task.override_name(format!("task {i}"));
         task.add_output(
             Output::builder()
                 .path("/stdout")
@@ -168,10 +167,7 @@ fn start_polling() {
         };
 
         let mut client = MonitorClient::new(channel);
-
-        let request = Request::new(SubscribeEventsRequest {});
-
-        let response = match client.subscribe_events(request).await {
+        let response = match client.subscribe_events(SubscribeEventsRequest {}).await {
             Ok(res) => {
                 println!("✅ gRPC client connected and subscribed to events");
                 res.into_inner()
@@ -183,9 +179,9 @@ fn start_polling() {
         };
 
         let mut stream = response;
-        while let Some(event) = stream.next().await {
-            match event {
-                Ok(ev) => println!("[task_id={}]", ev.event_id),
+        while let Some(next) = stream.next().await {
+            match next {
+                Ok(event) => println!("{event:?}"),
                 Err(e) => {
                     eprintln!("Error receiving event: {e:#}");
                     break;

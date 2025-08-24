@@ -3,7 +3,7 @@ use std::error::Error;
 use std::time::Duration;
 
 use crankshaft_monitor::proto::Event;
-use crankshaft_monitor::proto::GetServerStateRequest;
+use crankshaft_monitor::proto::ServiceStateRequest;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures_util::StreamExt;
@@ -62,16 +62,19 @@ impl Connection {
                 let endpoint = Endpoint::from(self.target.clone());
                 let channel = endpoint.connect().await?;
                 let mut client = MonitorClient::new(channel);
-                let update_request = tonic::Request::new(SubscribeEventsRequest {});
-                let state_request = tonic::Request::new(GetServerStateRequest {});
 
-                let update_stream =
-                    Box::new(client.subscribe_events(update_request).await?.into_inner());
+                let update_stream = Box::new(
+                    client
+                        .subscribe_events(SubscribeEventsRequest {})
+                        .await?
+                        .into_inner(),
+                );
 
-                let server_state = client.get_server_state(state_request).await?.into_inner();
-                let tasks = server_state.tasks;
-                let resources = server_state.resources;
-                state.set_initial_state(tasks, resources);
+                let service_state = client
+                    .get_service_state(ServiceStateRequest {})
+                    .await?
+                    .into_inner();
+                state.set_initial_state(service_state);
 
                 Ok::<ConnectionState, Box<dyn Error + Send + Sync>>(ConnectionState::Connected {
                     _client: client,
@@ -136,7 +139,7 @@ impl Connection {
             ),
         };
         Line::from(vec![
-            Span::raw("connection: "),
+            Span::raw("Crankshaft server: "),
             Span::raw(self.target.to_string()),
             Span::raw(" "),
             state,

@@ -20,46 +20,51 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &TuiTasksState) {
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([Constraint::Min(0)])
-        .split(frame.size());
+        .split(frame.area());
 
-    let headers = ["Task ID", "Event Type", "Timestamp", "Message"]
-        .iter()
-        .map(|h| {
-            Cell::from(*h).style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            )
-        });
+    let headers = [
+        "Task ID",
+        "Name",
+        "TES ID",
+        "Status",
+        "Last Update",
+        "Message",
+    ]
+    .iter()
+    .map(|h| {
+        Cell::from(*h).style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+    });
     let header = Row::new(headers).height(1).bottom_margin(1);
 
     let rows = tasks_state.tasks().values().map(|task| {
-        let (timestamp, message) = task
-            .latest_log()
-            .map(|log| (log.timestamp.to_string(), log.message.clone()))
-            .unwrap_or_else(|| ("-".into(), "-".into()));
-
-        let row = [
+        Row::new([
             Cell::from(task.id().to_string()),
-            Cell::from(format!("{:?}", task.event_type())),
-            Cell::from(timestamp),
-            Cell::from(message),
-        ];
-        Row::new(row)
+            Cell::from(task.name()),
+            Cell::from(task.tes_id().unwrap_or_default()),
+            Cell::from(task.status()),
+            Cell::from(task.timestamp().to_string()),
+            Cell::from(task.message()),
+        ])
     });
 
     let table = Table::new(
         rows,
         [
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
-            Constraint::Percentage(25),
+            Constraint::Max(10),
+            Constraint::Max(20),
+            Constraint::Max(20),
+            Constraint::Max(10),
+            Constraint::Max(30),
+            Constraint::Fill(1),
         ],
     )
     .header(header)
     .block(Block::default().title("Tasks").borders(Borders::ALL))
-    .highlight_style(Style::default().bg(Color::DarkGray));
+    .row_highlight_style(Style::default().bg(Color::DarkGray));
 
     frame.render_widget(table, area[0]);
 }

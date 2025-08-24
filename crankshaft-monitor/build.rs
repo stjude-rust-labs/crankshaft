@@ -1,7 +1,7 @@
 //! This is the build script for the crankshaft-monitor crate.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .out_dir("src/proto")
         .type_attribute(

@@ -11,3 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Added initial TUI and server sync ([#46](https://github.com/stjude-rust-labs/crankshaft/pull/46)).
 * Added initial implementation ([#43](https://github.com/stjude-rust-labs/crankshaft/pull/43)).
+
+#### Changed
+
+* Adapted to protobuf changes and removed the resources tab ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).

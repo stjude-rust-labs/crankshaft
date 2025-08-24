@@ -9,12 +9,28 @@ homepage.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "docker-driver"
+test = false
+bench = false
+required-features = ["binaries"]
+
+[features]
+binaries = [
+    "dep:clap",
+    "dep:clap-verbosity-flag",
+    "dep:shlex",
+    "dep:tracing-log",
+    "dep:tracing-subscriber",
+]
+
 [dependencies]
 anyhow.workspace = true
 bollard.workspace = true
 bon.workspace = true
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
+crankshaft-events = { path = "../crankshaft-events", version = "0.1.0" }
 futures.workspace = true
 indexmap = { workspace = true }
 serde.workspace = true
@@ -26,24 +42,8 @@ tokio-stream.workspace = true
 tracing.workspace = true
 tracing-log = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
-crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.1.0" }
 
 [dev-dependencies]
 
 [lints]
 workspace = true
-
-[features]
-binaries = [
-    "dep:clap",
-    "dep:clap-verbosity-flag",
-    "dep:shlex",
-    "dep:tracing-log",
-    "dep:tracing-subscriber",
-]
-
-[[bin]]
-name = "docker-driver"
-test = false
-bench = false
-required-features = ["binaries"]

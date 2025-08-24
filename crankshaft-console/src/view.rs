@@ -7,13 +7,7 @@ use ratatui::text::Span;
 
 use crate::state::State;
 
-/// The resources module contains the rendering logic for the resources view.
-pub mod resources;
-
-/// The styles module contains the styling for the TUI.
 pub mod styles;
-
-/// The tasks module contains the rendering logic for the tasks view.
 pub mod tasks;
 
 /// The `View` enum represents the different views of the TUI.
@@ -22,8 +16,6 @@ pub enum View {
     /// The tasks view.
     #[default]
     Tasks,
-    /// The resources view.
-    Resources,
 }
 
 impl View {
@@ -31,7 +23,6 @@ impl View {
     pub fn render(self, frame: &mut Frame<'_>, state: &mut State) {
         match self {
             View::Tasks => tasks::render_tasks(frame, state.task_state()),
-            View::Resources => resources::render_resource(frame, state.resource_state()),
         }
     }
 }

@@ -1,55 +1,151 @@
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 package crankshaft.monitor;
 
-// MonitorService defines the gRPC services for real-time monitoring.
+// The monitor service implements real-time monitoring of Crankshaft events.
 service Monitor {
-  // SubscribeEvents streams all task events to connected clients.
+  // Subscribes to the Crankshaft event stream.
   rpc SubscribeEvents(SubscribeEventsRequest) returns (stream Event) {}
-  // GetServerState returns the server state.
-  rpc GetServerState(GetServerStateRequest) returns (ServerStateResponse) {}
+  // Gets the current service state.
+  rpc GetServiceState(ServiceStateRequest) returns (ServiceStateResponse) {}
 }
 
-// GetServerStateRequest is a minimal request to get the server state.
-message GetServerStateRequest {}
+// The request for retrieving the current service state.
+message ServiceStateRequest {}
 
-// ServerStateResponse represents the server state.
-message ServerStateResponse {
-  Resources resources = 1;
-  map<string, EventType> tasks = 2;
+// The response containing the current service state.
+message ServiceStateResponse {
+  // The current set of tasks.
+  map<uint64, TaskEvents> tasks = 1;
 }
 
-// SubscribeEventsRequest is a minimal request to subscribe to all task events.
+message TaskEvents {
+  repeated Event events = 1;
+}
+
+// The request for subscribing to the task events stream.
 message SubscribeEventsRequest {}
 
-// Event represents a monitoring event from a task.
+// Represents a Crankshaft event.
 message Event {
-  string event_id = 1;
-  EventType event_type = 2;
-  int64 timestamp = 3;
-  oneof payload {
-    string message = 4;
-    Resources resources = 6;
+  // The timestamp of the event.
+  google.protobuf.Timestamp timestamp = 1;
+  oneof event_kind {
+    // The task created event.
+    TaskCreatedEvent created = 2;
+    // The task started event.
+    TaskStartedEvent started = 3;
+    // The task container created event.
+    TaskContainerCreatedEvent container_created = 4;
+    // The task container exited event.
+    TaskContainerExitedEvent container_exited = 5;
+    // The task completed event.
+    TaskCompletedEvent completed = 6;
+    // The task failed event.
+    TaskFailedEvent failed = 7;
+    // The task canceled event.
+    TaskCanceledEvent canceled = 8;
+    // The task preempted event.
+    TaskPreemptedEvent preempted = 9;
+    // The task stdout event.
+    TaskStdoutEvent stdout = 10;
+    // The task stderr event.
+    TaskStderrEvent stderr = 11;
   }
 }
 
-// EventType defines the possible types of monitoring events.
-enum EventType {
-  EVENT_TYPE_UNSPECIFIED = 0;
-  TASK_QUEUED = 1;
-  TASK_STARTED = 2;      // Task has started
-  TASK_COMPLETED = 3;    // Task has completed successfully
-  TASK_FAILED = 4;       // Task has failed
-  TASK_STOPPED = 5;      // Task was stopped
-  TASK_LOGS = 6;         // Log message from a task
-  CONTAINER_STARTED = 7; // Container has started
-  SERVICE_STARTED = 8;   // Service started
+// Represents an exit status.
+message ExitStatus {
+  oneof ExitStatusKind {
+    // The exit was from an exit code.
+    int32 code = 1;
+    // The exit was from a signal.
+    // Note: this field is only specified on Unix when the process exited with a signal.
+    int32 signal = 2;
+  }
 }
 
-message Resources {
-  double nodes = 1;
-  double cpu = 2;
-  double memory = 3;
-  double max_cpu = 4;
-  double max_memory = 5;
+// Represents a task created event.
+message TaskCreatedEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The name of the task.
+  string name = 2;
+  // The TES identifier of the task.
+  // Note: this field is only sent for the TES backend.
+  optional string tes_id = 3;
+}
+
+// Represents a task started event.
+message TaskStartedEvent {
+  // The id of the task.
+  uint64 id = 1;
+}
+
+// Represents a task container created event.
+// Note: this event is only sent for the Docker backend.
+message TaskContainerCreatedEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The id of the container that was created.
+  string container = 2;
+}
+
+// Represents a task container exited event.
+// Note: this event is only sent for the Docker backend.
+message TaskContainerExitedEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The id of the container that exited.
+  string container = 2;
+  // The exit status of the container.
+  ExitStatus exit_status = 3;
+}
+
+// Represents a task completed event.
+message TaskCompletedEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The exit statuses for each execution of the task.
+  repeated ExitStatus exit_statuses = 2;
+}
+
+// Represents a task failed event.
+message TaskFailedEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The error message.
+  string message = 2;
+}
+
+// Represents a task canceled event.
+message TaskCanceledEvent {
+  // The id of the task.
+  uint64 id = 1;
+}
+
+// Represents a task preempted event.
+message TaskPreemptedEvent {
+  // The id of the task.
+  uint64 id = 1;
+}
+
+// Represents a task stdout event.
+// Note: this event is only sent for the Docker backend.
+message TaskStdoutEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The stdout message.
+  bytes message = 2;
+}
+
+// Represents a task stderr event.
+// Note: this event is only sent for the Docker backend.
+message TaskStderrEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The stderr message.
+  bytes message = 2;
 }

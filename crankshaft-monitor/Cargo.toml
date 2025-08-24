@@ -28,6 +28,7 @@ tonic-prost-build.workspace = true
 
 [dev-dependencies]
 nonempty.workspace = true
+tokio-retry2.workspace = true
 
 [lints]
 workspace = true

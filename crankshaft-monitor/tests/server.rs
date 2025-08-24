@@ -4,7 +4,6 @@ use std::os::unix::process::ExitStatusExt as _;
 #[cfg(windows)]
 use std::os::windows::process::ExitStatusExt as _;
 use std::process::ExitStatus;
-use std::time::Duration;
 
 use crankshaft_events::Event as CrankshaftEvent;
 use crankshaft_monitor::Monitor;
@@ -16,7 +15,10 @@ use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures_util::StreamExt;
 use nonempty::NonEmpty;
 use tokio::sync::broadcast;
-use tokio::time::sleep;
+use tokio_retry2::Retry;
+use tokio_retry2::RetryError;
+use tokio_retry2::strategy::ExponentialFactorBackoff;
+use tokio_retry2::strategy::MaxInterval;
 
 #[tokio::test]
 async fn test_subscribe_events() {
@@ -24,13 +26,20 @@ async fn test_subscribe_events() {
 
     let monitor = Monitor::start("127.0.0.1:32000".parse().unwrap(), rx);
 
-    // Sleep to allow the server to start
-    // TODO: make this more robust
-    sleep(Duration::from_secs(1)).await;
+    // Perform a retry with backoff for connecting as the monitor starts
+    // asynchronously
+    let strategy = ExponentialFactorBackoff::from_millis(50, 2.0)
+        .max_interval(1000)
+        .take(10);
 
-    let mut client = MonitorClient::connect("http://127.0.0.1:32000")
-        .await
-        .expect("failed to connect to monitor");
+    let mut client = Retry::spawn(strategy, || async {
+        MonitorClient::connect("http://127.0.0.1:32000")
+            .await
+            .map_err(RetryError::transient)
+    })
+    .await
+    .expect("failed to connect to monitor");
+
     let mut events = client
         .subscribe_events(SubscribeEventsRequest {})
         .await
@@ -161,13 +170,19 @@ async fn test_service_state() {
 
     let monitor = Monitor::start("127.0.0.1:32001".parse().unwrap(), rx);
 
-    // Sleep to allow the server to start
-    // TODO: make this more robust
-    sleep(Duration::from_secs(1)).await;
+    // Perform a retry with backoff for connecting as the monitor starts
+    // asynchronously
+    let strategy = ExponentialFactorBackoff::from_millis(50, 2.0)
+        .max_interval(1000)
+        .take(10);
 
-    let mut client = MonitorClient::connect("http://127.0.0.1:32001")
-        .await
-        .expect("failed to connect to monitor");
+    let mut client = Retry::spawn(strategy, || async {
+        MonitorClient::connect("http://127.0.0.1:32001")
+            .await
+            .map_err(RetryError::transient)
+    })
+    .await
+    .expect("failed to connect to monitor");
 
     let state = client
         .get_service_state(ServiceStateRequest {})

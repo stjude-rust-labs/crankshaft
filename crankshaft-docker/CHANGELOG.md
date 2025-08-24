@@ -12,6 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 * Implemented sending events through the broadcast channel ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
 
+### Changed
+
+* Based events on `crankshaft-events` ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).
 
 ## 0.2.0 - 04-01-2025
 

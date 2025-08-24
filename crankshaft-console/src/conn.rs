@@ -62,13 +62,18 @@ impl Connection {
                 let endpoint = Endpoint::from(self.target.clone());
                 let channel = endpoint.connect().await?;
                 let mut client = MonitorClient::new(channel);
-                let update_request = tonic::Request::new(SubscribeEventsRequest {});
-                let state_request = tonic::Request::new(ServiceStateRequest {});
 
-                let update_stream =
-                    Box::new(client.subscribe_events(update_request).await?.into_inner());
+                let update_stream = Box::new(
+                    client
+                        .subscribe_events(SubscribeEventsRequest {})
+                        .await?
+                        .into_inner(),
+                );
 
-                let service_state = client.get_service_state(state_request).await?.into_inner();
+                let service_state = client
+                    .get_service_state(ServiceStateRequest {})
+                    .await?
+                    .into_inner();
                 state.set_initial_state(service_state);
 
                 Ok::<ConnectionState, Box<dyn Error + Send + Sync>>(ConnectionState::Connected {

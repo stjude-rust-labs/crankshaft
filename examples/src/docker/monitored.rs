@@ -28,7 +28,6 @@ use tempfile::NamedTempFile;
 use tokio::select;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
-use tonic::Request;
 use tonic::transport::Channel;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
@@ -168,10 +167,7 @@ fn start_polling() {
         };
 
         let mut client = MonitorClient::new(channel);
-
-        let request = Request::new(SubscribeEventsRequest {});
-
-        let response = match client.subscribe_events(request).await {
+        let response = match client.subscribe_events(SubscribeEventsRequest {}).await {
             Ok(res) => {
                 println!("✅ gRPC client connected and subscribed to events");
                 res.into_inner()

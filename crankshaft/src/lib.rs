@@ -12,3 +12,6 @@ pub use crankshaft_engine as engine;
 #[cfg(feature = "engine")]
 #[doc(inline)]
 pub use crankshaft_engine::Engine;
+#[cfg(feature = "events")]
+#[doc(inline)]
+pub use crankshaft_events as events;

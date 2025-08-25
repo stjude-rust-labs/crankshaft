@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added the `events` module for re-exporting `crankshaft-events` ([#50](https://github.com/stjude-rust-labs/crankshaft/pull/50)).
+
 ## 0.4.0 - 06-04-2025
 
 ### Changed

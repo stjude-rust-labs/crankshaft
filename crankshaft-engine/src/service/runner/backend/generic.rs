@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use anyhow::anyhow;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
 use crankshaft_config::backend::generic::SubValue;
@@ -140,7 +141,10 @@ impl crate::Backend for Backend {
             if output.url().scheme() != "file" {
                 unimplemented!("non-file outputs unsupported");
             };
-            let host_path = output.url().to_file_path().expect("failed to make output url into a path");
+            let host_path = output
+                .url()
+                .to_file_path()
+                .expect("failed to make output url into a path");
             let pair = serde_json::json!({
                 "host_path": host_path,
                 "guest_path": output.path()
@@ -210,6 +214,9 @@ impl crate::Backend for Backend {
                     .run(submit)
                     .await
                     .context("failed to run submit command")?;
+                if !output.status.success() {
+                    return Err(anyhow!("submit command failed: {}", output.status).into());
+                }
 
                 // Notify that execution has started
                 if let Some(started) = started.take() {

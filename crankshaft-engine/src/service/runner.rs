@@ -107,6 +107,8 @@ impl Runner {
             task.name = Some(generator.next().unwrap());
         }
 
+        // TODO ACF 2025-08-25: do something with errors returned from this spawned
+        // task, at least log em
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
             let result = backend.clone().run(task, None, token)?.await;

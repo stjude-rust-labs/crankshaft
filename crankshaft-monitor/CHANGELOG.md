@@ -17,3 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * Changed protobuf definition to be based off of `crankshaft-events` ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).
 * Removed unnecessary `metadata` field from `Event` ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
+
+#### Fixed
+
+* Only create a `Receiver` for client subscriptions ([#51](https://github.com/stjude-rust-labs/crankshaft/pull/51)).

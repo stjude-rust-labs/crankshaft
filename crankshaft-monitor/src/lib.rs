@@ -20,17 +20,24 @@ mod service;
 pub struct Monitor {
     /// The handle to the task running the gRPC server.
     server: Option<JoinHandle<()>>,
-    /// The cancellation token for shutting down the task.
+    /// The cancellation token for shutting down the server.
     token: CancellationToken,
 }
 
 impl Monitor {
     /// Starts the monitor and binds it to the given address.
     ///
+    /// The provided events stream will be subscribed to when clients connect to
+    /// the monitor.
+    ///
     /// Note that a failure to bind to the address will disable monitoring.
-    pub fn start(addr: SocketAddr, events: broadcast::Receiver<Event>) -> Self {
+    pub fn start(addr: SocketAddr, events: broadcast::Sender<Event>) -> Self {
+        // Immediately subscribe here before we spawn the server task; this allows the
+        // server to receive all events after `start` is called
+        let rx = events.subscribe();
+
         let token = CancellationToken::new();
-        let server = tokio::spawn(Self::run_server(addr, events, token.clone()));
+        let server = tokio::spawn(Self::run_server(addr, events, rx, token.clone()));
 
         Self {
             server: Some(server),
@@ -54,10 +61,11 @@ impl Monitor {
     /// Runs the gRPC server.
     async fn run_server(
         addr: SocketAddr,
-        events: broadcast::Receiver<Event>,
+        tx: broadcast::Sender<Event>,
+        rx: broadcast::Receiver<Event>,
         token: CancellationToken,
     ) {
-        let service = MonitorService::new(events);
+        let service = MonitorService::new(tx, rx, token.clone());
         let server = MonitorServer::new(service);
 
         info!("starting Crankshaft monitor at http://{addr}");

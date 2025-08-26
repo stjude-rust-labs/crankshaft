@@ -10,6 +10,7 @@ use futures_core::Stream;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
+use tokio_util::sync::CancellationToken;
 use tonic::Code;
 use tonic::Request;
 use tonic::Response;
@@ -138,67 +139,75 @@ pub struct ServiceState {
 /// Represents a gRPC service for monitoring Crankshaft events in real-time.
 #[derive(Debug)]
 pub struct MonitorService {
-    /// The events receiver from Crankshaft.
-    events: broadcast::Receiver<CrankshaftEvent>,
+    /// The events sender from Crankshaft.
+    ///
+    /// This is used to subscribe new receivers for clients.
+    tx: broadcast::Sender<CrankshaftEvent>,
     /// The current state of the service.
     state: Arc<RwLock<ServiceState>>,
+    /// The cancellation token for shutting down the service.
+    token: CancellationToken,
 }
 
 impl MonitorService {
     /// Creates a new monitor service.
-    pub fn new(events: broadcast::Receiver<CrankshaftEvent>) -> Self {
+    pub fn new(
+        tx: broadcast::Sender<CrankshaftEvent>,
+        rx: broadcast::Receiver<CrankshaftEvent>,
+        token: CancellationToken,
+    ) -> Self {
         let state: Arc<RwLock<ServiceState>> = Arc::default();
-        let resubscribed = events.resubscribe();
-        tokio::spawn(Self::update_state(events, state.clone()));
-        Self {
-            events: resubscribed,
-            state,
-        }
+        tokio::spawn(Self::update_state(rx, state.clone(), token.clone()));
+        Self { tx, state, token }
     }
 
     /// Handles service state updates.
     async fn update_state(
         mut events: broadcast::Receiver<CrankshaftEvent>,
         state: Arc<RwLock<ServiceState>>,
+        token: CancellationToken,
     ) {
         loop {
-            match events.recv().await {
-                Ok(event) => {
-                    let (id, remove) = match event {
-                        CrankshaftEvent::TaskCreated { id, .. }
-                        | CrankshaftEvent::TaskStarted { id }
-                        | CrankshaftEvent::TaskContainerCreated { id, .. }
-                        | CrankshaftEvent::TaskContainerExited { id, .. }
-                        | CrankshaftEvent::TaskStdout { id, .. }
-                        | CrankshaftEvent::TaskStderr { id, .. } => (id, false),
-                        CrankshaftEvent::TaskCompleted { id, .. }
-                        | CrankshaftEvent::TaskFailed { id, .. }
-                        | CrankshaftEvent::TaskCanceled { id }
-                        | CrankshaftEvent::TaskPreempted { id } => (id, true),
-                    };
+            tokio::select! {
+                _ = token.cancelled() => break,
+                r = events.recv() => match r {
+                    Ok(event) => {
+                        let (id, remove) = match event {
+                            CrankshaftEvent::TaskCreated { id, .. }
+                            | CrankshaftEvent::TaskStarted { id }
+                            | CrankshaftEvent::TaskContainerCreated { id, .. }
+                            | CrankshaftEvent::TaskContainerExited { id, .. }
+                            | CrankshaftEvent::TaskStdout { id, .. }
+                            | CrankshaftEvent::TaskStderr { id, .. } => (id, false),
+                            CrankshaftEvent::TaskCompleted { id, .. }
+                            | CrankshaftEvent::TaskFailed { id, .. }
+                            | CrankshaftEvent::TaskCanceled { id }
+                            | CrankshaftEvent::TaskPreempted { id } => (id, true),
+                        };
 
-                    if remove {
-                        let mut state = state.write().await;
-                        state.tasks.remove(&id);
-                    } else {
-                        let event: Event = event.into_protobuf();
-                        let mut state = state.write().await;
-                        let task = state.tasks.entry(id).or_default();
+                        if remove {
+                            let mut state = state.write().await;
+                            state.tasks.remove(&id);
+                        } else {
+                            let event: Event = event.into_protobuf();
+                            let mut state = state.write().await;
+                            let task = state.tasks.entry(id).or_default();
 
-                        // If there aren't any events, ensure the first one is the created event
-                        if task.events.is_empty() {
-                            if let Some(EventKind::Created(_)) = &event.event_kind {
+                            // If there aren't any events, ensure the first one is the created event
+                            if task.events.is_empty() {
+                                if let Some(EventKind::Created(_)) = &event.event_kind {
+                                    task.events.push(event);
+                                }
+                            } else {
                                 task.events.push(event);
                             }
-                        } else {
-                            task.events.push(event);
                         }
                     }
-                }
-                Err(RecvError::Closed) => break,
-                Err(e) => {
-                    error!("failed to read from event stream: {e:#}");
-                    continue;
+                    Err(RecvError::Closed) => break,
+                    Err(e) => {
+                        error!("failed to read from event stream: {e:#}");
+                        continue;
+                    }
                 }
             }
         }
@@ -213,14 +222,18 @@ impl Monitor for MonitorService {
         &self,
         _request: Request<SubscribeEventsRequest>,
     ) -> Result<Response<Self::SubscribeEventsStream>, Status> {
-        let mut receiver = self.events.resubscribe();
+        let mut receiver = self.tx.subscribe();
+        let token = self.token.clone();
 
         let stream = async_stream::stream! {
             loop {
-                match receiver.recv().await {
-                    Ok(event) => yield Ok(event.into_protobuf()),
-                    Err(RecvError::Closed) => break,
-                    Err(e) => yield Err(Status::new(Code::Internal, e.to_string()))
+                tokio::select! {
+                    _ = token.cancelled() => break,
+                    r = receiver.recv() => match r {
+                        Ok(event) => yield Ok(event.into_protobuf()),
+                        Err(RecvError::Closed) => break,
+                        Err(e) => yield Err(Status::new(Code::Internal, e.to_string()))
+                    }
                 }
             }
         };

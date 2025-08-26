@@ -18,6 +18,14 @@ use crate::service::Runner;
 use crate::service::runner::Backend;
 use crate::service::runner::TaskHandle;
 
+/// The capacity for the events channel.
+///
+/// This is the number of events to buffer in the channel before receivers
+/// become lagged.
+///
+/// The value of `100` was chosen simply as a reasonable default.
+const EVENTS_CHANNEL_CAPACITY: usize = 100;
+
 /// A workflow execution engine.
 #[derive(Debug)]
 pub struct Engine {
@@ -33,7 +41,7 @@ pub struct Engine {
 impl Engine {
     /// Constructs a new engine.
     pub fn new() -> Self {
-        let (events_tx, _) = broadcast::channel(100);
+        let (events_tx, _) = broadcast::channel(EVENTS_CHANNEL_CAPACITY);
         Self {
             runners: Default::default(),
             events: Some(events_tx),
@@ -45,8 +53,8 @@ impl Engine {
     /// Constructs a new engine with monitoring enabled.
     #[cfg(feature = "monitoring")]
     pub fn new_with_monitoring(addr: std::net::SocketAddr) -> Self {
-        let (events_tx, events_rx) = broadcast::channel(100);
-        let monitor = crankshaft_monitor::Monitor::start(addr, events_rx);
+        let (events_tx, _) = broadcast::channel(EVENTS_CHANNEL_CAPACITY);
+        let monitor = crankshaft_monitor::Monitor::start(addr, events_tx.clone());
 
         Self {
             runners: Default::default(),

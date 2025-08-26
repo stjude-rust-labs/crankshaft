@@ -5,8 +5,6 @@ mod state;
 mod term;
 mod view;
 
-use Event::*;
-use KeyCode::*;
 use anyhow::Context;
 use anyhow::Result;
 use conn::Connection;
@@ -37,15 +35,22 @@ async fn main() -> Result<()> {
     let mut conn = Connection::new(Uri::from_static("http://localhost:8080"));
     let mut state = State::default();
     let view = View::Tasks;
-    let mut input = Box::pin(input::EventStream::new());
+    let mut input = Box::pin(crossterm::event::EventStream::new());
     let styles = Styles::new();
 
     loop {
         tokio::select! {biased;
-            input = input.next() =>{
-                let input = input.context("keyboard input stream ended early")??;
+            input_event = input.next() =>{
+                let input = input_event.context("keyboard input stream ended early")??;
 
                 if input::should_ignore_key_event(&input){
+                    continue;
+                }
+
+                if state.log_view {
+                    if let Event::Key(KeyEvent {code: KeyCode::Char('q'), ..}) = input {
+                        state.log_view = false;
+                    }
                     continue;
                 }
 
@@ -53,9 +58,27 @@ async fn main() -> Result<()> {
                     return Ok(());
                 }
 
-                if let Key(KeyEvent {
-                            code: Char('t'), ..
-                        }) = input {
+                if input::is_next_task(&input) {
+                    state.task_state_mut().select_next();
+                }
+
+                if input::is_previous_task(&input) {
+                    state.task_state_mut().select_previous();
+                }
+
+                if input::is_view_logs(&input) &&
+                    state.task_state().selected_task().is_some() {
+                        state.log_view = true;
+                }
+
+
+                if input::is_cancel_task(&input) {
+                    if let Some(task) = state.task_state().selected_task() {
+                        conn.cancel_task(task.id()).await;
+                    }
+                }
+
+                if let Event::Key(KeyEvent {code: KeyCode::Char('t'), ..}) = input {
                     state.current_view = View::Tasks;
                 }
             },

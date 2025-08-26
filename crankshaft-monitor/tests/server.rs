@@ -19,6 +19,7 @@ use tokio_retry2::Retry;
 use tokio_retry2::RetryError;
 use tokio_retry2::strategy::ExponentialFactorBackoff;
 use tokio_retry2::strategy::MaxInterval;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn test_subscribe_events() {
@@ -51,6 +52,7 @@ async fn test_subscribe_events() {
         id: 0,
         name: "first".into(),
         tes_id: None,
+        token: CancellationToken::new(),
     })
     .unwrap();
     tx.send(CrankshaftEvent::TaskStarted { id: 0 }).unwrap();
@@ -63,6 +65,7 @@ async fn test_subscribe_events() {
         id: 1,
         name: "second".into(),
         tes_id: Some("tes".into()),
+        token: CancellationToken::new(),
     })
     .unwrap();
     tx.send(CrankshaftEvent::TaskStarted { id: 1 }).unwrap();
@@ -154,6 +157,7 @@ async fn test_service_state() {
         id: 0,
         name: "first".into(),
         tes_id: None,
+        token: CancellationToken::new(),
     })
     .unwrap();
     tx.send(CrankshaftEvent::TaskStarted { id: 0 }).unwrap();
@@ -166,6 +170,7 @@ async fn test_service_state() {
         id: 1,
         name: "second".into(),
         tes_id: Some("tes".into()),
+        token: CancellationToken::new(),
     })
     .unwrap();
     tx.send(CrankshaftEvent::TaskStarted { id: 1 }).unwrap();

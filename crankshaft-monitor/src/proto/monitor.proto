@@ -10,6 +10,18 @@ service Monitor {
   rpc SubscribeEvents(SubscribeEventsRequest) returns (stream Event) {}
   // Gets the current service state.
   rpc GetServiceState(ServiceStateRequest) returns (ServiceStateResponse) {}
+  // Cancels a task 
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse) {}
+}
+
+// The request for cancelling a task
+message CancelTaskRequest{
+  uint64 id = 1;
+}
+
+// The response of task cancel event
+message CancelTaskResponse {
+  bool success = 1;
 }
 
 // The request for retrieving the current service state.

@@ -272,7 +272,7 @@ impl crate::Backend for Backend {
                 .context("failed to create task with TES server")?
                 .id;
 
-            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: Some(tes_id.clone()) });
+            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: Some(tes_id.clone()), token: token.clone()});
 
             let result = select! {
                 // Always poll the cancellation token first

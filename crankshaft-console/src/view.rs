@@ -22,7 +22,7 @@ impl View {
     /// Renders the view.
     pub fn render(self, frame: &mut Frame<'_>, state: &mut State) {
         match self {
-            View::Tasks => tasks::render_tasks(frame, state.task_state()),
+            View::Tasks => tasks::render_tasks(frame, state.task_state_mut()),
         }
     }
 }

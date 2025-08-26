@@ -11,6 +11,7 @@ rust-version.workspace = true
 [dependencies]
 bytes.workspace = true
 nonempty.workspace = true
+tokio-util.workspace = true
 
 [lints]
 workspace = true

@@ -33,3 +33,47 @@ pub fn should_quit(input: &Event) -> bool {
         _ => false,
     }
 }
+
+/// Returns true if the user wants to go to the next task.
+pub fn is_next_task(input: &Event) -> bool {
+    matches!(
+        input,
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('j') | KeyCode::Down,
+            ..
+        })
+    )
+}
+
+/// Returns true if the user wants to go to the previous task.
+pub fn is_previous_task(input: &Event) -> bool {
+    matches!(
+        input,
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('k') | KeyCode::Up,
+            ..
+        })
+    )
+}
+
+/// Returns true if the user wants to see the logs of the selected task.
+pub fn is_view_logs(input: &Event) -> bool {
+    matches!(
+        input,
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('l'),
+            ..
+        })
+    )
+}
+
+/// Returns true if the user wants to cancel the selected task.
+pub fn is_cancel_task(input: &Event) -> bool {
+    matches!(
+        input,
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('c'),
+            ..
+        })
+    )
+}

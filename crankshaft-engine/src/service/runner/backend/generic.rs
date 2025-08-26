@@ -277,6 +277,7 @@ impl crate::Backend for Backend {
                     id: task_id,
                     name: task_name.clone(),
                     tes_id: None,
+                    token: token.clone()
                 }
             );
 

@@ -553,7 +553,7 @@ impl crate::Backend for Backend {
             };
 
             // Send the created event
-            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: None });
+            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: None, token:token.clone()  });
 
             // Run the task to completion
             let result = run.await;

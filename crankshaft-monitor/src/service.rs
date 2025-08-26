@@ -18,6 +18,8 @@ use tonic::Result;
 use tonic::Status;
 use tracing::error;
 
+use crate::proto::CancelTaskRequest;
+use crate::proto::CancelTaskResponse;
 use crate::proto::Event;
 use crate::proto::ExitStatus;
 use crate::proto::ServiceStateRequest;
@@ -76,9 +78,9 @@ impl IntoProtobuf<ExitStatus> for std::process::ExitStatus {
 impl IntoProtobuf<EventKind> for CrankshaftEvent {
     fn into_protobuf(self) -> EventKind {
         match self {
-            CrankshaftEvent::TaskCreated { id, name, tes_id } => {
-                EventKind::Created(TaskCreatedEvent { id, name, tes_id })
-            }
+            CrankshaftEvent::TaskCreated {
+                id, name, tes_id, ..
+            } => EventKind::Created(TaskCreatedEvent { id, name, tes_id }),
             CrankshaftEvent::TaskStarted { id } => EventKind::Started(TaskStartedEvent { id }),
             CrankshaftEvent::TaskContainerCreated { id, container } => {
                 EventKind::ContainerCreated(TaskContainerCreatedEvent { id, container })
@@ -134,6 +136,8 @@ impl IntoProtobuf<Event> for CrankshaftEvent {
 pub struct ServiceState {
     /// The map of task identifier to its events.
     tasks: HashMap<TaskId, TaskEvents>,
+    /// The map of task identifier to its CancellationToken
+    tokens: HashMap<TaskId, CancellationToken>,
 }
 
 /// Represents a gRPC service for monitoring Crankshaft events in real-time.
@@ -173,8 +177,11 @@ impl MonitorService {
                 r = events.recv() => match r {
                     Ok(event) => {
                         let (id, remove) = match event {
-                            CrankshaftEvent::TaskCreated { id, .. }
-                            | CrankshaftEvent::TaskStarted { id }
+                            CrankshaftEvent::TaskCreated { id, ref token, .. } => {
+                                state.write().await.tokens.insert(id, token.clone());
+                                (id, false)
+                            },
+                            CrankshaftEvent::TaskStarted { id }
                             | CrankshaftEvent::TaskContainerCreated { id, .. }
                             | CrankshaftEvent::TaskContainerExited { id, .. }
                             | CrankshaftEvent::TaskStdout { id, .. }
@@ -184,6 +191,7 @@ impl MonitorService {
                             | CrankshaftEvent::TaskCanceled { id }
                             | CrankshaftEvent::TaskPreempted { id } => (id, true),
                         };
+
 
                         if remove {
                             let mut state = state.write().await;
@@ -249,5 +257,23 @@ impl Monitor for MonitorService {
         Ok(Response::new(ServiceStateResponse {
             tasks: state.tasks.clone(),
         }))
+    }
+
+    async fn cancel_task(
+        &self,
+        request: Request<CancelTaskRequest>,
+    ) -> Result<Response<CancelTaskResponse>, Status> {
+        let id = request.into_inner().id;
+
+        let mut state = self.state.write().await;
+
+        if let Some(token) = state.tokens.remove(&id) {
+            token.cancel();
+            state.tasks.remove(&id);
+
+            Ok(Response::new(CancelTaskResponse { success: true }))
+        } else {
+            Err(Status::not_found(format!("Task {id} not found")))
+        }
     }
 }

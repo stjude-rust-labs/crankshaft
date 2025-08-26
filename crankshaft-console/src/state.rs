@@ -16,6 +16,8 @@ pub struct State {
     pub tasks_state: TuiTasksState,
     /// The current view of the TUI.
     pub current_view: View,
+    /// Whether the log view is active.
+    pub log_view: bool,
 }
 
 impl Default for State {
@@ -24,6 +26,7 @@ impl Default for State {
         Self {
             tasks_state: TuiTasksState::default(),
             current_view: View::default(),
+            log_view: false,
         }
     }
 }
@@ -42,5 +45,10 @@ impl State {
     /// Returns the task state.
     pub fn task_state(&self) -> &TuiTasksState {
         &self.tasks_state
+    }
+
+    /// Returns a mutable reference to the task state.
+    pub fn task_state_mut(&mut self) -> &mut TuiTasksState {
+        &mut self.tasks_state
     }
 }

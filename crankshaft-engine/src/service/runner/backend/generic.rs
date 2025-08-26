@@ -21,6 +21,8 @@ use regex::Regex;
 use tokio::select;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
+use tracing::debug;
+use tracing::error;
 use tracing::trace;
 use tracing::warn;
 
@@ -215,6 +217,9 @@ impl crate::Backend for Backend {
                     .await
                     .context("failed to run submit command")?;
                 if !output.status.success() {
+                    error!(status = ?output.status, "submit command failed");
+                    debug!(stdout = %String::from_utf8_lossy(&output.stdout), "submit command failed");
+                    debug!(stderr = %String::from_utf8_lossy(&output.stderr), "submit command failed");
                     return Err(anyhow!("submit command failed: {}", output.status).into());
                 }
 

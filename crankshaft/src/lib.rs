@@ -15,3 +15,6 @@ pub use crankshaft_engine::Engine;
 #[cfg(feature = "events")]
 #[doc(inline)]
 pub use crankshaft_events as events;
+#[cfg(feature = "docker")]
+#[doc(inline)]
+pub use crankshaft_docker as docker;

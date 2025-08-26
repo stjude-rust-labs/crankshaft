@@ -22,9 +22,9 @@ use tokio_retry2::strategy::MaxInterval;
 
 #[tokio::test]
 async fn test_subscribe_events() {
-    let (tx, rx) = broadcast::channel(16);
+    let (tx, _) = broadcast::channel(16);
 
-    let monitor = Monitor::start("127.0.0.1:32000".parse().unwrap(), rx);
+    let monitor = Monitor::start("127.0.0.1:32000".parse().unwrap(), tx.clone());
 
     // Perform a retry with backoff for connecting as the monitor starts
     // asynchronously
@@ -52,20 +52,20 @@ async fn test_subscribe_events() {
         name: "first".into(),
         tes_id: None,
     })
-    .ok();
-    tx.send(CrankshaftEvent::TaskStarted { id: 0 }).ok();
+    .unwrap();
+    tx.send(CrankshaftEvent::TaskStarted { id: 0 }).unwrap();
     tx.send(CrankshaftEvent::TaskCompleted {
         id: 0,
         exit_statuses: NonEmpty::new(ExitStatus::from_raw(0)),
     })
-    .ok();
+    .unwrap();
     tx.send(CrankshaftEvent::TaskCreated {
         id: 1,
         name: "second".into(),
         tes_id: Some("tes".into()),
     })
-    .ok();
-    tx.send(CrankshaftEvent::TaskStarted { id: 1 }).ok();
+    .unwrap();
+    tx.send(CrankshaftEvent::TaskStarted { id: 1 }).unwrap();
 
     // Read the events back from the client
     let event = events
@@ -144,7 +144,9 @@ async fn test_subscribe_events() {
 
 #[tokio::test]
 async fn test_service_state() {
-    let (tx, rx) = broadcast::channel(16);
+    let (tx, _) = broadcast::channel(16);
+
+    let monitor = Monitor::start("127.0.0.1:32001".parse().unwrap(), tx.clone());
 
     // Send some dummy events before the server starts
     // These events will be persisted in the service state
@@ -153,22 +155,20 @@ async fn test_service_state() {
         name: "first".into(),
         tes_id: None,
     })
-    .ok();
-    tx.send(CrankshaftEvent::TaskStarted { id: 0 }).ok();
+    .unwrap();
+    tx.send(CrankshaftEvent::TaskStarted { id: 0 }).unwrap();
     tx.send(CrankshaftEvent::TaskCompleted {
         id: 0,
         exit_statuses: NonEmpty::new(ExitStatus::from_raw(0)),
     })
-    .ok();
+    .unwrap();
     tx.send(CrankshaftEvent::TaskCreated {
         id: 1,
         name: "second".into(),
         tes_id: Some("tes".into()),
     })
-    .ok();
-    tx.send(CrankshaftEvent::TaskStarted { id: 1 }).ok();
-
-    let monitor = Monitor::start("127.0.0.1:32001".parse().unwrap(), rx);
+    .unwrap();
+    tx.send(CrankshaftEvent::TaskStarted { id: 1 }).unwrap();
 
     // Perform a retry with backoff for connecting as the monitor starts
     // asynchronously

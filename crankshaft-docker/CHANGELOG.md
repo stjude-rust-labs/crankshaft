@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+* Added the caller's effective gid to containers so a container's user can
+  access mounts and working directory ([#54](https://github.com/stjude-rust-labs/crankshaft/pull/54)).
 * Implemented sending events through the broadcast channel ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
 
 ### Changed

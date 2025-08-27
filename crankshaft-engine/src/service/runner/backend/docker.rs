@@ -499,6 +499,9 @@ impl crate::Backend for Backend {
                             .envs(execution.env)
                             .host_config(HostConfig {
                                 mounts: Some(mounts.clone()),
+                                // Ensure the caller's group id is added so that the container can access the mounts and working directory
+                                #[cfg(unix)]
+                                group_add: Some(vec![unsafe{ libc::getegid() }.to_string()]),
                                 ..task.resources.as_ref().map(|r| r.into()).unwrap_or_default()
                             });
 

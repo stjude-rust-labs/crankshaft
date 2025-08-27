@@ -43,7 +43,12 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
     let header = Row::new(headers).height(1).bottom_margin(1);
 
     let rows = tasks_state.tasks().values().enumerate().map(|(i, task)| {
-        let mut row = vec![
+        let row = vec![
+            Cell::from(if tasks_state.selected_task_index == Some(i) {
+                "→"
+            } else {
+                ""
+            }),
             Cell::from(task.id().to_string()),
             Cell::from(task.name()),
             Cell::from(task.tes_id().unwrap_or_default()),
@@ -51,11 +56,6 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
             Cell::from(task.timestamp().to_string()),
             Cell::from(task.message()),
         ];
-        if tasks_state.selected_task_index == Some(i) {
-            row.insert(0, Cell::from("→"));
-        } else {
-            row.insert(0, Cell::from(""));
-        }
         Row::new(row)
     });
 

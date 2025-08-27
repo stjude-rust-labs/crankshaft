@@ -271,7 +271,7 @@ impl Monitor for MonitorService {
             token.cancel();
             state.tasks.remove(&id);
 
-            Ok(Response::new(CancelTaskResponse { success: true }))
+            Ok(Response::new(CancelTaskResponse {}))
         } else {
             Err(Status::not_found(format!("Task {id} not found")))
         }

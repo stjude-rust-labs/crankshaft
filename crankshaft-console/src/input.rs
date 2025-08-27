@@ -67,6 +67,17 @@ pub fn is_view_logs(input: &Event) -> bool {
     )
 }
 
+/// Returns true if the user wants to see the task view.
+pub fn is_view_tasks(input: &Event) -> bool {
+    matches!(
+        input,
+        Event::Key(KeyEvent {
+            code: KeyCode::Char('t'),
+            ..
+        })
+    )
+}
+
 /// Returns true if the user wants to cancel the selected task.
 pub fn is_cancel_task(input: &Event) -> bool {
     matches!(

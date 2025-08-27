@@ -9,10 +9,7 @@ pub struct CancelTaskRequest {
 /// The response of task cancel event
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct CancelTaskResponse {
-    #[prost(bool, tag = "1")]
-    pub success: bool,
-}
+pub struct CancelTaskResponse {}
 /// The request for retrieving the current service state.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

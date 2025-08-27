@@ -47,6 +47,24 @@ async fn main() -> Result<()> {
                     continue;
                 }
 
+                if state.current_view == View::Cancel {
+                    if let Event::Key(key) = input {
+                        match key.code {
+                            KeyCode::Char('y') => {
+                                if let Some(task) = state.task_state().selected_task() {
+                                    conn.cancel_task(task.id()).await;
+                                }
+                                state.current_view = View::Tasks;
+                            }
+                            KeyCode::Char('n') | KeyCode::Esc => {
+                                state.current_view = View::Tasks;
+                            }
+                            _ => {}
+                        }
+                    }
+                    continue;
+                }
+
                 if state.log_view {
                     if let Event::Key(KeyEvent {code: KeyCode::Char('q'), ..}) = input {
                         state.log_view = false;
@@ -60,26 +78,31 @@ async fn main() -> Result<()> {
 
                 if input::is_next_task(&input) {
                     state.task_state_mut().select_next();
+                    continue;
                 }
 
                 if input::is_previous_task(&input) {
                     state.task_state_mut().select_previous();
+                    continue;
                 }
 
-                if input::is_view_logs(&input) &&
-                    state.task_state().selected_task().is_some() {
+                if input::is_view_logs(&input) {
+                    if state.task_state().selected_task().is_some() {
                         state.log_view = true;
+                    }
+                    continue;
                 }
-
 
                 if input::is_cancel_task(&input) {
-                    if let Some(task) = state.task_state().selected_task() {
-                        conn.cancel_task(task.id()).await;
+                    if state.task_state().selected_task().is_some() {
+                        state.current_view = View::Cancel;
                     }
+                    continue;
                 }
 
-                if let Event::Key(KeyEvent {code: KeyCode::Char('t'), ..}) = input {
+                if input::is_view_tasks(&input){
                     state.current_view = View::Tasks;
+                    continue;
                 }
             },
             instrument_message = conn.next_message(&mut state)=> {

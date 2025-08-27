@@ -20,9 +20,7 @@ message CancelTaskRequest{
 }
 
 // The response of task cancel event
-message CancelTaskResponse {
-  bool success = 1;
-}
+message CancelTaskResponse {}
 
 // The request for retrieving the current service state.
 message ServiceStateRequest {}

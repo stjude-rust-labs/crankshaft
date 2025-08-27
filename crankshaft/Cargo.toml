@@ -10,7 +10,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [features]
-default = ["config", "engine", "events", "docker"]
+default = ["config", "engine", "events"]
 config = ["dep:crankshaft-config"]
 engine = ["dep:crankshaft-engine"]
 events = ["dep:crankshaft-events"]

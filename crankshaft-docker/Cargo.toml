@@ -33,7 +33,7 @@ clap-verbosity-flag = { workspace = true, optional = true }
 crankshaft-events = { path = "../crankshaft-events", version = "0.1.0" }
 futures.workspace = true
 indexmap = { workspace = true }
-libc.workspace = true
+nix.workspace = true
 serde.workspace = true
 shlex = { workspace = true, optional = true }
 tar.workspace = true
@@ -45,6 +45,7 @@ tracing-log = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 
 [dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

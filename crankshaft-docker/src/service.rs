@@ -48,8 +48,8 @@ pub struct Service {
     /// service.
     client: Docker,
 
-    /// The name of the service.
-    name: String,
+    /// The id of the service.
+    id: String,
 
     /// The path to the file to write the container's stdout stream to.
     stdout: Option<PathBuf>,
@@ -65,21 +65,21 @@ impl Service {
     /// name externally from a user (say, on the command line as an argument).
     pub fn new(
         client: Docker,
-        name: String,
+        id: String,
         stdout: Option<PathBuf>,
         stderr: Option<PathBuf>,
     ) -> Self {
         Self {
             client,
-            name,
+            id,
             stdout,
             stderr,
         }
     }
 
-    /// Gets the name of the service.
-    pub fn name(&self) -> &str {
-        &self.name
+    /// Gets the id of the service.
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     /// Runs a service and waits for the task execution to end.
@@ -106,8 +106,8 @@ impl Service {
 
         let (container_id, exit_code) = loop {
             trace!(
-                "polling tasks for service `{name}` (task `{task_name}`)",
-                name = self.name
+                "polling tasks for service `{id}` (task `{task_name}`)",
+                id = self.id
             );
 
             // Get the list of tasks for the service (there should be only one)
@@ -116,7 +116,7 @@ impl Service {
                 .list_tasks(Some(ListTasksOptions {
                     filters: Some(HashMap::from_iter([(
                         String::from("service"),
-                        vec![self.name.to_owned()],
+                        vec![self.id.to_owned()],
                     )])),
                 }))
                 .await
@@ -150,8 +150,8 @@ impl Service {
                 | Some(TaskState::PREPARING)
                 | None => {
                     trace!(
-                        "task has not yet started for service `{name}` (task `{task_name}`)",
-                        name = self.name
+                        "task has not yet started for service `{id}` (task `{task_name}`)",
+                        id = self.id
                     );
 
                     // Query again after a delay
@@ -193,9 +193,8 @@ impl Service {
                         .output;
 
                     info!(
-                        "service `{name}` (task `{task_name}`) has started container \
-                         `{container_id}",
-                        name = self.name
+                        "service `{id}` (task `{task_name}`) has started container `{container_id}",
+                        id = self.id
                     );
 
                     if let Some(events) = &events {
@@ -337,9 +336,9 @@ impl Service {
         let status = ExitStatus::from_raw(exit_code as u32);
 
         info!(
-            "container `{container_id}` for service `{name}` (task `{task_name}`) has exited with \
+            "container `{container_id}` for service `{id}` (task `{task_name}`) has exited with \
              {status}",
-            name = self.name
+            id = self.id
         );
 
         if let Some(events) = &events {
@@ -358,9 +357,9 @@ impl Service {
 
     /// Deletes a service.
     pub async fn delete(&self) -> Result<()> {
-        debug!("deleting Docker service `{name}`", name = self.name);
+        debug!("deleting Docker service `{id}`", id = self.id);
         self.client
-            .delete_service(&self.name)
+            .delete_service(&self.id)
             .await
             .map_err(Error::Docker)?;
 

@@ -458,6 +458,7 @@ impl crate::Backend for Backend {
                     let (result, cleanup) = if use_service {
                         let mut builder = client
                             .service_builder()
+                            .name(&name)
                             .image(execution.image)
                             .program(execution.program)
                             .args(execution.args)
@@ -476,8 +477,8 @@ impl crate::Backend for Backend {
                             builder = builder.work_dir(work_dir);
                         }
 
-                        let service = Arc::new(builder.try_build(name).await.map_err(|e| TaskRunError::Other(e.into()))?);
-                        info!("created service `{name}` (task `{task_name}`)", name = service.name());
+                        let service = Arc::new(builder.try_build().await.map_err(|e| TaskRunError::Other(e.into()))?);
+                        info!("created service `{id}` (task `{task_name}`)", id = service.id());
 
                         select! {
                             // Always poll the cancellation token first
@@ -493,6 +494,7 @@ impl crate::Backend for Backend {
                     } else {
                         let mut builder = client
                             .container_builder()
+                            .name(&name)
                             .image(execution.image)
                             .program(execution.program)
                             .args(execution.args)
@@ -501,7 +503,7 @@ impl crate::Backend for Backend {
                                 mounts: Some(mounts.clone()),
                                 // Ensure the caller's group id is added so that the container can access the mounts and working directory
                                 #[cfg(unix)]
-                                group_add: Some(vec![unsafe{ libc::getegid() }.to_string()]),
+                                group_add: Some(vec![nix::unistd::Gid::effective().to_string()]),
                                 ..task.resources.as_ref().map(|r| r.into()).unwrap_or_default()
                             });
 
@@ -519,7 +521,7 @@ impl crate::Backend for Backend {
 
                         let container = Arc::new(
                             builder
-                                .try_build(name)
+                                .try_build()
                                 .await.map_err(|e| TaskRunError::Other(e.into()))?,
                         );
 
@@ -662,4 +664,79 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    #[tokio::test]
+    #[cfg(target_os = "linux")]
+    async fn backend_adds_user_egid() -> anyhow::Result<()> {
+        use std::fs;
+
+        use anyhow::Context;
+        use nix::unistd::Gid;
+        use tempfile::NamedTempFile;
+        use url::Url;
+
+        use super::*;
+        use crate::service::runner::Backend as _;
+        use crate::service::runner::NAME_BUFFER_LEN;
+        use crate::task::Execution;
+        use crate::task::Output;
+        use crate::task::output::Type;
+
+        let names = Arc::new(Mutex::new(GeneratorIterator::new(
+            UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
+            NAME_BUFFER_LEN,
+        )));
+
+        let backend = Backend::initialize_default_with(Config::default(), names, None)
+            .await
+            .context("failed to create backend")?;
+
+        // Get the current user's effective gid
+        let gid = Gid::effective();
+
+        let stdout_path = NamedTempFile::new()
+            .context("failed to create temporary file")?
+            .into_temp_path();
+
+        // Run the task
+        let statuses = backend
+            .run(
+                Task::builder()
+                    .executions(NonEmpty::new(
+                        Execution::builder()
+                            .image("ubuntu:latest")
+                            .program("/usr/bin/id")
+                            .stdout("/mnt/stdout")
+                            .build(),
+                    ))
+                    .outputs(vec![
+                        Output::builder()
+                            .ty(Type::File)
+                            .path("/mnt/stdout")
+                            .url(
+                                Url::from_file_path(&stdout_path)
+                                    .expect("failed to get URL for stdout path"),
+                            )
+                            .build(),
+                    ])
+                    .build(),
+                CancellationToken::new(),
+            )
+            .context("failed to run task")?
+            .await
+            .context("task execution failed")?;
+
+        assert!(statuses.first().success(), "container failed");
+
+        // Assert that the command output had the user's group added
+        let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
+        assert!(
+            stdout.contains(&format!("uid=0(root) gid=0(root) groups=0(root),{gid}")),
+            "task stdout of `{stdout}` did not contain the expected output"
+        );
+        Ok(())
+    }
 }

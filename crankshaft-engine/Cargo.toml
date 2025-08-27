@@ -25,7 +25,7 @@ crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.1.0", option
 futures.workspace = true
 growable-bloom-filter.workspace = true
 indexmap.workspace = true
-libc.workspace = true
+nix.workspace = true
 nonempty.workspace = true
 rand.workspace = true
 regex.workspace = true

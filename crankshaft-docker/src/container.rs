@@ -12,8 +12,8 @@ use std::process::ExitStatus;
 use bollard::Docker;
 use bollard::body_full;
 use bollard::container::LogOutput;
-use bollard::query_parameters::AttachContainerOptions;
 use bollard::query_parameters::InspectContainerOptions;
+use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::RemoveContainerOptions;
 use bollard::query_parameters::StartContainerOptions;
 use bollard::query_parameters::UploadToContainerOptions;
@@ -184,33 +184,6 @@ impl Container {
                 .ok();
         }
 
-        // Attach to the container before we start it
-        let logs = if self.stdout.is_some() || self.stderr.is_some() {
-            debug!(
-                "attaching to container `{name}` (task `{task_name}`)",
-                name = self.name
-            );
-
-            // Attach to the logs stream.
-            Some(
-                self.client
-                    .attach_container(
-                        &self.name,
-                        Some(AttachContainerOptions {
-                            stdout: self.stdout.is_some(),
-                            stderr: self.stderr.is_some(),
-                            stream: true,
-                            ..Default::default()
-                        }),
-                    )
-                    .await
-                    .map_err(Error::Docker)?
-                    .output,
-            )
-        } else {
-            None
-        };
-
         info!(
             "starting container `{name}` (task `{task_name}`)",
             name = self.name
@@ -238,6 +211,17 @@ impl Container {
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
+            let logs = self.client.logs(
+                &self.name,
+                Some(
+                    LogsOptionsBuilder::new()
+                        .stdout(self.stdout.is_some())
+                        .stderr(self.stderr.is_some())
+                        .follow(true)
+                        .build(),
+                ),
+            );
+
             let stdout = match &self.stdout {
                 Some(path) => Some((
                     path.as_path(),
@@ -264,13 +248,7 @@ impl Container {
                 None => None,
             };
 
-            write_logs(
-                logs.expect("should have attached to the container"),
-                stdout,
-                stderr,
-                events.as_ref(),
-            )
-            .await?;
+            write_logs(logs, stdout, stderr, events.as_ref()).await?;
         }
 
         // Wait for the container to be completed.

@@ -164,8 +164,7 @@ impl Service {
                     // TODO: make this a variable delay so as to lessen a thundering herd
                     sleep(Duration::from_secs(1)).await;
                 }
-                Some(TaskState::RUNNING) | Some(TaskState::COMPLETE) => {
-                    // Get the container id
+                Some(TaskState::RUNNING) | Some(TaskState::COMPLETE) | Some(TaskState::FAILED) => {
                     let container_status = status.container_status.ok_or_else(|| {
                         Error::Message(
                             "Docker daemon reported a task with no container status".into(),
@@ -173,7 +172,7 @@ impl Service {
                     })?;
 
                     let container_id = container_status.container_id.ok_or_else(|| {
-                        Error::Message("Docker reported a running task with no container id".into())
+                        Error::Message("Docker reported a task with no container id".into())
                     })?;
 
                     if let Some(events) = &events {
@@ -271,15 +270,19 @@ impl Service {
                         break (
                             container_id,
                             container_status.exit_code.ok_or_else(|| {
-                                Error::Message(
-                                    "Docker reported a completed task with no exit code".into(),
-                                )
+                                Error::Message(format!(
+                                    "Docker reported a {kind} task with no exit code",
+                                    kind = if status.state == Some(TaskState::FAILED) {
+                                        "failed"
+                                    } else {
+                                        "completed"
+                                    }
+                                ))
                             })?,
                         );
                     }
                 }
-                Some(TaskState::FAILED)
-                | Some(TaskState::SHUTDOWN)
+                Some(TaskState::SHUTDOWN)
                 | Some(TaskState::REJECTED)
                 | Some(TaskState::ORPHANED)
                 | Some(TaskState::REMOVE) => {

@@ -16,6 +16,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 * Based events on `crankshaft-events` ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).
 
+### Fixed
+
+* Fixed Docker backend to write logs when interacting with a swarm ([#55](https://github.com/stjude-rust-labs/crankshaft/pull/55)).
+
 ## 0.2.0 - 04-01-2025
 
 ### Changed

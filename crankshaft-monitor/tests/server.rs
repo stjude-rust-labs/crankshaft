@@ -7,6 +7,7 @@ use std::process::ExitStatus;
 
 use crankshaft_events::Event as CrankshaftEvent;
 use crankshaft_monitor::Monitor;
+use crankshaft_monitor::proto::CancelTaskRequest;
 use crankshaft_monitor::proto::ServiceStateRequest;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::event::EventKind;
@@ -216,6 +217,46 @@ async fn test_service_state() {
         }
         _ => panic!("unexpected event"),
     }
+
+    drop(tx);
+    monitor.stop().await;
+}
+
+#[tokio::test]
+async fn test_cancel_task() {
+    let (tx, _) = broadcast::channel(16);
+
+    let monitor = Monitor::start("127.0.0.1:32002".parse().unwrap(), tx.clone());
+
+    let strategy = ExponentialFactorBackoff::from_millis(50, 2.0)
+        .max_interval(1000)
+        .take(10);
+
+    let mut client = Retry::spawn(strategy, || async {
+        MonitorClient::connect("http://127.0.0.1:32002")
+            .await
+            .map_err(RetryError::transient)
+    })
+    .await
+    .expect("failed to connect to monitor");
+
+    let token = CancellationToken::new();
+
+    // Send some dummy events at the start
+    tx.send(CrankshaftEvent::TaskCreated {
+        id: 0,
+        name: "first".into(),
+        tes_id: None,
+        token: token.clone(),
+    })
+    .unwrap();
+
+    client
+        .cancel_task(CancelTaskRequest { id: 0 })
+        .await
+        .expect("failed to cancel task");
+
+    token.cancelled().await;
 
     drop(tx);
     monitor.stop().await;

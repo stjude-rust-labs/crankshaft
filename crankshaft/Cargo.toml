@@ -14,10 +14,12 @@ default = ["config", "engine", "events"]
 config = ["dep:crankshaft-config"]
 engine = ["dep:crankshaft-engine"]
 events = ["dep:crankshaft-events"]
+docker = ["dep:crankshaft-docker"]
 monitoring = ["dep:crankshaft-engine", "crankshaft-engine/monitoring"]
 
 [dependencies]
 crankshaft-config = { path = "../crankshaft-config", version = "0.3.0", optional = true }
+crankshaft-docker = { path = "../crankshaft-docker", version = "0.2.0", optional = true }
 crankshaft-engine = { path = "../crankshaft-engine", version = "0.4.0", optional = true }
 crankshaft-events = { path = "../crankshaft-events", version = "0.1.0", optional = true }
 

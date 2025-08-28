@@ -25,6 +25,9 @@ pub struct Builder {
     /// container.
     client: Docker,
 
+    /// The name of the service.
+    name: Option<String>,
+
     /// The image (e.g., `ubuntu:latest`).
     image: Option<String>,
 
@@ -58,6 +61,7 @@ impl Builder {
     pub fn new(client: Docker) -> Self {
         Self {
             client,
+            name: None,
             image: Default::default(),
             program: Default::default(),
             args: Default::default(),
@@ -68,6 +72,12 @@ impl Builder {
             mounts: Default::default(),
             resources: Default::default(),
         }
+    }
+
+    /// Sets the name of the service.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
     }
 
     /// Adds an image name.
@@ -147,7 +157,7 @@ impl Builder {
     }
 
     /// Consumes `self` and attempts to create a Docker service.
-    pub async fn try_build(self, name: impl Into<String>) -> Result<Service> {
+    pub async fn try_build(self) -> Result<Service> {
         let image = self
             .image
             .ok_or_else(|| Error::MissingBuilderField("image"))?;
@@ -155,12 +165,11 @@ impl Builder {
             .program
             .ok_or_else(|| Error::MissingBuilderField("program"))?;
 
-        let name = name.into();
         let response = self
             .client
             .create_service(
                 ServiceSpec {
-                    name: Some(name.clone()),
+                    name: self.name,
                     mode: Some(ServiceSpecMode {
                         replicated: Some(ServiceSpecModeReplicated { replicas: Some(1) }),
                         ..Default::default()
@@ -173,6 +182,10 @@ impl Builder {
                             dir: self.work_dir,
                             env: Some(self.env.iter().map(|(k, v)| format!("{k}={v}")).collect()),
                             mounts: Some(self.mounts),
+                            // Ensure the caller's group id is added so that the container can
+                            // access the mounts and working directory
+                            #[cfg(unix)]
+                            groups: Some(vec![nix::unistd::Gid::effective().to_string()]),
                             ..Default::default()
                         }),
                         resources: self.resources,
@@ -195,7 +208,9 @@ impl Builder {
 
         Ok(Service {
             client: self.client,
-            name,
+            id: response.id.ok_or_else(|| {
+                Error::Message("Docker daemon response did not contain a service identifier".into())
+            })?,
             stdout: self.stdout,
             stderr: self.stderr,
         })

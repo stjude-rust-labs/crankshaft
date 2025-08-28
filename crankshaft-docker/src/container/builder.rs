@@ -19,6 +19,9 @@ pub struct Builder {
     /// container.
     client: Docker,
 
+    /// The name for the container.
+    name: Option<String>,
+
     /// The image (e.g., `ubuntu:latest`).
     image: Option<String>,
 
@@ -49,6 +52,7 @@ impl Builder {
     pub fn new(client: Docker) -> Self {
         Self {
             client,
+            name: None,
             image: Default::default(),
             program: Default::default(),
             args: Default::default(),
@@ -58,6 +62,12 @@ impl Builder {
             work_dir: Default::default(),
             host_config: Default::default(),
         }
+    }
+
+    /// Sets the name of the container.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
     }
 
     /// Adds an image name.
@@ -127,7 +137,7 @@ impl Builder {
     /// Consumes `self` and attempts to create a Docker container.
     ///
     /// Note that the creation of a container does not start the container.
-    pub async fn try_build(self, name: impl Into<String>) -> Result<Container> {
+    pub async fn try_build(self) -> Result<Container> {
         let image = self
             .image
             .ok_or_else(|| Error::MissingBuilderField("image"))?;
@@ -139,12 +149,11 @@ impl Builder {
         cmd.push(program);
         cmd.extend(self.args);
 
-        let name = name.into();
         let response = self
             .client
             .create_container(
                 Some(CreateContainerOptions {
-                    name: Some(name.clone()),
+                    name: self.name,
                     ..Default::default()
                 }),
                 ContainerCreateBody {

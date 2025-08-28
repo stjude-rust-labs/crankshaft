@@ -97,6 +97,7 @@ async fn create_container(
 ) -> Result<Container> {
     Ok(docker
         .container_builder()
+        .name(name)
         .image(format!(
             "{image}:{tag}",
             image = image.as_ref(),
@@ -104,7 +105,7 @@ async fn create_container(
         ))
         .program(program)
         .args(args)
-        .try_build(name)
+        .try_build()
         .await?)
 }
 

@@ -16,10 +16,7 @@ pub fn should_ignore_key_event(input: &Event) -> bool {
 pub fn should_quit(input: &Event) -> bool {
     use Event::*;
     use KeyCode::*;
-    match input {
-        Key(KeyEvent {
-            code: Char('q'), ..
-        }) => true,
+    matches!(input,
         Key(KeyEvent {
             code: Char('c'),
             modifiers,
@@ -29,9 +26,7 @@ pub fn should_quit(input: &Event) -> bool {
             code: Char('d'),
             modifiers,
             ..
-        }) if modifiers.contains(KeyModifiers::CONTROL) => true,
-        _ => false,
-    }
+        }) if modifiers.contains(KeyModifiers::CONTROL))
 }
 
 /// Returns true if the user wants to go to the next task.
@@ -51,17 +46,6 @@ pub fn is_previous_task(input: &Event) -> bool {
         input,
         Event::Key(KeyEvent {
             code: KeyCode::Char('k') | KeyCode::Up,
-            ..
-        })
-    )
-}
-
-/// Returns true if the user wants to see the logs of the selected task.
-pub fn is_view_logs(input: &Event) -> bool {
-    matches!(
-        input,
-        Event::Key(KeyEvent {
-            code: KeyCode::Char('l'),
             ..
         })
     )

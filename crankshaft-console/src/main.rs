@@ -10,7 +10,6 @@ use anyhow::Result;
 use conn::Connection;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use futures_util::StreamExt;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -62,14 +61,6 @@ async fn main() -> Result<()> {
                             _ => {}
                         }
                     }
-                    continue;
-                }
-
-                if state.log_view {
-                    if let Event::Key(KeyEvent {code: KeyCode::Char('q'), ..}) = input {
-                        state.log_view = false;
-                    }
-                    continue;
                 }
 
                 if input::should_quit(&input){
@@ -78,31 +69,20 @@ async fn main() -> Result<()> {
 
                 if input::is_next_task(&input) {
                     state.task_state_mut().select_next();
-                    continue;
                 }
 
                 if input::is_previous_task(&input) {
                     state.task_state_mut().select_previous();
-                    continue;
                 }
 
-                if input::is_view_logs(&input) {
-                    if state.task_state().selected_task().is_some() {
-                        state.log_view = true;
-                    }
-                    continue;
-                }
+                if input::is_cancel_task(&input) &&
+                state.task_state().selected_task().is_some() {
+                    state.current_view = View::Cancel;
 
-                if input::is_cancel_task(&input) {
-                    if state.task_state().selected_task().is_some() {
-                        state.current_view = View::Cancel;
-                    }
-                    continue;
                 }
 
                 if input::is_view_tasks(&input){
                     state.current_view = View::Tasks;
-                    continue;
                 }
             },
             instrument_message = conn.next_message(&mut state)=> {

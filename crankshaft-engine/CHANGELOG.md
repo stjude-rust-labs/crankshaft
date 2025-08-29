@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+* Added support for canceling individual tasks from events ([#53](https://github.com/stjude-rust-labs/crankshaft/pull/53))
 * Docker backend: added the caller's effective gid to containers so a
   container's user can access mounts and working directory ([#54](https://github.com/stjude-rust-labs/crankshaft/pull/54)).
 * Added `monitoring` compile-time feature for enabling support for monitoring

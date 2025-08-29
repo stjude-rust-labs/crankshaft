@@ -43,4 +43,9 @@ impl State {
     pub fn task_state(&self) -> &TuiTasksState {
         &self.tasks_state
     }
+
+    /// Returns a mutable reference to the task state.
+    pub fn task_state_mut(&mut self) -> &mut TuiTasksState {
+        &mut self.tasks_state
+    }
 }

@@ -2,11 +2,13 @@
 use std::error::Error;
 use std::time::Duration;
 
+use crankshaft_monitor::proto::CancelTaskRequest;
 use crankshaft_monitor::proto::Event;
 use crankshaft_monitor::proto::ServiceStateRequest;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures_util::StreamExt;
+use tonic::Code;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
@@ -35,7 +37,7 @@ enum ConnectionState {
     /// The connected state.
     Connected {
         /// The client connection to the server.
-        _client: MonitorClient<Channel>,
+        client: MonitorClient<Channel>,
         /// The stream of events from the server.
         update_stream: Box<Streaming<Event>>,
     },
@@ -77,7 +79,7 @@ impl Connection {
                 state.set_initial_state(service_state);
 
                 Ok::<ConnectionState, Box<dyn Error + Send + Sync>>(ConnectionState::Connected {
-                    _client: client,
+                    client,
                     update_stream,
                 })
             };
@@ -114,6 +116,17 @@ impl Connection {
                     }
                 }
                 ConnectionState::Disconnected(_) => self.connect(state).await,
+            }
+        }
+    }
+
+    /// Cancels a task.
+    pub async fn cancel_task(&mut self, task_id: u64) {
+        if let ConnectionState::Connected { client, .. } = &mut self.state {
+            if let Err(e) = client.cancel_task(CancelTaskRequest { id: task_id }).await {
+                if e.code() != Code::NotFound {
+                    tracing::error!("failed to cancel task: {e}");
+                }
             }
         }
     }

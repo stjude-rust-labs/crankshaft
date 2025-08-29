@@ -256,6 +256,8 @@ impl crate::Backend for Backend {
         let names = self.names.clone();
         let retries = self.policy.clone().take(self.retries);
 
+        let task_token = CancellationToken::new();
+
         Ok(async move {
             // Generate a name of the task if one wasn't provided
             let task_name = task.name.clone().unwrap_or_else(|| {
@@ -272,12 +274,14 @@ impl crate::Backend for Backend {
                 .context("failed to create task with TES server")?
                 .id;
 
-            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: Some(tes_id.clone()) });
+            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: Some(tes_id.clone()), token: task_token.clone()});
 
             let result = select! {
                 // Always poll the cancellation token first
                 biased;
-
+                _ = task_token.cancelled() =>{
+                    Err(TaskRunError::Canceled)
+                }
                 _ = token.cancelled() => {
                     // Cancel the task
                     client

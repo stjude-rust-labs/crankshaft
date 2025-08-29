@@ -23,6 +23,8 @@ use prost_types::Timestamp;
 pub struct TuiTasksState {
     /// A map of currently executing tasks.
     tasks: BTreeMap<u64, Task>,
+    /// The index of the selected task.
+    pub selected_task_index: Option<usize>,
 }
 
 impl TuiTasksState {
@@ -65,6 +67,50 @@ impl TuiTasksState {
                 self.tasks.insert(id, task);
             }
         }
+    }
+
+    /// Selects the next task.
+    pub fn select_next(&mut self) {
+        if self.tasks.is_empty() {
+            self.selected_task_index = None;
+            return;
+        }
+        let i = match self.selected_task_index {
+            Some(i) => {
+                if i >= self.tasks.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.selected_task_index = Some(i);
+    }
+
+    /// Selects the previous task.
+    pub fn select_previous(&mut self) {
+        if self.tasks.is_empty() {
+            self.selected_task_index = None;
+            return;
+        }
+        let i = match self.selected_task_index {
+            Some(i) => {
+                if i == 0 {
+                    self.tasks.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.selected_task_index = Some(i);
+    }
+
+    /// Returns the selected task.
+    pub fn selected_task(&self) -> Option<&Task> {
+        self.selected_task_index
+            .and_then(|i| self.tasks.values().nth(i))
     }
 }
 

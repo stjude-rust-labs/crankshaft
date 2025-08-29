@@ -5,14 +5,11 @@ mod state;
 mod term;
 mod view;
 
-use Event::*;
-use KeyCode::*;
 use anyhow::Context;
 use anyhow::Result;
 use conn::Connection;
 use crossterm::event::Event;
 use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
 use futures_util::StreamExt;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -37,25 +34,54 @@ async fn main() -> Result<()> {
     let mut conn = Connection::new(Uri::from_static("http://localhost:8080"));
     let mut state = State::default();
     let view = View::Tasks;
-    let mut input = Box::pin(input::EventStream::new());
+    let mut input = Box::pin(crossterm::event::EventStream::new());
     let styles = Styles::new();
 
     loop {
         tokio::select! {biased;
-            input = input.next() =>{
-                let input = input.context("keyboard input stream ended early")??;
+            input_event = input.next() =>{
+                let input = input_event.context("keyboard input stream ended early")??;
 
                 if input::should_ignore_key_event(&input){
                     continue;
+                }
+
+                if state.current_view == View::Cancel {
+                    if let Event::Key(key) = input {
+                        match key.code {
+                            KeyCode::Char('y') => {
+                                if let Some(task) = state.task_state().selected_task() {
+                                    conn.cancel_task(task.id()).await;
+                                }
+                                state.current_view = View::Tasks;
+                            }
+                            KeyCode::Char('n') | KeyCode::Esc => {
+                                state.current_view = View::Tasks;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
 
                 if input::should_quit(&input){
                     return Ok(());
                 }
 
-                if let Key(KeyEvent {
-                            code: Char('t'), ..
-                        }) = input {
+                if input::is_next_task(&input) {
+                    state.task_state_mut().select_next();
+                }
+
+                if input::is_previous_task(&input) {
+                    state.task_state_mut().select_previous();
+                }
+
+                if input::is_cancel_task(&input) &&
+                state.task_state().selected_task().is_some() {
+                    state.current_view = View::Cancel;
+
+                }
+
+                if input::is_view_tasks(&input){
                     state.current_view = View::Tasks;
                 }
             },

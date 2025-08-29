@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 
 use bytes::Bytes;
 use nonempty::NonEmpty;
+use tokio_util::sync::CancellationToken;
 
 /// Gets the next task id.
 pub fn next_task_id() -> u64 {
@@ -34,6 +35,9 @@ pub enum Event {
         ///
         /// This is `Some` only for the TES backend.
         tes_id: Option<String>,
+
+        /// The cancellation token provided by the backend
+        token: CancellationToken,
     },
     /// A task has started execution.
     ///

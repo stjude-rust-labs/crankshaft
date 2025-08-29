@@ -9,4 +9,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
+* Added cancellation token to task created event ([#53](https://github.com/stjude-rust-labs/crankshaft/pull/53))
 * Added initial definition of Crankshaft events ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).

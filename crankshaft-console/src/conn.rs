@@ -8,6 +8,7 @@ use crankshaft_monitor::proto::ServiceStateRequest;
 use crankshaft_monitor::proto::SubscribeEventsRequest;
 use crankshaft_monitor::proto::monitor_client::MonitorClient;
 use futures_util::StreamExt;
+use tonic::Code;
 use tonic::Streaming;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
@@ -123,7 +124,9 @@ impl Connection {
     pub async fn cancel_task(&mut self, task_id: u64) {
         if let ConnectionState::Connected { client, .. } = &mut self.state {
             if let Err(e) = client.cancel_task(CancelTaskRequest { id: task_id }).await {
-                tracing::error!("failed to cancel task: {e}");
+                if e.code() != Code::NotFound {
+                    tracing::error!("failed to cancel task: {e}");
+                }
             }
         }
     }

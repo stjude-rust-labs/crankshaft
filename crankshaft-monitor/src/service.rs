@@ -177,10 +177,7 @@ impl MonitorService {
                 r = events.recv() => match r {
                     Ok(event) => {
                         let (id, remove) = match event {
-                            CrankshaftEvent::TaskCreated { id, ref token, .. } => {
-                                state.write().await.tokens.insert(id, token.clone());
-                                (id, false)
-                            },
+                            CrankshaftEvent::TaskCreated { id, .. } |
                             CrankshaftEvent::TaskStarted { id }
                             | CrankshaftEvent::TaskContainerCreated { id, .. }
                             | CrankshaftEvent::TaskContainerExited { id, .. }
@@ -192,21 +189,20 @@ impl MonitorService {
                             | CrankshaftEvent::TaskPreempted { id } => (id, true),
                         };
 
-
                         if remove {
                             let mut state = state.write().await;
                             state.tasks.remove(&id);
+                            state.tokens.remove(&id);
+                        } else if let CrankshaftEvent::TaskCreated { token, ..} = &event {
+                            let token = token.clone();
+                            let event: Event = event.into_protobuf();
+                            let mut state = state.write().await;
+                            state.tasks.insert(id, TaskEvents { events: vec![event] });
+                            state.tokens.insert(id, token);
                         } else {
                             let event: Event = event.into_protobuf();
                             let mut state = state.write().await;
-                            let task = state.tasks.entry(id).or_default();
-
-                            // If there aren't any events, ensure the first one is the created event
-                            if task.events.is_empty() {
-                                if let Some(EventKind::Created(_)) = &event.event_kind {
-                                    task.events.push(event);
-                                }
-                            } else {
+                            if let Some(task) = state.tasks.get_mut(&id) {
                                 task.events.push(event);
                             }
                         }
@@ -265,15 +261,13 @@ impl Monitor for MonitorService {
     ) -> Result<Response<CancelTaskResponse>, Status> {
         let id = request.into_inner().id;
 
-        let mut state = self.state.write().await;
+        let state = self.state.read().await;
 
-        if let Some(token) = state.tokens.remove(&id) {
+        if let Some(token) = state.tokens.get(&id) {
             token.cancel();
-            state.tasks.remove(&id);
-
             Ok(Response::new(CancelTaskResponse {}))
         } else {
-            Err(Status::not_found(format!("Task {id} not found")))
+            Err(Status::not_found(format!("Task `{id}` not found")))
         }
     }
 }

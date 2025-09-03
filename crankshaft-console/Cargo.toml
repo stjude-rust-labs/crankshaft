@@ -1,7 +1,13 @@
 [package]
 name = "crankshaft-console"
+description = "A TUI for monitoring Crankshaft tasks"
 version = "0.1.0"
-edition = "2021"
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true

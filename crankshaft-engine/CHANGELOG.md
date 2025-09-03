@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.5.0 - 09-03-2025
+
 ### Added
 
 * Added support for canceling individual tasks from events ([#53](https://github.com/stjude-rust-labs/crankshaft/pull/53))

@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.3.0 - 09-03-2025
+
 ### Added
 
 * Added the caller's effective gid to containers so a container's user can

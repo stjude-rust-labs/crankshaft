@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.5.0 - 09-03-2025
+
 ### Added
 
 * Added the `docker` module for re-exporting `crankshaft-docker` ([#52](https://github.com/stjude-rust-labs/crankshaft/pull/52)).

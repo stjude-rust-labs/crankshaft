@@ -1,0 +1,18 @@
+[package]
+name = "crankshaft-events"
+description = "Definition of events sent by Crankshaft"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bytes.workspace = true
+nonempty.workspace = true
+tokio-util.workspace = true
+
+[lints]
+workspace = true

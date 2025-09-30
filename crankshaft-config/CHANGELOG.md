@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.4.0 - 09-03-2025
+
+### Added
+
+* Added option for enabling monitoring support ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
+
 ## 0.3.0 - 06-04-2025
 
 ### Added

@@ -1,0 +1,27 @@
+[package]
+name = "crankshaft-console"
+description = "A TUI for monitoring Crankshaft tasks"
+version = "0.1.0"
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+color-eyre.workspace = true
+crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.1.0" }
+crossterm.workspace = true
+futures-util.workspace = true
+prost-types.workspace = true
+ratatui.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

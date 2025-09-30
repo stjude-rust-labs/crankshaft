@@ -10,10 +10,9 @@ use std::process::ExitStatus;
 use std::time::Duration;
 
 use bollard::Docker;
-use bollard::container::LogOutput;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::ListTasksOptions;
-use bollard::query_parameters::LogsOptions;
+use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use bollard::secret::TaskState;
@@ -21,16 +20,18 @@ use bollard::secret::TaskState;
 mod builder;
 
 pub use builder::Builder;
+use crankshaft_events::Event;
 use futures::StreamExt;
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 use tracing::debug;
 use tracing::info;
 use tracing::trace;
 
 use crate::Error;
+use crate::EventOptions;
 use crate::Result;
+use crate::container::write_logs;
 
 /// A docker service.
 ///
@@ -46,7 +47,7 @@ pub struct Service {
     /// service.
     client: Docker,
 
-    /// The name of the service.
+    /// The id of the service.
     id: String,
 
     /// The path to the file to write the container's stdout stream to.
@@ -75,11 +76,42 @@ impl Service {
         }
     }
 
+    /// Gets the id of the service.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
     /// Runs a service and waits for the task execution to end.
-    pub async fn run(&self, name: &str, started: impl FnOnce()) -> Result<ExitStatus> {
+    pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
+        let stdout = match &self.stdout {
+            Some(path) => Some((
+                path.as_path(),
+                File::create(path).await.map_err(|e| {
+                    Error::Message(format!(
+                        "failed to create stdout file `{path}`: {e}",
+                        path = path.display()
+                    ))
+                })?,
+            )),
+            None => None,
+        };
+
+        let stderr = match &self.stderr {
+            Some(path) => Some((
+                path.as_path(),
+                File::create(path).await.map_err(|e| {
+                    Error::Message(format!(
+                        "failed to create stderr file `{path}`: {e}",
+                        path = path.display()
+                    ))
+                })?,
+            )),
+            None => None,
+        };
+
         let (container_id, exit_code) = loop {
             trace!(
-                "polling tasks for service `{id}` (task `{name}`)",
+                "polling tasks for service `{id}` (task `{task_name}`)",
                 id = self.id
             );
 
@@ -108,9 +140,10 @@ impl Service {
             );
 
             let task = tasks.into_iter().next().unwrap();
-            let status = task
-                .status
-                .expect("Docker daemon reported a task with no status");
+
+            let status = task.status.ok_or_else(|| {
+                Error::Message("Docker daemon reported a task with no status".into())
+            })?;
 
             match status.state {
                 Some(TaskState::NEW)
@@ -120,9 +153,10 @@ impl Service {
                 | Some(TaskState::ACCEPTED)
                 | Some(TaskState::READY)
                 | Some(TaskState::PREPARING)
+                | Some(TaskState::STARTING)
                 | None => {
                     trace!(
-                        "task has not yet started for service `{id}` (task `{name}`)",
+                        "task has not yet started for service `{id}` (task `{task_name}`)",
                         id = self.id
                     );
 
@@ -130,102 +164,127 @@ impl Service {
                     // TODO: make this a variable delay so as to lessen a thundering herd
                     sleep(Duration::from_secs(1)).await;
                 }
-                Some(TaskState::STARTING) | Some(TaskState::RUNNING) => {
-                    // Wait for the container to exit
-                    let status = status.container_status.expect(
-                        "Docker daemon reported a starting or running task with no container \
-                         status",
-                    );
+                Some(TaskState::RUNNING) | Some(TaskState::COMPLETE) | Some(TaskState::FAILED) => {
+                    let container_status = status.container_status.ok_or_else(|| {
+                        Error::Message(
+                            "Docker daemon reported a task with no container status".into(),
+                        )
+                    })?;
 
-                    let container_id = status
-                        .container_id
-                        .expect("Docker reported a starting or running task with no container id");
+                    let container_id = container_status.container_id.ok_or_else(|| {
+                        Error::Message("Docker reported a task with no container id".into())
+                    })?;
+
+                    if let Some(events) = &events {
+                        events
+                            .sender
+                            .send(Event::TaskContainerCreated {
+                                id: events.task_id,
+                                container: container_id.clone(),
+                            })
+                            .ok();
+                    }
 
                     info!(
-                        "service `{id}` (task `{name}`) has started container `{container_id}",
+                        "service `{id}` (task `{task_name}`) has started container `{container_id}",
                         id = self.id
                     );
 
-                    // Notify that the task has started
-                    started();
-
-                    // Wait for the container to be completed.
-                    let mut wait_stream = self
-                        .client
-                        .wait_container(&container_id, None::<WaitContainerOptions>);
-
-                    let mut exit_code = None;
-                    if let Some(result) = wait_stream.next().await {
-                        match result {
-                            // Bollard turns non-zero exit codes into wait errors, so check for both
-                            Ok(ContainerWaitResponse {
-                                status_code: code, ..
-                            })
-                            | Err(bollard::errors::Error::DockerContainerWaitError {
-                                code, ..
-                            }) => {
-                                exit_code = Some(code);
-                            }
-                            Err(e) => return Err(e.into()),
+                    if let Some(events) = &events {
+                        if events.send_start {
+                            events
+                                .sender
+                                .send(Event::TaskStarted { id: events.task_id })
+                                .ok();
                         }
                     }
 
-                    if exit_code.is_none() {
-                        // Get the exit code if the wait was immediate
-                        let container = self
-                            .client
-                            .inspect_container(&container_id, None::<InspectContainerOptions>)
-                            .await
-                            .map_err(Error::Docker)?;
-
-                        exit_code = Some(
-                            container
-                                .state
-                                .expect("Docker reported a container without a state")
-                                .exit_code
-                                .expect(
-                                    "Docker reported a finished contained without an exit code",
-                                ),
+                    // Write the logs
+                    if self.stdout.is_some() || self.stderr.is_some() {
+                        let logs = self.client.logs(
+                            &container_id,
+                            Some(
+                                LogsOptionsBuilder::new()
+                                    .stdout(true)
+                                    .stderr(true)
+                                    .follow(true)
+                                    .build(),
+                            ),
                         );
+
+                        // Write the logs
+                        write_logs(logs, stdout, stderr, events.as_ref()).await?;
                     }
 
-                    break (container_id, exit_code.unwrap());
+                    if status.state == Some(TaskState::RUNNING) {
+                        // Wait for the container to be completed.
+                        let mut wait_stream = self
+                            .client
+                            .wait_container(&container_id, None::<WaitContainerOptions>);
+
+                        match wait_stream.next().await {
+                            Some(Ok(ContainerWaitResponse {
+                                status_code: code, ..
+                            }))
+                            | Some(Err(bollard::errors::Error::DockerContainerWaitError {
+                                code,
+                                ..
+                            })) => {
+                                break (container_id, code);
+                            }
+                            Some(Err(e)) => return Err(e.into()),
+                            None => {
+                                // Get the exit code if the wait was immediate
+                                let container = self
+                                    .client
+                                    .inspect_container(
+                                        &container_id,
+                                        None::<InspectContainerOptions>,
+                                    )
+                                    .await
+                                    .map_err(Error::Docker)?;
+
+                                break (
+                                    container_id,
+                                    container
+                                        .state
+                                        .ok_or_else(|| {
+                                            Error::Message(
+                                                "Docker reported a container without a state"
+                                                    .into(),
+                                            )
+                                        })?
+                                        .exit_code
+                                        .ok_or_else(|| {
+                                            Error::Message(
+                                                "Docker reported a finished contained without an \
+                                                 exit code"
+                                                    .into(),
+                                            )
+                                        })?,
+                                );
+                            }
+                        }
+                    } else {
+                        break (
+                            container_id,
+                            container_status.exit_code.ok_or_else(|| {
+                                Error::Message(format!(
+                                    "Docker reported a {kind} task with no exit code",
+                                    kind = if status.state == Some(TaskState::FAILED) {
+                                        "failed"
+                                    } else {
+                                        "completed"
+                                    }
+                                ))
+                            })?,
+                        );
+                    }
                 }
-                Some(TaskState::COMPLETE) => {
-                    let status = status
-                        .container_status
-                        .expect("Docker daemon reported a completed task with no container status");
-
-                    let container_id = status
-                        .container_id
-                        .expect("Docker reported a completed task with no container id");
-
-                    info!(
-                        "container `{container_id}` for service `{id}` (task `{name}`) has \
-                         completed",
-                        id = self.id
-                    );
-
-                    // Notify that the task has started (and has already completed)
-                    started();
-
-                    break (
-                        container_id,
-                        // Use the exit code already provided to us
-                        status
-                            .exit_code
-                            .expect("Docker reported a completed task with no exit code"),
-                    );
-                }
-                Some(TaskState::FAILED)
-                | Some(TaskState::SHUTDOWN)
+                Some(TaskState::SHUTDOWN)
                 | Some(TaskState::REJECTED)
                 | Some(TaskState::ORPHANED)
                 | Some(TaskState::REMOVE) => {
-                    // Notify that the task has started (and has failed)
-                    started();
-
-                    // Handle the failure
                     return Err(Error::Message(format!(
                         "Docker task failed: {msg}",
                         msg = status
@@ -238,77 +297,29 @@ impl Service {
             }
         };
 
-        // Write the log streams
-        if self.stdout.is_some() || self.stderr.is_some() {
-            let mut stdout = match &self.stdout {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stdout file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
-                None => None,
-            };
-
-            let mut stderr = match &self.stderr {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stderr file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
-                None => None,
-            };
-
-            let mut stream = self.client.logs(
-                &container_id,
-                Some(LogsOptions {
-                    stdout: self.stdout.is_some(),
-                    stderr: self.stderr.is_some(),
-                    ..Default::default()
-                }),
-            );
-
-            while let Some(result) = stream.next().await {
-                let output = result.map_err(Error::Docker)?;
-                match output {
-                    LogOutput::StdOut { message } => {
-                        stdout
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stdout file `{path}`: {e}",
-                                    path = self.stdout.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    LogOutput::StdErr { message } => {
-                        stderr
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stderr file `{path}`: {e}",
-                                    path = self.stderr.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    _ => {}
-                }
-            }
-        }
-
         // See WEXITSTATUS from wait(2) to explain the shift
         #[cfg(unix)]
         let status = ExitStatus::from_raw((exit_code as i32) << 8);
 
         #[cfg(windows)]
         let status = ExitStatus::from_raw(exit_code as u32);
+
+        info!(
+            "container `{container_id}` for service `{id}` (task `{task_name}`) has exited with \
+             {status}",
+            id = self.id
+        );
+
+        if let Some(events) = &events {
+            events
+                .sender
+                .send(Event::TaskContainerExited {
+                    id: events.task_id,
+                    container: container_id,
+                    exit_status: status,
+                })
+                .ok();
+        }
 
         Ok(status)
     }

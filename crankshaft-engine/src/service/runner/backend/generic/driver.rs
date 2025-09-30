@@ -179,7 +179,7 @@ async fn create_ssh_transport(config: &ssh::Config) -> Result<Transport> {
     let addr = format!("{host}:{port}", host = config.host(), port = config.port());
 
     // Connect to the remote SSH host.
-    let message = format!("connecting to SSH host: {}", addr);
+    let message = format!("connecting to SSH host: {addr}");
     debug!(message);
     let tcp = TcpStream::connect(addr)
         .await

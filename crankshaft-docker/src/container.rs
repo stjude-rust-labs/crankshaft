@@ -5,26 +5,31 @@ use std::io::Cursor;
 use std::os::unix::process::ExitStatusExt as _;
 #[cfg(windows)]
 use std::os::windows::process::ExitStatusExt as _;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 
 use bollard::Docker;
 use bollard::body_full;
 use bollard::container::LogOutput;
-use bollard::query_parameters::AttachContainerOptions;
 use bollard::query_parameters::InspectContainerOptions;
+use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::RemoveContainerOptions;
 use bollard::query_parameters::StartContainerOptions;
 use bollard::query_parameters::UploadToContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
+use crankshaft_events::Event;
+use futures::Stream;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::pin;
 use tokio_stream::StreamExt as _;
 use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::EventOptions;
 use crate::Result;
 
 mod builder;
@@ -38,14 +43,75 @@ pub use builder::Builder;
 /// allocations.
 const DEFAULT_TAR_CAPACITY: usize = 0xFFFF;
 
+/// Helper for writing a container's logs to stdout/stderr files.
+///
+/// This also sends the stdout/stderr events for the task.
+pub(crate) async fn write_logs(
+    logs: impl Stream<Item = std::result::Result<LogOutput, bollard::errors::Error>>,
+    mut stdout: Option<(&Path, File)>,
+    mut stderr: Option<(&Path, File)>,
+    events: Option<&EventOptions>,
+) -> Result<()> {
+    pin!(logs);
+
+    while let Some(result) = logs.next().await {
+        let output = result.map_err(Error::Docker)?;
+        match output {
+            LogOutput::StdOut { message } => {
+                if let Some((path, stdout)) = &mut stdout {
+                    stdout.write(&message).await.map_err(|e| {
+                        Error::Message(format!(
+                            "failed to write to stdout file `{path}`: {e}",
+                            path = path.display()
+                        ))
+                    })?;
+                }
+
+                if let Some(events) = events {
+                    events
+                        .sender
+                        .send(Event::TaskStdout {
+                            id: events.task_id,
+                            message,
+                        })
+                        .ok();
+                }
+            }
+            LogOutput::StdErr { message } => {
+                if let Some((path, stderr)) = &mut stderr {
+                    stderr.write(&message).await.map_err(|e| {
+                        Error::Message(format!(
+                            "failed to write to stderr file `{path}`: {e}",
+                            path = path.display()
+                        ))
+                    })?;
+                }
+
+                if let Some(events) = &events {
+                    events
+                        .sender
+                        .send(Event::TaskStderr {
+                            id: events.task_id,
+                            message,
+                        })
+                        .ok();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 /// A container.
 pub struct Container {
     /// A reference to the [`Docker`] client that will be used to create this
     /// container.
     client: Docker,
 
-    /// The id of the created container.
-    id: String,
+    /// The name of the created container.
+    name: String,
 
     /// The path to the file to write the container's stdout stream to.
     stdout: Option<PathBuf>,
@@ -55,22 +121,27 @@ pub struct Container {
 }
 
 impl Container {
-    /// Creates a new [`Container`] if you already know the container id.
+    /// Creates a new [`Container`] if you already know the container name.
     ///
     /// You should typically use a [`Builder`] unless you receive the container
     /// name externally from a user (say, on the command line as an argument).
     pub fn new(
         client: Docker,
-        id: String,
+        name: String,
         stdout: Option<PathBuf>,
         stderr: Option<PathBuf>,
     ) -> Self {
         Self {
             client,
-            id,
+            name,
             stdout,
             stderr,
         }
+    }
+
+    /// Gets the name of the container.
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Uploads an input file to the container.
@@ -89,7 +160,7 @@ impl Container {
 
         self.client
             .upload_to_container(
-                &self.id,
+                &self.name,
                 Some(UploadToContainerOptions {
                     path: String::from("/"),
                     ..Default::default()
@@ -102,112 +173,92 @@ impl Container {
     }
 
     /// Runs a container and waits for the execution to end.
-    pub async fn run(&self, name: &str, started: impl FnOnce()) -> Result<ExitStatus> {
-        // Attach to the container before we start it
-        let stream = if self.stdout.is_some() || self.stderr.is_some() {
-            debug!(
-                "attaching to container `{id}` (task `{name}`)",
-                id = self.id
-            );
+    pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
+        if let Some(events) = &events {
+            events
+                .sender
+                .send(Event::TaskContainerCreated {
+                    id: events.task_id,
+                    container: self.name.clone(),
+                })
+                .ok();
+        }
 
-            // Attach to the logs stream.
-            Some(
-                self.client
-                    .attach_container(
-                        &self.id,
-                        Some(AttachContainerOptions {
-                            stdout: self.stdout.is_some(),
-                            stderr: self.stderr.is_some(),
-                            stream: true,
-                            ..Default::default()
-                        }),
-                    )
-                    .await
-                    .map_err(Error::Docker)?
-                    .output,
-            )
-        } else {
-            None
-        };
-
-        info!("starting container `{id}` (task `{name}`)", id = self.id);
+        info!(
+            "starting container `{name}` (task `{task_name}`)",
+            name = self.name
+        );
 
         // Start the container.
         self.client
-            .start_container(&self.id, None::<StartContainerOptions>)
+            .start_container(&self.name, None::<StartContainerOptions>)
             .await
             .map_err(Error::Docker)?;
 
-        // Notify that the container has started
-        started();
+        info!(
+            "container `{name}` (task `{task_name}`) has started",
+            name = self.name
+        );
 
-        info!("container `{id}` (task `{name}`) has started", id = self.id);
+        if let Some(events) = &events {
+            if events.send_start {
+                events
+                    .sender
+                    .send(Event::TaskStarted { id: events.task_id })
+                    .ok();
+            }
+        }
 
         // Write the log streams
         if self.stdout.is_some() || self.stderr.is_some() {
-            let mut stdout = match &self.stdout {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stdout file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
+            let logs = self.client.logs(
+                &self.name,
+                Some(
+                    LogsOptionsBuilder::new()
+                        .stdout(self.stdout.is_some())
+                        .stderr(self.stderr.is_some())
+                        .follow(true)
+                        .build(),
+                ),
+            );
+
+            let stdout = match &self.stdout {
+                Some(path) => Some((
+                    path.as_path(),
+                    File::create(path).await.map_err(|e| {
+                        Error::Message(format!(
+                            "failed to create stdout file `{path}`: {e}",
+                            path = path.display()
+                        ))
+                    })?,
+                )),
                 None => None,
             };
 
-            let mut stderr = match &self.stderr {
-                Some(path) => Some(File::create(path).await.map_err(|e| {
-                    Error::Message(format!(
-                        "failed to create stderr file `{path}`: {e}",
-                        path = path.display()
-                    ))
-                })?),
+            let stderr = match &self.stderr {
+                Some(path) => Some((
+                    path.as_path(),
+                    File::create(path).await.map_err(|e| {
+                        Error::Message(format!(
+                            "failed to create stderr file `{path}`: {e}",
+                            path = path.display()
+                        ))
+                    })?,
+                )),
                 None => None,
             };
 
-            let mut stream = stream.expect("should have attached to the container");
-            while let Some(result) = stream.next().await {
-                let output = result.map_err(Error::Docker)?;
-                match output {
-                    LogOutput::StdOut { message } => {
-                        stdout
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stdout file `{path}`: {e}",
-                                    path = self.stdout.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    LogOutput::StdErr { message } => {
-                        stderr
-                            .as_mut()
-                            .unwrap()
-                            .write(&message)
-                            .await
-                            .map_err(|e| {
-                                Error::Message(format!(
-                                    "failed to write to stderr file `{path}`: {e}",
-                                    path = self.stderr.as_ref().unwrap().display()
-                                ))
-                            })?;
-                    }
-                    _ => {}
-                }
-            }
+            write_logs(logs, stdout, stderr, events.as_ref()).await?;
         }
 
         // Wait for the container to be completed.
         debug!(
-            "waiting for container `{id}` (task `{name}`) to exit",
-            id = self.id
+            "waiting for container `{name}` (task `{task_name}`) to exit",
+            name = self.name
         );
         let mut wait_stream = self
             .client
-            .wait_container(&self.id, None::<WaitContainerOptions>);
+            .wait_container(&self.name, None::<WaitContainerOptions>);
 
         let mut exit_code = None;
         if let Some(result) = wait_stream.next().await {
@@ -227,7 +278,7 @@ impl Container {
             // Get the exit code if the wait was immediate
             let container = self
                 .client
-                .inspect_container(&self.id, None::<InspectContainerOptions>)
+                .inspect_container(&self.name, None::<InspectContainerOptions>)
                 .await
                 .map_err(Error::Docker)?;
 
@@ -248,9 +299,20 @@ impl Container {
         let status = ExitStatus::from_raw(exit_code.unwrap() as u32);
 
         info!(
-            "container `{id}` (task `{name}`) has exited with {status}",
-            id = self.id
+            "container `{name}` (task `{task_name}`) has exited with {status}",
+            name = self.name
         );
+
+        if let Some(events) = &events {
+            events
+                .sender
+                .send(Event::TaskContainerExited {
+                    id: events.task_id,
+                    container: self.name.clone(),
+                    exit_status: status,
+                })
+                .ok();
+        }
 
         Ok(status)
     }
@@ -263,7 +325,7 @@ impl Container {
     async fn remove_inner(&self, force: bool) -> Result<()> {
         self.client
             .remove_container(
-                &self.id,
+                &self.name,
                 Some(RemoveContainerOptions {
                     force,
                     ..Default::default()
@@ -280,7 +342,7 @@ impl Container {
     /// This does not force the removal of the container. To force the container
     /// to be removed, see the [`Self::force_remove()`] method.
     pub async fn remove(&self) -> Result<()> {
-        debug!("removing container `{id}`", id = self.id);
+        debug!("removing container `{name}`", name = self.name);
         self.remove_inner(false).await
     }
 
@@ -289,7 +351,7 @@ impl Container {
     /// This forces the container to be removed. To unforcefully remove the
     /// container, see the [`Self::remove()`] method.
     pub async fn force_remove(&self) -> Result<()> {
-        debug!("force removing container `{id}`", id = self.id);
+        debug!("force removing container `{name}`", name = self.name);
         self.remove_inner(true).await
     }
 }

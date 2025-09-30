@@ -6,7 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic
 Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased 
+## Unreleased
+
+## 0.3.0 - 09-03-2025
+
+### Added
+
+* Added the caller's effective gid to containers so a container's user can
+  access mounts and working directory ([#54](https://github.com/stjude-rust-labs/crankshaft/pull/54)).
+* Implemented sending events through the broadcast channel ([#44](https://github.com/stjude-rust-labs/crankshaft/pull/44)).
+
+### Changed
+
+* Based events on `crankshaft-events` ([#49](https://github.com/stjude-rust-labs/crankshaft/pull/49)).
+
+### Fixed
+
+* Fixed Docker backend to write logs when interacting with a swarm ([#55](https://github.com/stjude-rust-labs/crankshaft/pull/55)).
 
 ## 0.2.0 - 04-01-2025
 

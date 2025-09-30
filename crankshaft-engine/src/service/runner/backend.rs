@@ -7,7 +7,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
-use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::Task;
@@ -41,15 +40,14 @@ pub trait Backend: Debug + Send + Sync + 'static {
 
     /// Runs a task in a backend.
     ///
-    /// The optional `started` channel is notified when the first execution of
-    /// the task has started.
+    /// The optional event_sender sends the task lifecycle events to any client
+    /// connected to `Crankshaft`
     ///
     /// Returns a collection of exit status corresponding to the task's
     /// executions.
     fn run(
         &self,
         task: Task,
-        started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>>;
 }

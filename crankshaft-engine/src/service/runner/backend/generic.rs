@@ -6,6 +6,7 @@
 use std::borrow::Cow;
 use std::process::ExitStatus;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -14,12 +15,15 @@ use anyhow::anyhow;
 use crankshaft_config::backend::Defaults;
 use crankshaft_config::backend::generic::Config;
 use crankshaft_config::backend::generic::SubValue;
+use crankshaft_events::Event;
+use crankshaft_events::next_task_id;
+use crankshaft_events::send_event;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
 use regex::Regex;
 use tokio::select;
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::error;
@@ -28,6 +32,8 @@ use tracing::warn;
 
 use super::TaskRunError;
 use crate::Task;
+use crate::service::name::GeneratorIterator;
+use crate::service::name::UniqueAlphanumeric;
 use crate::service::runner::backend::generic::driver::Driver;
 use crate::task::Resources;
 
@@ -41,18 +47,25 @@ pub const DEFAULT_MONITOR_FREQUENCY: u64 = 5;
 pub struct Backend {
     /// The driver.
     driver: Arc<Driver>,
-
     /// The inner configuration.
     config: Config,
-
     /// The execution defaults.
     defaults: Option<Defaults>,
+    /// The events sender for the backend.
+    events: Option<broadcast::Sender<Event>>,
+    /// The unique name generator for tasks without names.
+    names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 }
 
 impl Backend {
     /// Attempts to initialize a new generic [`Backend`] with the default
     /// connection settings and the provided configuration for the backend.
-    pub async fn initialize(config: Config, defaults: Option<Defaults>) -> Result<Self> {
+    pub async fn initialize(
+        config: Config,
+        defaults: Option<Defaults>,
+        names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
+        events: Option<broadcast::Sender<Event>>,
+    ) -> Result<Self> {
         // TODO(clay): this could be "taken" instead to avoid the clone.
         let driver = Driver::initialize(config.driver().clone())
             .await
@@ -62,6 +75,8 @@ impl Backend {
             driver,
             config,
             defaults,
+            events,
+            names,
         })
     }
 
@@ -107,7 +122,6 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
-        mut started: Option<oneshot::Sender<()>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         let driver = self.driver.clone();
@@ -154,47 +168,47 @@ impl crate::Backend for Backend {
             outputs.push(pair);
         }
 
+        let task_id = next_task_id();
+        let events = self.events.clone();
+        let names = self.names.clone();
+
+        let task_token = CancellationToken::new();
+
         Ok(async move {
-            let mut statuses = Vec::new();
-            let job_id_regex = config
-                .job_id_regex()
-                .as_ref()
-                .map(|pattern| {
-                    Regex::new(pattern)
-                        .with_context(|| format!("job regex `{pattern}` is not valid"))
-                })
-                .transpose()?;
+            // Generate a name of the task if one wasn't provided
+            let task_name = task.name.unwrap_or_else(|| {
+                let mut generator = names.lock().unwrap();
+                // SAFETY: the name generator should _never_ run out of entries.
+                generator.next().unwrap()
+            });
 
-            for execution in task.executions {
-                if token.is_cancelled() {
-                    return Err(TaskRunError::Canceled);
-                }
+            // TODO ACF 2025-09-29: rustfmt appears to be forsaking this block of code. Try pulling it out into a standalone `async fn`, which will make this more readable anyway
+            let run = async {
+                let mut statuses = Vec::new();
+                let job_id_regex = config
+                    .job_id_regex()
+                    .as_ref()
+                    .map(|pattern| {
+                        Regex::new(pattern)
+                            .with_context(|| format!("job regex `{pattern}` is not valid"))
+                    })
+                    .transpose()?;
 
-                // TODO(clay): this will warn every time for now. We need to
-                // change the model of how tasks are done internally to remove
-                // this need.
-                warn!(
-                    "generic backends do not support images; as such, the directive to use a `{}` \
-                     image will be ignored",
-                    execution.image
-                );
+                for execution in task.executions {
+                    if token.is_cancelled() {
+                        return Err(TaskRunError::Canceled);
+                    }
 
-                let mut substitutions = default_substitutions.clone();
+                    // TODO(clay): this will warn every time for now. We need to
+                    // change the model of how tasks are done internally to remove
+                    // this need.
+                    warn!(
+                        "generic backends do not support images; as such, the directive to use a \
+                         `{}` image will be ignored",
+                        execution.image
+                    );
 
-                if substitutions
-                    .insert(
-                        "command".into(),
-                        shlex::try_join(
-                            std::iter::once(execution.program.as_str())
-                                .chain(execution.args.iter().map(String::as_str)),
-                        )
-                        .map_err(|e| TaskRunError::Other(e.into()))?
-                        .into(),
-                    )
-                    .is_some()
-                {
-                    unreachable!("the `command` key should not be present here");
-                };
+                    let mut substitutions = default_substitutions.clone();
 
                 if let Some(cwd) = &execution.work_dir {
                     if substitutions.insert("cwd".into(), cwd.as_str().into()).is_some() {
@@ -223,10 +237,12 @@ impl crate::Backend for Backend {
                     return Err(anyhow!("submit command failed: {}", output.status).into());
                 }
 
-                // Notify that execution has started
-                if let Some(started) = started.take() {
-                    started.send(()).ok();
-                }
+                    // TODO: just because we've submitted a job doesn't mean it is running
+                    // The generic backend needs finer-grained reporting for us to tell when a
+                    // execution is actually running and not just queued; for example, the monitor
+                    // script might be able to print out the status rather just a "job exists"
+                    // (queued/running/?) and "job doesn't exist" (finished)
+                    send_event!(events, Event::TaskStarted { id: task_id });
 
                 // Monitoring the output.
                 match job_id_regex {
@@ -236,10 +252,8 @@ impl crate::Backend for Backend {
                         let captures = regex.captures_iter(&stdout).next().unwrap_or_else(|| {
                             panic!(
                                 "could not match the job id regex within stdout: `{}`",
-                                stdout
-                            )
+                                stdout                            )
                         });
-
                         // SAFETY: this will always unwrap, as the group is
                         // _required_ for the pattern to match.
                         let id = captures.get(1).map(|c| c.as_str()).unwrap();
@@ -254,7 +268,7 @@ impl crate::Backend for Backend {
                             let result = select! {
                                 // Always poll the cancellation token first
                                 biased;
-
+                                _= task_token.cancelled() => {Err(TaskRunError::Canceled)}
                                 _ = token.cancelled() => {
                                     Err(TaskRunError::Canceled)
                                 }
@@ -285,9 +299,9 @@ impl crate::Backend for Backend {
                                     .context("failed to run get_exit_code command")?;
                                 let get_exit_code_stdout =
                                     String::from_utf8(get_exit_code_out.stdout)
-                                        .context("exit code output was not valid UTF-8")?
-                                        .trim()
-                                        .to_owned();
+                                    .context("exit code output was not valid UTF-8")?
+                                    .trim()
+                                    .to_owned();
                                 trace!(get_exit_code_stdout);
                                 cfg_if::cfg_if! {
                                     if #[cfg(unix)] {
@@ -303,7 +317,6 @@ impl crate::Backend for Backend {
                                 statuses.push(job_status);
                                 break;
                             }
-
                             tokio::time::sleep(Duration::from_secs(
                                 config
                                     .monitor_frequency()
@@ -316,11 +329,52 @@ impl crate::Backend for Backend {
                         statuses.push(output.status);
                     }
                 }
+                }
+
+                // SAFETY: each task _must_ have at least one execution, so at least one
+                // execution result _must_ exist at this stage. Thus, this will always unwrap.
+                Ok(NonEmpty::from_vec(statuses).unwrap())
+            };
+
+            // Send the created event
+            send_event!(
+                events,
+                Event::TaskCreated {
+                    id: task_id,
+                    name: task_name.clone(),
+                    tes_id: None,
+                    token: task_token.clone()
+                }
+            );
+
+            // Run the task to completion
+            let result = run.await;
+
+            // Send an event for the result
+            match &result {
+                Ok(statuses) => send_event!(
+                    events,
+                    Event::TaskCompleted {
+                        id: task_id,
+                        exit_statuses: statuses.clone()
+                    }
+                ),
+                Err(TaskRunError::Canceled) => {
+                    send_event!(events, Event::TaskCanceled { id: task_id })
+                }
+                Err(TaskRunError::Preempted) => {
+                    send_event!(events, Event::TaskPreempted { id: task_id })
+                }
+                Err(TaskRunError::Other(e)) => send_event!(
+                    events,
+                    Event::TaskFailed {
+                        id: task_id,
+                        message: format!("{e:#}")
+                    }
+                ),
             }
 
-            // SAFETY: each task _must_ have at least one execution, so at least one
-            // execution result _must_ exist at this stage. Thus, this will always unwrap.
-            Ok(NonEmpty::from_vec(statuses).unwrap())
+            result
         }
         .boxed())
     }

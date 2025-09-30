@@ -7,7 +7,6 @@ use std::sync::LazyLock;
 use bon::Builder;
 use bon::builder;
 use handlebars::Handlebars;
-use regex::Captures;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -41,6 +40,10 @@ static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"~\{([^}]*)\}").unwrap()
 });
 
+/// Repurpose JSON values for the template substitution map.
+///
+/// This gives us a way to conveniently construct values that can be
+/// heterogeneous across the different substitution variables.
 pub type SubValue = serde_json::Value;
 
 /// Replaces placeholders within a generic configuration value.
@@ -221,6 +224,7 @@ pub(crate) fn demo() -> Config {
         .driver(driver::demo())
         .submit("echo 'submitting'")
         .monitor("echo 'monitoring'")
+        .get_exit_code("echo 'getting exit code'")
         .kill("echo 'killing'")
         .build()
 }

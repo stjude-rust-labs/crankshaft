@@ -18,6 +18,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 bollard.workspace = true
 bon.workspace = true
+cfg-if.workspace = true
 crankshaft-config = { path = "../crankshaft-config", version = "0.4.0" }
 crankshaft-docker = { path = "../crankshaft-docker", version = "0.3.0" }
 crankshaft-events = { path = "../crankshaft-events", version = "0.1.0" }
@@ -29,6 +30,7 @@ nix.workspace = true
 nonempty.workspace = true
 rand.workspace = true
 regex.workspace = true
+serde_json.workspace = true
 shlex.workspace = true
 ssh2.workspace = true
 tar.workspace = true

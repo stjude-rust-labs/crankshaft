@@ -113,6 +113,7 @@ impl Driver {
     /// (i.e., the errors are typically unrecoverable).
     pub async fn run(&self, command: impl Into<String>) -> Result<Output> {
         let command = command.into();
+        trace!(command, "running");
 
         match &self.transport {
             Transport::Local => run_local_command(command, &self.config).await,
@@ -139,7 +140,7 @@ impl Driver {
 
 /// Runs a command in a local context.
 async fn run_local_command(command: String, config: &Config) -> Result<Output> {
-    trace!("executing local command: `{command}`");
+    trace!("running local command: `{command}`");
 
     // NOTE: this is cloned because `default()` is only implemented on the owned
     // [`Locale`] type (not a reference).
@@ -157,10 +158,16 @@ async fn run_local_command(command: String, config: &Config) -> Result<Output> {
     }
     .context("spawning the local command")?;
 
-    command
+    let res = command
         .wait_with_output()
         .await
-        .context("executing the local command")
+        .context("executing the local command");
+
+    if let Ok(output) = &res {
+        trace!(exit_status = %output.status , "local command exited");
+    }
+
+    res
 }
 
 //===============//

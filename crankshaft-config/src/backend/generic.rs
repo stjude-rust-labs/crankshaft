@@ -6,11 +6,12 @@ use std::sync::LazyLock;
 
 use bon::Builder;
 use bon::builder;
-use regex::Captures;
+use handlebars::Handlebars;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+use tracing::trace;
 
 pub mod driver;
 
@@ -39,20 +40,23 @@ static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"~\{([^}]*)\}").unwrap()
 });
 
-/// Replaces placeholders within a generic configuration value.
-pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, Cow<'_, str>>) -> String {
-    PLACEHOLDER_REGEX
-        .replace_all(input, |captures: &Captures<'_>| {
-            // SAFETY: the `PLACEHOLDER_REGEX` above is hardcoded to ensure a group
-            // is included. This is tested statically below.
-            let key = &captures.get(1).unwrap();
+/// Repurpose JSON values for the template substitution map.
+///
+/// This gives us a way to conveniently construct values that can be
+/// heterogeneous across the different substitution variables.
+pub type SubValue = serde_json::Value;
 
-            replacements
-                .get(key.as_str())
-                .map(|r| r.as_ref().to_string())
-                .unwrap_or_else(|| format!("~{{{key}}}", key = key.as_str()))
+/// Replaces placeholders within a generic configuration value.
+pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, SubValue>) -> String {
+    trace!(input, replacements = ?replacements);
+    let mut handlebars = Handlebars::new();
+    handlebars.set_strict_mode(true);
+    handlebars
+        .render_template(input, &replacements)
+        .unwrap_or_else(|e| {
+            eprintln!("{e}");
+            panic!("handlebars rendering failed: {e}")
         })
-        .to_string()
 }
 
 /// A configuration object for a generic execution backend.
@@ -74,11 +78,23 @@ pub struct Config {
     job_id_regex: Option<String>,
 
     /// The script used to monitor a submitted job.
+    ///
+    /// The exit code of this script should be `0` (success) while the job is
+    /// running, and nonzero once the job is no longer running.
     #[builder(into)]
     monitor: String,
 
     /// The frequency in seconds that the job status will be queried.
     monitor_frequency: Option<u64>,
+
+    /// The script used to get the exit code of a completed job after the
+    /// `monitor` script returns successfully.
+    ///
+    /// This script should write the job's exit code as a decimal integer to
+    /// `stdout`, and then exit. The exit code should be `0` (success)
+    /// unless the exit code cannot be determined.
+    #[builder(into)]
+    get_exit_code: String,
 
     /// The script used to kill a job.
     #[builder(into)]
@@ -87,7 +103,7 @@ pub struct Config {
     /// The runtime attributes.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     #[builder(into, default)]
-    attributes: HashMap<Cow<'static, str>, Cow<'static, str>>,
+    attributes: HashMap<Cow<'static, str>, SubValue>,
 }
 
 impl Config {
@@ -108,13 +124,18 @@ impl Config {
     fn resolve(
         &self,
         command: &str,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+        substitutions: &HashMap<Cow<'_, str>, SubValue>,
     ) -> ResolveResult {
-        let mut result = substitute(command, substitutions);
-
-        if !self.attributes.is_empty() {
-            result = substitute(&result, &self.attributes);
-        }
+        // TODO ACF 2025-08-22: clean up unnecessary cloning here; temporary hacks
+        // required to only call `substitute` once
+        let substitutions = if self.attributes.is_empty() {
+            Cow::Borrowed(substitutions)
+        } else {
+            let mut combined = substitutions.clone();
+            combined.extend(self.attributes.clone());
+            Cow::Owned(combined)
+        };
+        let result = substitute(command, substitutions.as_ref());
 
         // NOTE: this is just to help clean up some of the output. The intention
         // is to remove line breaks and multiple spaces that make it easier to
@@ -160,31 +181,38 @@ impl Config {
     }
 
     /// Gets the runtime attributes.
-    pub fn attributes(&self) -> &HashMap<Cow<'static, str>, Cow<'static, str>> {
+    pub fn attributes(&self) -> &HashMap<Cow<'static, str>, SubValue> {
         &self.attributes
     }
 
+    /// Gets a mutable reference to the runtime attributes.
+    pub fn attributes_mut(&mut self) -> &mut HashMap<Cow<'static, str>, SubValue> {
+        &mut self.attributes
+    }
+
     /// Gets the submit command with all of the substitutions resolved.
-    pub fn resolve_submit(
-        &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
-    ) -> ResolveResult {
+    pub fn resolve_submit(&self, substitutions: &HashMap<Cow<'_, str>, SubValue>) -> ResolveResult {
         self.resolve(&self.submit, substitutions)
     }
 
     /// Gets the monitor command with all of the substitutions resolved.
     pub fn resolve_monitor(
         &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+        substitutions: &HashMap<Cow<'_, str>, SubValue>,
     ) -> ResolveResult {
         self.resolve(&self.monitor, substitutions)
     }
 
-    /// Gets the kill command with all of the substitutions resolved.
-    pub fn resolve_kill(
+    /// Gets the `get_exit_code` command with all of the substitutions resolved.
+    pub fn resolve_get_exit_code(
         &self,
-        substitutions: &HashMap<Cow<'_, str>, Cow<'_, str>>,
+        substitutions: &HashMap<Cow<'_, str>, SubValue>,
     ) -> ResolveResult {
+        self.resolve(&self.get_exit_code, substitutions)
+    }
+
+    /// Gets the kill command with all of the substitutions resolved.
+    pub fn resolve_kill(&self, substitutions: &HashMap<Cow<'_, str>, SubValue>) -> ResolveResult {
         self.resolve(&self.kill, substitutions)
     }
 }
@@ -196,6 +224,7 @@ pub(crate) fn demo() -> Config {
         .driver(driver::demo())
         .submit("echo 'submitting'")
         .monitor("echo 'monitoring'")
+        .get_exit_code("echo 'getting exit code'")
         .kill("echo 'killing'")
         .build()
 }

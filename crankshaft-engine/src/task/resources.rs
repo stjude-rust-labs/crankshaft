@@ -7,6 +7,7 @@ use bollard::secret::HostConfig;
 use bollard::secret::TaskSpecResources;
 use bon::Builder;
 use crankshaft_config::backend::Defaults;
+use crankshaft_config::backend::generic::SubValue;
 use tracing::debug;
 
 /// A set of requested resources.
@@ -120,7 +121,7 @@ impl Resources {
     //
     // Please do not deviate from this unless you have a really strong,
     // articulated reason that is agreed upon by the core developers.
-    pub fn to_hashmap(&self) -> HashMap<Cow<'static, str>, Cow<'static, str>> {
+    pub fn to_hashmap(&self) -> HashMap<Cow<'static, str>, SubValue> {
         let mut map = HashMap::new();
 
         if let Some(cores) = self.cpu {

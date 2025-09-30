@@ -99,6 +99,8 @@ impl Runner {
         let backend = self.backend.clone();
         let lock = self.lock.clone();
 
+        // TODO ACF 2025-08-25: do something with errors returned from this spawned
+        // task, at least log em
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
             let result = backend.clone().run(task, token)?.await;

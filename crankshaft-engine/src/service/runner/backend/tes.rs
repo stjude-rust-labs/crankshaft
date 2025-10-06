@@ -152,7 +152,9 @@ impl Backend {
     ///     4096,
     /// )));
     ///
+    /// # tokio_test::block_on(async {
     /// let backend = Backend::initialize(config, names, None);
+    /// # });
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```

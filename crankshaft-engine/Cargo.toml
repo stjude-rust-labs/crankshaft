@@ -45,6 +45,7 @@ uuid.workspace = true
 whoami.workspace = true
 
 [dev-dependencies]
+tokio-test.workspace = true
 approx.workspace = true
 
 [lints]

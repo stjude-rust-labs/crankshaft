@@ -184,7 +184,7 @@ impl Backend {
                             "task failed due to system error:\n\n{messages}"
                         )));
                     }
-                    State::Complete | State::ExecutorError => {
+                    State::Complete => {
                         // Repeat with a basic request to get executor logs
                         let task = client
                             .get_task(
@@ -197,12 +197,7 @@ impl Backend {
                             .into_task()
                             .unwrap();
 
-                        // Task completed or had an error
-                        if *state == State::Complete {
-                            info!("TES task `{tes_id}` (task `{task_name}`) has completed");
-                        } else {
-                            info!("TES task `{tes_id}` (task `{task_name}`) has failed");
-                        }
+                        info!("TES task `{tes_id}` (task `{task_name}`) has completed");
 
                         // There may be multiple task logs due to internal retries by the TES server
                         // Therefore, we're only interested in the last log
@@ -226,6 +221,12 @@ impl Backend {
                             "invalid response from TES server: completed task is missing executor \
                              logs",
                         )?);
+                    }
+                    State::ExecutorError => {
+                        info!("TES task `{tes_id}` (task `{task_name}`) has failed");
+                        return Err(TaskRunError::Other(anyhow!(
+                            "task failed due to executor error"
+                        )));
                     }
                     State::Canceled => return Err(TaskRunError::Canceled),
                     State::Preempted => return Err(TaskRunError::Preempted),

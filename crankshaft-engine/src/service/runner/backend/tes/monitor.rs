@@ -233,13 +233,13 @@ impl TaskMonitor {
                 tag = state.tag
             );
             let list = async {
-                let _permit = backend_state
+                let permit = backend_state
                     .permits
                     .acquire()
                     .await
                     .context("failed to acquire network request permit")?;
 
-                backend_state
+                let result = backend_state
                     .client
                     .list_tasks(
                         Some(&ListTasksParams {
@@ -253,7 +253,11 @@ impl TaskMonitor {
                         backend_state.policy(),
                     )
                     .await
-                    .context("failed to get task information from TES server")
+                    .context("failed to get task information from TES server");
+
+                // Drop the permit now that the request has completed
+                drop(permit);
+                result
             };
 
             // Get the list of tasks

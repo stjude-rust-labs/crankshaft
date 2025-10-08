@@ -177,25 +177,26 @@ impl Backend {
             .context("failed to wait for task completion")??;
 
         // Query for the state of the task
-        let task = {
-            let _permit = state
-                .permits
-                .acquire()
-                .await
-                .context("failed to acquire network request permit")?;
+        let permit = state
+            .permits
+            .acquire()
+            .await
+            .context("failed to acquire network request permit")?;
 
-            state
-                .client
-                .get_task(
-                    tes_id,
-                    Some(&GetTaskParams { view: View::Full }),
-                    state.policy(),
-                )
-                .await
-                .context("failed to get task information from TES server")?
-                .into_task()
-                .context("returned task is not a full view")?
-        };
+        let task = state
+            .client
+            .get_task(
+                tes_id,
+                Some(&GetTaskParams { view: View::Full }),
+                state.policy(),
+            )
+            .await
+            .context("failed to get task information from TES server")?
+            .into_task()
+            .context("returned task is not a full view")?;
+
+        // Drop the permit now that the request has completed
+        drop(permit);
 
         let task_state = task.state.unwrap_or_default();
         match task_state {
@@ -297,24 +298,25 @@ impl crate::Backend for Backend {
                 .get_or_insert_default()
                 .insert(monitor::CRANKSHAFT_GROUP_TAG_NAME.to_string(), tag);
 
-            let tes_id = {
-                let _permit = state
-                    .permits
-                    .acquire()
-                    .await
-                    .context("failed to acquire network request permit")?;
+            let permit = state
+                .permits
+                .acquire()
+                .await
+                .context("failed to acquire network request permit")?;
 
-                select! {
-                    // Always poll the cancellation token first
-                    biased;
-                    _ = token.cancelled() => {
-                        return Err(TaskRunError::Canceled);
-                    }
-                    res = state.client.create_task(&task, state.policy()) => {
-                        res.context("failed to create task with TES server")?.id
-                    }
+            let tes_id = select! {
+                // Always poll the cancellation token first
+                biased;
+                _ = token.cancelled() => {
+                    return Err(TaskRunError::Canceled);
+                }
+                res = state.client.create_task(&task, state.policy()) => {
+                    res.context("failed to create task with TES server")?.id
                 }
             };
+
+            // Drop the permit now that the request has completed
+            drop(permit);
 
             let task_token = CancellationToken::new();
 
@@ -343,7 +345,7 @@ impl crate::Backend for Backend {
             };
 
             if let Err(TaskRunError::Canceled) = &result {
-                let _permit = state
+                let permit = state
                     .permits
                     .acquire()
                     .await
@@ -357,6 +359,9 @@ impl crate::Backend for Backend {
                     .cancel_task(&tes_id, state.policy())
                     .await
                     .context("failed to cancel task with TES server")?;
+
+                // Drop the permit now that the request has completed
+                drop(permit);
             }
 
             monitor.remove_task(tes_id).await;

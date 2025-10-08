@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 async fn test_subscribe_events() {
     let (tx, _) = broadcast::channel(16);
 
-    let monitor = Monitor::start("127.0.0.1:32000".parse().unwrap(), tx.clone());
+    let monitor = Monitor::start("127.0.0.1:32000".parse().unwrap(), tx.clone()).await;
 
     // Perform a retry with backoff for connecting as the monitor starts
     // asynchronously
@@ -150,7 +150,7 @@ async fn test_subscribe_events() {
 async fn test_service_state() {
     let (tx, _) = broadcast::channel(16);
 
-    let monitor = Monitor::start("127.0.0.1:32001".parse().unwrap(), tx.clone());
+    let monitor = Monitor::start("127.0.0.1:32001".parse().unwrap(), tx.clone()).await;
 
     // Send some dummy events before the server starts
     // These events will be persisted in the service state
@@ -226,7 +226,7 @@ async fn test_service_state() {
 async fn test_cancel_task() {
     let (tx, _) = broadcast::channel(16);
 
-    let monitor = Monitor::start("127.0.0.1:32002".parse().unwrap(), tx.clone());
+    let monitor = Monitor::start("127.0.0.1:32002".parse().unwrap(), tx.clone()).await;
 
     let strategy = ExponentialFactorBackoff::from_millis(50, 2.0)
         .max_interval(1000)

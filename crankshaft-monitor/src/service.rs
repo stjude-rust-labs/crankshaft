@@ -155,7 +155,7 @@ pub struct MonitorService {
 
 impl MonitorService {
     /// Creates a new monitor service.
-    pub fn new(
+    pub async fn new(
         tx: broadcast::Sender<CrankshaftEvent>,
         rx: broadcast::Receiver<CrankshaftEvent>,
         token: CancellationToken,

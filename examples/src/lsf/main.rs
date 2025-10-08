@@ -91,9 +91,15 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         ))
         .build();
 
-    let mut tasks = (0..args.n_jobs)
-        .map(|_| Ok(engine.spawn("lsf", task.clone(), token.clone())?.wait()))
-        .collect::<Result<FuturesUnordered<_>>>()?;
+    let mut tasks = FuturesUnordered::new();
+    for _ in 0..args.n_jobs {
+        tasks.push(
+            engine
+                .spawn("lsf", task.clone(), token.clone())
+                .await?
+                .wait(),
+        );
+    }
 
     let progress = ProgressBar::new(tasks.len() as u64);
     progress.set_style(

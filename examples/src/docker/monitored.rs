@@ -56,6 +56,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .build();
 
     let engine = Engine::new_with_monitoring("127.0.0.1:8080".parse().unwrap())
+        .await
         .with(config)
         .await
         .context("initializing Docker backend")?;
@@ -112,11 +113,11 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                 .build(),
         );
 
-        let handle = engine.spawn("docker", task, token.clone())?;
+        let handle = engine.spawn("docker", task, token.clone()).await?;
 
         if !did_start_polling {
             tokio::time::sleep(Duration::from_millis(1)).await;
-            start_polling();
+            start_polling().await;
             did_start_polling = true;
         }
 
@@ -155,7 +156,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
 }
 
 /// performs polling
-fn start_polling() {
+async fn start_polling() {
     tokio::spawn(async {
         let addr = "http://127.0.0.1:8080";
         let channel = match Channel::from_static(addr).connect().await {

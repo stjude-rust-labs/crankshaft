@@ -92,7 +92,7 @@ impl Runner {
     /// executions collection.
     ///
     /// The `cancellation` token can be used to gracefully cancel the task.
-    pub fn spawn(&self, task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
+    pub async fn spawn(&self, task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();

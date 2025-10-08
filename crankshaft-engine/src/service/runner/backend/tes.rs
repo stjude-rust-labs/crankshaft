@@ -79,7 +79,7 @@ struct State {
     policy: ExponentialFactorBackoff,
     /// The sender for the monitor using for monitoring new tasks.
     monitor: mpsc::Sender<MonitorRequest>,
-    /// The permits for ensuring a maximum number of server requests.
+    /// The permits for ensuring a maximum number of concurrent server requests.
     permits: Semaphore,
     /// The events sender for Crankshaft events.
     events: Option<broadcast::Sender<Event>>,

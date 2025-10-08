@@ -76,7 +76,7 @@ impl Runner {
                 let backend = generic::Backend::initialize(config, defaults, names, events).await?;
                 Arc::new(backend)
             }
-            Kind::TES(config) => Arc::new(tes::Backend::initialize(config, names, events)),
+            Kind::TES(config) => Arc::new(tes::Backend::initialize(config, names, events).await),
         };
 
         Ok(Self {

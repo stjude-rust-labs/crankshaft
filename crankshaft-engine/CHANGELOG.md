@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* Improved how the TES backend monitors running tasks ([#60](https://github.com/stjude-rust-labs/crankshaft/pull/60)).
+
 ## 0.5.0 - 09-03-2025
 
 ### Added

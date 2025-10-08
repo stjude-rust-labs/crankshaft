@@ -31,7 +31,7 @@ impl Monitor {
     /// the monitor.
     ///
     /// Note that a failure to bind to the address will disable monitoring.
-    pub fn start(addr: SocketAddr, events: broadcast::Sender<Event>) -> Self {
+    pub async fn start(addr: SocketAddr, events: broadcast::Sender<Event>) -> Self {
         // Immediately subscribe here before we spawn the server task; this allows the
         // server to receive all events after `start` is called
         let rx = events.subscribe();
@@ -65,7 +65,7 @@ impl Monitor {
         rx: broadcast::Receiver<Event>,
         token: CancellationToken,
     ) {
-        let service = MonitorService::new(tx, rx, token.clone());
+        let service = MonitorService::new(tx, rx, token.clone()).await;
         let server = MonitorServer::new(service);
 
         info!("starting Crankshaft monitor at http://{addr}");

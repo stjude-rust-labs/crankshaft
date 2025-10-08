@@ -52,9 +52,9 @@ impl Engine {
 
     /// Constructs a new engine with monitoring enabled.
     #[cfg(feature = "monitoring")]
-    pub fn new_with_monitoring(addr: std::net::SocketAddr) -> Self {
+    pub async fn new_with_monitoring(addr: std::net::SocketAddr) -> Self {
         let (events_tx, _) = broadcast::channel(EVENTS_CHANNEL_CAPACITY);
-        let monitor = crankshaft_monitor::Monitor::start(addr, events_tx.clone());
+        let monitor = crankshaft_monitor::Monitor::start(addr, events_tx.clone()).await;
 
         Self {
             runners: Default::default(),
@@ -104,7 +104,7 @@ impl Engine {
     ///
     /// A [`TaskHandle`] is returned, which contains a channel that can be
     /// awaited for the result of the job.
-    pub fn spawn(
+    pub async fn spawn(
         &self,
         name: impl AsRef<str>,
         task: Task,
@@ -125,12 +125,12 @@ impl Engine {
                 .unwrap_or_default(),
         );
 
-        backend.spawn(task, token)
+        backend.spawn(task, token).await
     }
 
     /// Starts an instrumentation loop.
     #[cfg(tokio_unstable)]
-    pub fn start_instrument(delay_ms: u64) {
+    pub async fn start_instrument(delay_ms: u64) {
         use tokio_metrics::RuntimeMonitor;
         use tracing::info;
 

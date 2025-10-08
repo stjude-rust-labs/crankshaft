@@ -78,6 +78,28 @@ enum MonitorRequest {
     RemoveTask(RemoveTaskRequest),
 }
 
+/// Represents a monitored task.
+#[derive(Debug)]
+struct Task {
+    /// The name of the task.
+    name: String,
+    /// The sender for the "completed" notification.
+    completed: oneshot::Sender<Result<()>>,
+}
+
+/// Represents state for the task monitor.
+#[derive(Debug, Default)]
+struct TaskMonitorState {
+    /// The current tag to group TES tasks with.
+    tag: String,
+    /// The map of Crankshaft id to monitored task.
+    tasks: HashMap<u64, Task>,
+    /// The map of TES task id to Crankshaft task id
+    ids: HashMap<String, u64>,
+    /// Set of known running tasks
+    running: HashSet<u64>,
+}
+
 /// Represents a TES task monitor.
 ///
 /// The TES task monitor is responsible for polling the TES server for task
@@ -98,9 +120,9 @@ impl TaskMonitor {
     /// Constructs a new task monitor with the given name.
     ///
     /// The name is used for formatting the tag used to create new TES tasks.
-    pub async fn new(name: String, state: Arc<super::State>) -> Self {
+    pub async fn new(name: String, backend_state: Arc<super::BackendState>) -> Self {
         let (tx, rx) = mpsc::channel(MONITOR_CAPACITY);
-        tokio::spawn(Self::monitor(name, state, rx));
+        tokio::spawn(Self::monitor(name, backend_state, rx));
         Self(tx)
     }
 
@@ -150,177 +172,185 @@ impl TaskMonitor {
             .expect("failed to send request");
     }
 
+    /// Handles the "add task" request.
+    fn handle_add_task(state: &mut TaskMonitorState, name: &str, req: AddTaskRequest) {
+        // If there are no monitored tasks, create a new tag
+        if state.tasks.is_empty() {
+            state.running.clear();
+            state.tag = format!(
+                "{name}-{timestamp}-{id}",
+                timestamp = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+                id = req.id,
+            );
+        }
+
+        state.tasks.insert(
+            req.id,
+            Task {
+                name: req.name,
+                completed: req.completed,
+            },
+        );
+        req.response
+            .send(AddTaskResponse {
+                tag: state.tag.clone(),
+            })
+            .expect("failed to send add task response");
+    }
+
+    /// Handles the "associate task id" request.
+    fn handle_associate_task_id(state: &mut TaskMonitorState, req: AssociateTaskIdRequest) {
+        state.ids.insert(req.tes_id, req.id);
+    }
+
+    /// Handles the "remove task" request.
+    fn handle_remove_task(state: &mut TaskMonitorState, req: RemoveTaskRequest) {
+        if let Some(id) = state.ids.get(&req.tes_id) {
+            state.tasks.remove(id);
+            state.running.remove(id);
+        }
+    }
+
+    /// Updates the tasks by querying the TES server for the current task state.
+    ///
+    /// Responsible for sending task started events and for sending completion
+    /// messages.
+    async fn update_tasks(state: &mut TaskMonitorState, backend_state: &super::BackendState) {
+        // Don't do anything if there are no tasks being monitored
+        if state.tasks.is_empty() {
+            return;
+        }
+
+        assert!(!state.tag.is_empty(), "should have a current tag");
+        let mut page_token = None;
+        loop {
+            debug!(
+                "querying for the state of TES tasks with tag `{tag}` and page token \
+                 `{page_token:?}`",
+                tag = state.tag
+            );
+            let list = async {
+                let _permit = backend_state
+                    .permits
+                    .acquire()
+                    .await
+                    .context("failed to acquire network request permit")?;
+
+                backend_state
+                    .client
+                    .list_tasks(
+                        Some(&ListTasksParams {
+                            tag_keys: Some(vec![CRANKSHAFT_GROUP_TAG_NAME.to_string()]),
+                            tag_values: Some(vec![state.tag.clone()]),
+                            page_size: Some(MAX_PAGE_SIZE - 1),
+                            page_token,
+                            view: Some(View::Minimal),
+                            ..Default::default()
+                        }),
+                        backend_state.policy(),
+                    )
+                    .await
+                    .context("failed to get task information from TES server")
+            };
+
+            // Get the list of tasks
+            match list.await {
+                Ok(ListTasks {
+                    tasks: tes_tasks,
+                    next_page_token,
+                }) => {
+                    // For any task that is completed and in the map, notify of completion
+                    for task in tes_tasks
+                        .into_iter()
+                        .map(|t| t.into_minimal().expect("task should be minimal"))
+                    {
+                        match task.state.unwrap_or_default() {
+                            TesState::Running | TesState::Paused => {
+                                // The task is now running, send the started event
+                                if let Some(id) = state.ids.get(&task.id) {
+                                    if let Some(Task { name, .. }) = state.tasks.get(id) {
+                                        if state.running.insert(*id) {
+                                            info!(
+                                                "TES task `{tes_id}` (task `{name}`) is now \
+                                                 running",
+                                                tes_id = task.id
+                                            );
+                                            send_event!(
+                                                backend_state.events,
+                                                Event::TaskStarted { id: *id }
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            TesState::Complete
+                            | TesState::ExecutorError
+                            | TesState::SystemError
+                            | TesState::Canceled
+                            | TesState::Preempted => {
+                                // The task has completed, send the completion message
+                                if let Some(id) = state.ids.remove(&task.id) {
+                                    state.running.remove(&id);
+                                    if let Some(task) = state.tasks.remove(&id) {
+                                        let _ = task.completed.send(Ok(()));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if next_page_token.is_none() {
+                        break;
+                    }
+
+                    page_token = next_page_token;
+                }
+                Err(e) => {
+                    // Complete the current set of monitored tasks with an error
+                    state.running.clear();
+                    for (_, task) in state.tasks.drain() {
+                        let _ = task
+                            .completed
+                            .send(Err(anyhow!("failed to monitor TES tasks: {e:#}")));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     /// Performs the TES task monitoring.
     async fn monitor(
         monitor_name: String,
-        state: Arc<super::State>,
+        backend_state: Arc<super::BackendState>,
         mut rx: mpsc::Receiver<MonitorRequest>,
     ) {
         info!(
             "TES task monitor is starting with polling interval of {interval} seconds",
-            interval = state.interval.as_secs()
+            interval = backend_state.interval.as_secs()
         );
 
-        /// Represents a monitored task.
-        struct Task {
-            /// The name of the task.
-            name: String,
-            /// The sender for the "completed" notification.
-            completed: oneshot::Sender<Result<()>>,
-        }
-
-        // The map of Crankshaft id to monitored task
-        let mut tasks = HashMap::new();
-        // The map of TES task id to Crankshaft task id
-        let mut ids = HashMap::new();
-        // Set of known running tasks
-        let mut running = HashSet::new();
-        // The current tag
-        let mut tag = String::new();
+        let mut state = TaskMonitorState::default();
 
         // The timer for the querying TES task state
-        let mut timer = tokio::time::interval(state.interval);
+        let mut timer = tokio::time::interval(backend_state.interval);
         timer.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         loop {
             select! {
                 msg = rx.recv() => match msg {
                     Some(request) => match request {
-                        MonitorRequest::AddTask(req) => {
-                            // If there are no monitored tasks, create a new tag
-                            if tasks.is_empty() {
-                                running.clear();
-                                tag = format!(
-                                    "{monitor_name}-{timestamp}-{id}",
-                                    timestamp = SystemTime::now()
-                                        .duration_since(SystemTime::UNIX_EPOCH)
-                                        .unwrap_or_default()
-                                        .as_secs(),
-                                    id = req.id,
-                                );
-                            }
-
-                            tasks.insert(
-                                req.id,
-                                Task {
-                                    name: req.name,
-                                    completed: req.completed,
-                                },
-                            );
-                            req.response.send(AddTaskResponse { tag: tag.clone() }).expect("failed to send add task response");
-                        }
-                        MonitorRequest::AssociateTaskId(req) => {
-                            ids.insert(req.tes_id, req.id);
-                        }
-                        MonitorRequest::RemoveTask(req) => {
-                            if let Some(id) = ids.get(&req.tes_id) {
-                                tasks.remove(id);
-                                running.remove(id);
-                            }
-                        }
+                        MonitorRequest::AddTask(req) => Self::handle_add_task(&mut state, &monitor_name, req),
+                        MonitorRequest::AssociateTaskId(req) => Self::handle_associate_task_id(&mut state, req),
+                        MonitorRequest::RemoveTask(req) => Self::handle_remove_task(&mut state, req),
                     },
                     None => break,
                 },
-                _ = timer.tick() => {
-                    // Don't do anything if there are no tasks being monitored
-                    if tasks.is_empty() {
-                        continue;
-                    }
-
-                    assert!(!tag.is_empty(), "should have a current tag");
-                    let mut page_token = None;
-                    loop {
-                        debug!(
-                            "querying for the state of TES tasks with tag `{tag}` and page token `{page_token:?}`"
-                        );
-                        let list = async {
-                            let _permit = state
-                                .permits
-                                .acquire()
-                                .await
-                                .context("failed to acquire network request permit")?;
-
-                            state
-                                .client
-                                .list_tasks(
-                                    Some(&ListTasksParams {
-                                        tag_keys: Some(vec![CRANKSHAFT_GROUP_TAG_NAME.to_string()]),
-                                        tag_values: Some(vec![tag.clone()]),
-                                        page_size: Some(MAX_PAGE_SIZE - 1),
-                                        page_token,
-                                        view: Some(View::Minimal),
-                                        ..Default::default()
-                                    }),
-                                    state.policy(),
-                                )
-                                .await
-                                .context("failed to get task information from TES server")
-                        };
-
-                        // Get the list of tasks
-                        let result = list.await;
-
-                        match result {
-                            Ok(ListTasks {
-                                tasks: tes_tasks,
-                                next_page_token,
-                            }) => {
-                                // For any task that is completed and in the map, notify of completion
-                                for task in tes_tasks
-                                    .into_iter()
-                                    .map(|t| t.into_minimal().expect("task should be minimal"))
-                                {
-                                    match task.state.unwrap_or_default() {
-                                        TesState::Running | TesState::Paused => {
-                                            // The task is now running, send the started event
-                                            if let Some(id) = ids.get(&task.id) {
-                                                if let Some(Task { name, .. }) = tasks.get(id) {
-                                                    if running.insert(*id) {
-                                                        info!(
-                                                            "TES task `{tes_id}` (task `{name}`) is now running",
-                                                            tes_id = task.id
-                                                        );
-                                                        send_event!(state.events, Event::TaskStarted { id: *id });
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        TesState::Complete
-                                        | TesState::ExecutorError
-                                        | TesState::SystemError
-                                        | TesState::Canceled
-                                        | TesState::Preempted => {
-                                            // The task has completed, send the completion message
-                                            if let Some(id) = ids.remove(&task.id) {
-                                                running.remove(&id);
-                                                if let Some(task) = tasks.remove(&id) {
-                                                    let _ = task.completed.send(Ok(()));
-                                                }
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-
-                                if next_page_token.is_none() {
-                                    break;
-                                }
-
-                                page_token = next_page_token;
-                            }
-                            Err(e) => {
-                                // Complete the current set of monitored tasks with an error
-                                running.clear();
-                                for (_, task) in tasks.drain() {
-                                    let _ = task
-                                        .completed
-                                        .send(Err(anyhow!("failed to monitor TES tasks: {e:#}")));
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
+                _ = timer.tick() => Self::update_tasks(&mut state, backend_state.as_ref()).await,
             }
         }
 

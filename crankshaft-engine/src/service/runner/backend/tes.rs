@@ -55,7 +55,7 @@ const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 10;
 
 /// Shared state between tasks.
 #[derive(Debug)]
-struct State {
+struct BackendState {
     /// The TES client.
     client: Client,
     /// The poll interval for checking on task status.
@@ -70,7 +70,7 @@ struct State {
     events: Option<broadcast::Sender<Event>>,
 }
 
-impl State {
+impl BackendState {
     /// Gets the retry policy for the backend.
     fn policy(&self) -> impl Iterator<Item = Duration> + use<'_> {
         self.policy.clone().take(self.retries)
@@ -82,8 +82,8 @@ impl State {
 pub struct Backend {
     /// The unique name generator for tasks without names.
     names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-    /// The state shared between tasks.
-    state: Arc<State>,
+    /// The backend state shared between tasks.
+    state: Arc<BackendState>,
     /// The TES task monitor.
     monitor: TaskMonitor,
 }
@@ -129,7 +129,7 @@ impl Backend {
             builder = builder.insert_header("Authorization", auth.header_value());
         }
 
-        let state = Arc::new(State {
+        let state = Arc::new(BackendState {
             // SAFETY: the only required field of `builder` is the `url`, which we provided earlier.
             client: builder.try_build().expect("client to build"),
             interval: interval
@@ -157,7 +157,7 @@ impl Backend {
 
     /// Waits for a task to complete.
     async fn wait_task(
-        state: &State,
+        state: &BackendState,
         monitor: &TaskMonitor,
         task_id: u64,
         task_name: &str,

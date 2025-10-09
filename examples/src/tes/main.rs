@@ -108,41 +108,43 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .build();
 
     #[cfg(tokio_unstable)]
-    Engine::start_instrument(3000);
+    Engine::start_instrument(3000).await;
 
-    let mut tasks = (0..args.n_jobs)
-        .map(|_| {
-            let mut task = task.clone();
-            let stdout = NamedTempFile::new()?.into_temp_path();
-            let stderr = NamedTempFile::new()?.into_temp_path();
+    let mut tasks = FuturesUnordered::new();
+    for _ in 0..args.n_jobs {
+        let mut task = task.clone();
+        let stdout = NamedTempFile::new()?.into_temp_path();
+        let stderr = NamedTempFile::new()?.into_temp_path();
 
-            task.add_output(
-                Output::builder()
-                    .path("/stdout")
-                    .url(
-                        Url::from_file_path(&stdout)
-                            .map_err(|_| anyhow!("failed to get stdout URL"))?,
-                    )
-                    .ty(Type::File)
-                    .build(),
-            );
-            task.add_output(
-                Output::builder()
-                    .path("/stderr")
-                    .url(
-                        Url::from_file_path(&stderr)
-                            .map_err(|_| anyhow!("failed to get stderr URL"))?,
-                    )
-                    .ty(Type::File)
-                    .build(),
-            );
+        task.add_output(
+            Output::builder()
+                .path("/stdout")
+                .url(
+                    Url::from_file_path(&stdout)
+                        .map_err(|_| anyhow!("failed to get stdout URL"))?,
+                )
+                .ty(Type::File)
+                .build(),
+        );
+        task.add_output(
+            Output::builder()
+                .path("/stderr")
+                .url(
+                    Url::from_file_path(&stderr)
+                        .map_err(|_| anyhow!("failed to get stderr URL"))?,
+                )
+                .ty(Type::File)
+                .build(),
+        );
 
-            let handle = engine.spawn("tes", task, token.clone())?;
-            Ok(handle
+        tasks.push(
+            engine
+                .spawn("tes", task, token.clone())
+                .await?
                 .wait()
-                .map(|e| e.map(|e| (e.into_iter().next().unwrap(), stdout, stderr))))
-        })
-        .collect::<Result<FuturesUnordered<_>>>()?;
+                .map(|e| e.map(|e| (e.into_iter().next().unwrap(), stdout, stderr))),
+        );
+    }
 
     let progress = ProgressBar::new(tasks.len() as u64);
     progress.set_style(

@@ -47,6 +47,9 @@ pub struct Config {
 
     /// The number of retries for each request.
     pub retries: Option<u32>,
+
+    /// The maximum number of concurrent requests.
+    pub max_concurrency: Option<usize>,
 }
 
 #[cfg(test)]
@@ -57,5 +60,7 @@ mod tests {
     fn defaults() {
         let options = Config::default();
         assert!(options.auth.is_none());
+        assert!(options.retries.is_none());
+        assert!(options.max_concurrency.is_none());
     }
 }

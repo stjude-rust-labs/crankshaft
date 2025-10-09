@@ -28,36 +28,64 @@ use tes::v1::Client;
 use tes::v1::client::strategy::ExponentialFactorBackoff;
 use tes::v1::types::requests::GetTaskParams;
 use tes::v1::types::requests::View;
-use tes::v1::types::task::State;
+use tes::v1::types::task::State as TesState;
 use tokio::select;
+use tokio::sync::Semaphore;
 use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use tracing::trace;
 
 use super::TaskRunError;
 use crate::Task;
 use crate::service::name::GeneratorIterator;
 use crate::service::name::UniqueAlphanumeric;
+use crate::service::runner::backend::tes::monitor::TaskMonitor;
+
+mod monitor;
 
 /// The default poll interval for querying task status.
 const DEFAULT_INTERVAL: Duration = Duration::from_secs(1);
 
-/// A backend driven by the Task Execution Service (TES) schema.
+/// The maximum delay between retry attempts.
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
+
+/// The default maximum number of concurrent requests the backend will make.
+const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 10;
+
+/// Shared state between tasks.
 #[derive(Debug)]
-pub struct Backend {
-    /// A handle to the inner TES client.
-    client: Arc<Client>,
+struct BackendState {
+    /// The TES client.
+    client: Client,
     /// The poll interval for checking on task status.
     interval: Duration,
-    /// The events sender for the backend.
-    events: Option<broadcast::Sender<Event>>,
-    /// The unique name generator for tasks without names.
-    names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
     /// The number of retries to attempt.
     retries: usize,
     /// The retry policy to use for client operations.
     policy: ExponentialFactorBackoff,
+    /// The permits for ensuring a maximum number of concurrent server requests.
+    permits: Semaphore,
+    /// The events sender for Crankshaft events.
+    events: Option<broadcast::Sender<Event>>,
+}
+
+impl BackendState {
+    /// Gets the retry policy for the backend.
+    fn policy(&self) -> impl Iterator<Item = Duration> + use<'_> {
+        self.policy.clone().take(self.retries)
+    }
+}
+
+/// A backend driven by the Task Execution Service (TES) schema.
+#[derive(Debug)]
+pub struct Backend {
+    /// The unique name generator for tasks without names.
+    names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
+    /// The backend state shared between tasks.
+    state: Arc<BackendState>,
+    /// The TES task monitor.
+    monitor: TaskMonitor,
 }
 
 impl Backend {
@@ -83,157 +111,156 @@ impl Backend {
     ///     4096,
     /// )));
     ///
-    /// let backend = Backend::initialize(config, names, None);
+    /// # tokio_test::block_on(async {
+    /// let backend = Backend::initialize(config, names, None).await;
+    /// # });
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn initialize(
+    pub async fn initialize(
         config: Config,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
         events: Option<broadcast::Sender<Event>>,
     ) -> Self {
-        let (url, config, interval) = config.into_parts();
+        let (url, http, interval) = config.into_parts();
         let mut builder = Client::builder().url(url);
 
-        if let Some(auth) = &config.auth {
+        if let Some(auth) = &http.auth {
             builder = builder.insert_header("Authorization", auth.header_value());
         }
 
-        Self {
-            // SAFETY: the only required field of `builder` is the `url`, which
-            // we provided earlier.
-            client: Arc::new(builder.try_build().expect("client to build")),
+        let state = Arc::new(BackendState {
+            // SAFETY: the only required field of `builder` is the `url`, which we provided earlier.
+            client: builder.try_build().expect("client to build"),
             interval: interval
                 .map(Duration::from_secs)
                 .unwrap_or(DEFAULT_INTERVAL),
+            retries: http.retries.unwrap_or_default() as usize,
+            policy: ExponentialFactorBackoff::from_millis(1000, 2.0).max_delay(MAX_RETRY_DELAY),
+            permits: Semaphore::new(
+                http.max_concurrency
+                    .unwrap_or(DEFAULT_MAX_CONCURRENT_REQUESTS),
+            ),
             events,
+        });
+
+        // SAFETY: the name generator should _never_ run out of entries.
+        let monitor_name = names.lock().unwrap().next().unwrap();
+        let monitor = TaskMonitor::new(monitor_name, state.clone()).await;
+
+        Self {
             names,
-            retries: config.retries.unwrap_or_default() as usize,
-            policy: ExponentialFactorBackoff::from_millis(1000, 2.0)
-                .max_delay(Duration::from_secs(10)),
+            state,
+            monitor,
         }
     }
 
     /// Waits for a task to complete.
     async fn wait_task(
-        client: &Client,
+        state: &BackendState,
+        monitor: &TaskMonitor,
         task_id: u64,
         task_name: &str,
         tes_id: &str,
-        interval: Duration,
-        events: Option<broadcast::Sender<Event>>,
-        retries: impl Iterator<Item = Duration> + Clone,
+        completed: oneshot::Receiver<Result<()>>,
     ) -> Result<NonEmpty<ExitStatus>, TaskRunError> {
         info!(
             "TES task `{tes_id}` (task `{task_name}`) has been created; waiting for task to start"
         );
 
-        loop {
-            let task = client
-                .get_task(
-                    tes_id,
-                    Some(&GetTaskParams {
-                        view: View::Minimal,
-                    }),
-                    retries.clone(),
-                )
-                .await
-                .context("failed to get task information from TES server")?
-                .into_minimal()
-                .unwrap();
+        // Associate the TES task id with the Crankshaft id in the monitor
+        monitor.associate_task_id(task_id, tes_id.to_string()).await;
 
-            trace!("response for TES task `{tes_id}`: {task:?}");
+        // Wait for notification from the monitor that the task has completed
+        completed
+            .await
+            .context("failed to wait for task completion")??;
 
-            if let Some(ref state) = task.state {
-                match state {
-                    State::Unknown | State::Queued | State::Initializing => {
-                        // Task hasn't started yet
-                        trace!(
-                            "TES task `{tes_id}` is not yet running; waiting before polling again"
-                        );
-                    }
-                    State::Running | State::Paused => {
-                        trace!("TES task `{tes_id}` is running; waiting before polling again");
-                        send_event!(events, Event::TaskStarted { id: task_id });
-                    }
-                    State::Canceling => {
-                        // Task is canceling, wait for it to cancel
-                        trace!("TES task `{tes_id}` is canceling; waiting before polling again");
-                    }
-                    State::SystemError => {
-                        // Repeat with a full request to get the system logs.
-                        let task = client
-                            .get_task(
-                                tes_id,
-                                Some(&GetTaskParams { view: View::Full }),
-                                retries.clone(),
-                            )
-                            .await
-                            .context("failed to get task information from TES server")?
-                            .into_task()
-                            .unwrap();
+        // Query for the state of the task
+        let permit = state
+            .permits
+            .acquire()
+            .await
+            .context("failed to acquire network request permit")?;
 
-                        let messages = task
-                            .logs
-                            .unwrap_or_default()
-                            .last()
-                            .and_then(|l| l.system_logs.as_ref().map(|l| l.join("\n")))
-                            .unwrap_or_default();
+        let task = state
+            .client
+            .get_task(
+                tes_id,
+                Some(&GetTaskParams { view: View::Full }),
+                state.policy(),
+            )
+            .await
+            .context("failed to get task information from TES server")?
+            .into_task()
+            .context("returned task is not a full view")?;
 
-                        return Err(TaskRunError::Other(anyhow!(
-                            "task failed due to system error:\n\n{messages}"
-                        )));
-                    }
-                    State::Complete => {
-                        // Repeat with a basic request to get executor logs
-                        let task = client
-                            .get_task(
-                                tes_id,
-                                Some(&GetTaskParams { view: View::Basic }),
-                                retries.clone(),
-                            )
-                            .await
-                            .context("failed to get task information from TES server")?
-                            .into_task()
-                            .unwrap();
+        // Drop the permit now that the request has completed
+        drop(permit);
 
-                        info!("TES task `{tes_id}` (task `{task_name}`) has completed");
+        let task_state = task.state.unwrap_or_default();
+        match task_state {
+            TesState::Unknown
+            | TesState::Queued
+            | TesState::Initializing
+            | TesState::Running
+            | TesState::Paused
+            | TesState::Canceling => Err(TaskRunError::Other(anyhow!(
+                "TES task is not in a completed state"
+            ))),
+            TesState::Complete => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has completed");
 
-                        // There may be multiple task logs due to internal retries by the TES server
-                        // Therefore, we're only interested in the last log
-                        let logs = task.logs.unwrap_or_default();
-                        let task = logs.last().context(
-                            "invalid response from TES server: completed task is missing task logs",
-                        )?;
+                // There may be multiple task logs due to internal retries by the TES server
+                // Therefore, we're only interested in the last log
+                let logs = task.logs.unwrap_or_default();
+                let task = logs.last().context(
+                    "invalid response from TES server: completed task is missing task logs",
+                )?;
 
-                        // Iterate the exit code from each executor log
-                        return Ok(NonEmpty::collect(task.logs.iter().map(|executor| {
-                            // See WEXITSTATUS from wait(2) to explain the shift
-                            #[cfg(unix)]
-                            let status = ExitStatus::from_raw(executor.exit_code << 8);
+                // Iterate the exit code from each executor log
+                Ok(NonEmpty::collect(task.logs.iter().map(|executor| {
+                    // See WEXITSTATUS from wait(2) to explain the shift
+                    #[cfg(unix)]
+                    let status = ExitStatus::from_raw(executor.exit_code << 8);
 
-                            #[cfg(windows)]
-                            let status = ExitStatus::from_raw(executor.exit_code as u32);
+                    #[cfg(windows)]
+                    let status = ExitStatus::from_raw(executor.exit_code as u32);
 
-                            status
-                        }))
-                        .context(
-                            "invalid response from TES server: completed task is missing executor \
-                             logs",
-                        )?);
-                    }
-                    State::ExecutorError => {
-                        info!("TES task `{tes_id}` (task `{task_name}`) has failed");
-                        return Err(TaskRunError::Other(anyhow!(
-                            "task failed due to executor error"
-                        )));
-                    }
-                    State::Canceled => return Err(TaskRunError::Canceled),
-                    State::Preempted => return Err(TaskRunError::Preempted),
-                }
+                    status
+                }))
+                .context(
+                    "invalid response from TES server: completed task is missing executor logs",
+                )?)
             }
+            TesState::ExecutorError => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has failed");
+                Err(TaskRunError::Other(anyhow!(
+                    "task failed due to executor error"
+                )))
+            }
+            TesState::SystemError => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has failed with a system error");
 
-            tokio::time::sleep(interval).await;
+                let messages = task
+                    .logs
+                    .unwrap_or_default()
+                    .last()
+                    .and_then(|l| l.system_logs.as_ref().map(|l| l.join("\n")))
+                    .unwrap_or_default();
+
+                Err(TaskRunError::Other(anyhow!(
+                    "task failed due to system error:\n\n{messages}"
+                )))
+            }
+            TesState::Canceled => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has been canceled");
+                Err(TaskRunError::Canceled)
+            }
+            TesState::Preempted => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has been preempted");
+                Err(TaskRunError::Preempted)
+            }
         }
     }
 }
@@ -251,31 +278,58 @@ impl crate::Backend for Backend {
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
         let task_id = next_task_id();
-        let client = self.client.clone();
-        let interval = self.interval;
-        let events = self.events.clone();
         let names = self.names.clone();
-        let retries = self.policy.clone().take(self.retries);
-
-        let task_token = CancellationToken::new();
+        let monitor = self.monitor.clone();
+        let state = self.state.clone();
 
         Ok(async move {
             // Generate a name of the task if one wasn't provided
             let task_name = task.name.clone().unwrap_or_else(|| {
-                let mut generator = names.lock().unwrap();
                 // SAFETY: the name generator should _never_ run out of entries.
-                generator.next().unwrap()
+                names.lock().unwrap().next().unwrap()
             });
 
-            let task = tes::v1::types::requests::Task::try_from(task)?;
+            let mut task = tes::v1::types::requests::Task::try_from(task)?;
 
-            let tes_id = client
-                .create_task(&task, retries.clone())
+            // Add the task to the monitor
+            let (completed_tx, completed_rx) = oneshot::channel();
+            let tag = monitor.add_task(task_id, task_name.clone(), completed_tx).await;
+
+            task.tags
+                .get_or_insert_default()
+                .insert(monitor::CRANKSHAFT_GROUP_TAG_NAME.to_string(), tag);
+
+            let permit = state
+                .permits
+                .acquire()
                 .await
-                .context("failed to create task with TES server")?
-                .id;
+                .context("failed to acquire network request permit")?;
 
-            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: Some(tes_id.clone()), token: task_token.clone()});
+            let tes_id = select! {
+                // Always poll the cancellation token first
+                biased;
+                _ = token.cancelled() => {
+                    return Err(TaskRunError::Canceled);
+                }
+                res = state.client.create_task(&task, state.policy()) => {
+                    res.context("failed to create task with TES server")?.id
+                }
+            };
+
+            // Drop the permit now that the request has completed
+            drop(permit);
+
+            let task_token = CancellationToken::new();
+
+            send_event!(
+                state.events,
+                Event::TaskCreated {
+                    id: task_id,
+                    name: task_name.clone(),
+                    tes_id: Some(tes_id.clone()),
+                    token: task_token.clone()
+                }
+            );
 
             let result = select! {
                 // Always poll the cancellation token first
@@ -284,41 +338,52 @@ impl crate::Backend for Backend {
                     Err(TaskRunError::Canceled)
                 }
                 _ = token.cancelled() => {
-                    // Cancel the task
-                    client
-                        .cancel_task(&tes_id, retries.clone())
-                        .await
-                        .context("failed to cancel task with TES server")?;
                     Err(TaskRunError::Canceled)
                 }
-                res = Self::wait_task(&client, task_id, &task_name, &tes_id, interval, events.clone(), retries.clone()) => {
+                res = Self::wait_task(&state, &monitor, task_id, &task_name, &tes_id, completed_rx) => {
                     res
                 }
             };
 
+            if let Err(TaskRunError::Canceled) = &result {
+                let permit = state
+                    .permits
+                    .acquire()
+                    .await
+                    .context("failed to acquire permit")?;
+
+                info!("canceling TES task `{tes_id}` (task `{task_name}`)");
+
+                // Cancel the task
+                state
+                    .client
+                    .cancel_task(&tes_id, state.policy())
+                    .await
+                    .context("failed to cancel task with TES server")?;
+
+                // Drop the permit now that the request has completed
+                drop(permit);
+            }
+
+            monitor.remove_task(tes_id).await;
+
             // Send an event for the result
             match &result {
                 Ok(statuses) => send_event!(
-                    events,
+                    state.events,
                     Event::TaskCompleted {
                         id: task_id,
                         exit_statuses: statuses.clone(),
                     }
                 ),
-                Err(TaskRunError::Canceled) => send_event!(
-                    events,
-                    Event::TaskCanceled {
-                        id: task_id
-                    }
-                ),
-                Err(TaskRunError::Preempted) => send_event!(
-                    events,
-                    Event::TaskPreempted {
-                        id: task_id
-                    }
-                ),
+                Err(TaskRunError::Canceled) => {
+                    send_event!(state.events, Event::TaskCanceled { id: task_id })
+                }
+                Err(TaskRunError::Preempted) => {
+                    send_event!(state.events, Event::TaskPreempted { id: task_id })
+                }
                 Err(TaskRunError::Other(e)) => send_event!(
-                    events,
+                    state.events,
                     Event::TaskFailed {
                         id: task_id,
                         message: format!("{e:#}")

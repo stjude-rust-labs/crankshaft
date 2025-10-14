@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.5.0 - 10-13-2025
+
+### Added
+
+* Added option for maximum request concurrency to TES backend ([#60](https://github.com/stjude-rust-labs/crankshaft/pull/60)).
+
 ## 0.4.0 - 09-03-2025
 
 ### Added

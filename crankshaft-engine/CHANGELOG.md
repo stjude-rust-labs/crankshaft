@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Fixed
+
+* Fixed the way the TES backend polls tasks to prevent passing an empty next
+  page token back to the server ([#63](https://github.com/stjude-rust-labs/crankshaft/pull/63)).
+
 ## 0.6.0 - 10-13-2025
 
 ### Changed

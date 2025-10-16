@@ -219,14 +219,15 @@ impl TaskMonitor {
     /// Responsible for sending task started events and for sending completion
     /// messages.
     async fn update_tasks(state: &mut TaskMonitorState, backend_state: &super::BackendState) {
-        // Don't do anything if there are no tasks being monitored
-        if state.tasks.is_empty() {
-            return;
-        }
-
-        assert!(!state.tag.is_empty(), "should have a current tag");
         let mut page_token = None;
         loop {
+            // Don't do anything if there are no tasks being monitored
+            if state.tasks.is_empty() {
+                return;
+            }
+
+            assert!(!state.tag.is_empty(), "should have a current tag");
+
             debug!(
                 "querying for the state of TES tasks with tag `{tag}` and page token \
                  `{page_token:?}`",
@@ -307,7 +308,11 @@ impl TaskMonitor {
                         }
                     }
 
-                    if next_page_token.is_none() {
+                    if next_page_token
+                        .as_ref()
+                        .map(|t| t.is_empty())
+                        .unwrap_or(true)
+                    {
                         break;
                     }
 

@@ -250,7 +250,9 @@ impl From<&Resources> for HostConfig {
                 driver: Some(NVIDIA_DRIVER.to_string()),
                 count: Some(gpu as i64),
                 device_ids: None,
-                capabilities: Some(vec![GPU_CAPABILITIES.iter().map(|s| s.to_string()).collect()]),
+                capabilities: Some(vec![
+                    GPU_CAPABILITIES.iter().map(|s| s.to_string()).collect(),
+                ]),
                 options: None,
             }]);
         }

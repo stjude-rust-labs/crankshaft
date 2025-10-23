@@ -241,8 +241,11 @@ impl From<&Resources> for HostConfig {
         }
 
         if let Some(gpu) = resources.gpu() {
-            // TODO(clay): Only NVIDIA GPUs are supported at the moment. Add support for
-            // other GPU vendors (AMD, Intel) in the future.
+            // TODO(clay): Only NVIDIA GPUs are supported at the moment. Add
+            // support for other GPU vendors (AMD, Intel) in the future.
+            //
+            // These are specified as documented in
+            // https://docs.docker.com/compose/how-tos/gpu-support/.
             const NVIDIA_DRIVER: &str = "nvidia";
             const GPU_CAPABILITY: &str = "gpu";
 

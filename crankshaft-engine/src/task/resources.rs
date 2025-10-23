@@ -254,7 +254,6 @@ impl From<&Resources> for HostConfig {
                 count: Some(gpu as i64),
                 device_ids: None,
                 capabilities: Some(vec![vec![GPU_CAPABILITY.into()]]),
-                ]),
                 options: None,
             }]);
         }

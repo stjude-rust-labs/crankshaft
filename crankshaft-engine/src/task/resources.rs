@@ -250,7 +250,7 @@ impl From<&Resources> for HostConfig {
             const GPU_CAPABILITY: &str = "gpu";
 
             host_config.device_requests = Some(vec![DeviceRequest {
-                driver: Some(NVIDIA_DRIVER.to_string()),
+                driver: Some(NVIDIA_DRIVER.into()),
                 count: Some(gpu as i64),
                 device_ids: None,
                 capabilities: Some(vec![vec![GPU_CAPABILITY.into()]]),

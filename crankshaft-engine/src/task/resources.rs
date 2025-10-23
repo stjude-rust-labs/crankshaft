@@ -366,12 +366,8 @@ mod test {
         assert_eq!(device_request.count, Some(1));
         assert_eq!(device_request.device_ids, None);
         assert_eq!(
-            device_request.capabilities.as_ref().map(|caps| {
-                caps.iter()
-                    .map(|inner| inner.iter().map(|s| s.as_str()).collect::<Vec<_>>())
-                    .collect::<Vec<_>>()
-            }),
-            Some(vec![vec!["gpu"]])
+            device_request.capabilities.as_ref(),
+            Some(&vec![vec!["gpu".into()]])
         );
         assert_eq!(device_request.options, None);
     }

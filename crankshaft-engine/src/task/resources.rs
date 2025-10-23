@@ -244,14 +244,13 @@ impl From<&Resources> for HostConfig {
             // TODO(clay): Only NVIDIA GPUs are supported at the moment. Add support for
             // other GPU vendors (AMD, Intel) in the future.
             const NVIDIA_DRIVER: &str = "nvidia";
-            const GPU_CAPABILITIES: [&str; 1] = ["gpu"];
+            const GPU_CAPABILITY: &str = "gpu";
 
             host_config.device_requests = Some(vec![DeviceRequest {
                 driver: Some(NVIDIA_DRIVER.to_string()),
                 count: Some(gpu as i64),
                 device_ids: None,
-                capabilities: Some(vec![
-                    GPU_CAPABILITIES.iter().map(|s| s.to_string()).collect(),
+                capabilities: Some(vec![vec![GPU_CAPABILITY.into()]]),
                 ]),
                 options: None,
             }]);

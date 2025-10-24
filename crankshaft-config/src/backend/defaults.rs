@@ -40,6 +40,9 @@ pub struct Defaults {
     /// gibibytes. These may be rounded to any level of precision that is
     /// required for a particular environment.
     disk: Option<f64>,
+
+    /// The number of GPUs to use during execution.
+    gpu: Option<u64>,
 }
 
 impl Defaults {
@@ -66,5 +69,10 @@ impl Defaults {
     /// Gets the amount of disk space (in GiB).
     pub fn disk(&self) -> Option<f64> {
         self.disk
+    }
+
+    /// Gets the number of GPUs.
+    pub fn gpu(&self) -> Option<u64> {
+        self.gpu
     }
 }

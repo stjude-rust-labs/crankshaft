@@ -1,8 +1,12 @@
-//! An example for runner a task using the Docker backend service.
+//! An example for running a task using the Docker backend service.
 //!
 //! You can run this command with the following command:
 //!
 //! `cargo run --release --bin docker`
+//!
+//! To request GPU resources for each task, add the `--gpu` flag:
+//!
+//! `cargo run --release --bin docker --gpu 1`
 
 use std::env::current_dir;
 use std::time::Duration;
@@ -17,6 +21,7 @@ use crankshaft::config::backend::docker::Config;
 use crankshaft::engine::Task;
 use crankshaft::engine::task::Execution;
 use crankshaft::engine::task::Output;
+use crankshaft::engine::task::Resources;
 use crankshaft::engine::task::output::Type;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -44,6 +49,10 @@ pub struct Args {
     /// The number of jobs to submit in total.
     #[arg(short, long, default_value_t = 1000)]
     n_jobs: usize,
+
+    /// The number of GPUs to request for each task.
+    #[arg(long)]
+    gpu: Option<u64>,
 }
 
 /// Starting point for task execution.
@@ -58,6 +67,8 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
         .with(config)
         .await
         .context("initializing Docker backend")?;
+
+    let resources = Resources::builder().maybe_gpu(args.gpu).build();
 
     let task = Task::builder()
         .description("a longer description")
@@ -76,6 +87,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                 .stderr("/stderr")
                 .build(),
         ))
+        .resources(resources)
         .build();
 
     let mut tasks = FuturesUnordered::new();
@@ -129,14 +141,23 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let mut results = Vec::new();
     while let Some(result) = tasks.next().await {
         let failed = result.is_err();
-        results.push(result);
 
         progress.set_message(format!(
             "task #{num} {status}",
-            num = results.len(),
+            num = results.len() + 1,
             status = if failed { "failed" } else { "completed" }
         ));
         progress.inc(1);
+
+        if let Err(ref e) = result {
+            drop(progress);
+            eprintln!("\nTask #{} failed: {:#}", results.len() + 1, e);
+            eprintln!("Canceling remaining tasks...");
+            token.cancel();
+            return Err(anyhow!("Task execution aborted due to failure"));
+        }
+
+        results.push(result);
     }
 
     drop(progress);

@@ -3,6 +3,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use bollard::secret::DeviceRequest;
 use bollard::secret::HostConfig;
 use bollard::secret::TaskSpecResources;
 use bon::Builder;
@@ -42,6 +43,10 @@ pub struct Resources {
     /// The associated compute zones.
     #[builder(into, default)]
     pub(crate) zones: Vec<String>,
+
+    /// The number of GPUs requested.
+    #[builder(into)]
+    pub(crate) gpu: Option<u64>,
 }
 
 impl Resources {
@@ -80,6 +85,11 @@ impl Resources {
         &self.zones
     }
 
+    /// The number of GPUs requested.
+    pub fn gpu(&self) -> Option<u64> {
+        self.gpu
+    }
+
     /// Applies any provided options in `other` to the [`Resources`].
     pub fn apply(mut self, other: &Self) -> Self {
         if let Some(cores) = other.cpu {
@@ -104,6 +114,10 @@ impl Resources {
 
         if let Some(preemptible) = other.preemptible {
             self.preemptible = Some(preemptible);
+        }
+
+        if let Some(gpu) = other.gpu {
+            self.gpu = Some(gpu);
         }
 
         self.zones = other.zones.clone();
@@ -151,6 +165,10 @@ impl Resources {
             map.insert("preemptible".into(), preemptible.to_string().into());
         }
 
+        if let Some(gpu) = self.gpu {
+            map.insert("gpu".into(), gpu.to_string().into());
+        }
+
         // Zones are explicitly not included.
         map
     }
@@ -166,6 +184,7 @@ impl Default for Resources {
             disk: Some(8.0),
             preemptible: Some(false),
             zones: Default::default(),
+            gpu: None,
         }
     }
 }
@@ -180,6 +199,7 @@ impl From<&Defaults> for Resources {
             disk: defaults.disk(),
             preemptible: Default::default(),
             zones: Default::default(),
+            gpu: defaults.gpu(),
         }
     }
 }
@@ -218,6 +238,24 @@ impl From<&Resources> for HostConfig {
             let mut storage_opt: HashMap<String, String> = HashMap::new();
             storage_opt.insert("size".to_string(), disk.to_string());
             host_config.storage_opt = Some(storage_opt);
+        }
+
+        if let Some(gpu) = resources.gpu() {
+            // TODO(clay): Only NVIDIA GPUs are supported at the moment. Add
+            // support for other GPU vendors (AMD, Intel) in the future.
+            //
+            // These are specified as documented in
+            // https://docs.docker.com/compose/how-tos/gpu-support/.
+            const NVIDIA_DRIVER: &str = "nvidia";
+            const GPU_CAPABILITY: &str = "gpu";
+
+            host_config.device_requests = Some(vec![DeviceRequest {
+                driver: Some(NVIDIA_DRIVER.into()),
+                count: Some(gpu as i64),
+                device_ids: None,
+                capabilities: Some(vec![vec![GPU_CAPABILITY.into()]]),
+                options: None,
+            }]);
         }
 
         host_config
@@ -289,6 +327,7 @@ mod test {
             disk: Some(80.),
             preemptible: Some(true),
             zones: vec!["foo".into(), "bar".into(), "baz".into()],
+            gpu: None,
         };
 
         let tes: tes::v1::types::task::Resources = resources.into();
@@ -302,5 +341,53 @@ mod test {
         );
         assert_eq!(tes.backend_parameters, None);
         assert_eq!(tes.backend_parameters_strict, None);
+    }
+
+    #[test]
+    fn gpu_creates_device_request() {
+        let resources = Resources {
+            cpu: None,
+            cpu_limit: None,
+            ram: None,
+            ram_limit: None,
+            disk: None,
+            preemptible: None,
+            zones: vec![],
+            gpu: Some(1),
+        };
+
+        let host_config: HostConfig = (&resources).into();
+
+        assert!(host_config.device_requests.is_some());
+        let device_requests = host_config.device_requests.unwrap();
+        assert_eq!(device_requests.len(), 1);
+
+        let device_request = &device_requests[0];
+        assert_eq!(device_request.driver.as_deref(), Some("nvidia"));
+        assert_eq!(device_request.count, Some(1));
+        assert_eq!(device_request.device_ids, None);
+        assert_eq!(
+            device_request.capabilities.as_ref(),
+            Some(&vec![vec!["gpu".into()]])
+        );
+        assert_eq!(device_request.options, None);
+    }
+
+    #[test]
+    fn no_gpu_creates_no_device_request() {
+        let resources = Resources {
+            cpu: None,
+            cpu_limit: None,
+            ram: None,
+            ram_limit: None,
+            disk: None,
+            preemptible: None,
+            zones: vec![],
+            gpu: None,
+        };
+
+        let host_config: HostConfig = (&resources).into();
+
+        assert!(host_config.device_requests.is_none());
     }
 }

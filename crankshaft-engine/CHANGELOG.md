@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added GPU support for the Docker backend ([#64](https://github.com/stjude-rust-labs/crankshaft/pull/64)).
+
 ### Fixed
 
 * Fixed the way the TES backend polls tasks to prevent passing an empty next

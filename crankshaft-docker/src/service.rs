@@ -190,13 +190,13 @@ impl Service {
                         id = self.id
                     );
 
-                    if let Some(events) = &events {
-                        if events.send_start {
-                            events
-                                .sender
-                                .send(Event::TaskStarted { id: events.task_id })
-                                .ok();
-                        }
+                    if let Some(events) = &events
+                        && events.send_start
+                    {
+                        events
+                            .sender
+                            .send(Event::TaskStarted { id: events.task_id })
+                            .ok();
                     }
 
                     // Write the logs

@@ -180,12 +180,12 @@ impl crate::Backend for Backend {
                         .is_some()
                     {
                         unreachable!("the `command` key should not be present here");
-                    };
+                    }
 
-                    if let Some(cwd) = execution.work_dir {
-                        if substitutions.insert("cwd".into(), cwd.into()).is_some() {
-                            unreachable!("the `cwd` key should not be present here");
-                        };
+                    if let Some(cwd) = execution.work_dir
+                        && substitutions.insert("cwd".into(), cwd.into()).is_some()
+                    {
+                        unreachable!("the `cwd` key should not be present here");
                     }
 
                     // Submitting the initial job.

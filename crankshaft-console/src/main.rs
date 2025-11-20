@@ -46,8 +46,7 @@ async fn main() -> Result<()> {
                     continue;
                 }
 
-                if state.current_view == View::Cancel {
-                    if let Event::Key(key) = input {
+                if state.current_view == View::Cancel && let Event::Key(key) = input {
                         match key.code {
                             KeyCode::Char('y') => {
                                 if let Some(task) = state.task_state().selected_task() {
@@ -61,7 +60,6 @@ async fn main() -> Result<()> {
                             _ => {}
                         }
                     }
-                }
 
                 if input::should_quit(&input){
                     return Ok(());

@@ -13,11 +13,11 @@ resolver = "2"
 
 [workspace.package]
 license = "MIT OR Apache-2.0"
-edition = "2021"
+edition = "2024"
 authors = ["The Rust WDL project developers"]
 homepage = "https://github.com/stjude-rust-labs/crankshaft"
 repository = "https://github.com/stjude-rust-labs/crankshaft"
-rust-version = "1.83.0"
+rust-version = "1.91.1"
 
 [workspace.dependencies]
 anyhow = "1.0.99"
@@ -80,31 +80,8 @@ whoami = "1.6.1"
 
 [workspace.lints.rust]
 missing_docs = "warn"
-nonstandard-style = "warn"
 rust-2018-idioms = "warn"
-rust-2021-compatibility = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
-
-# Re-enable this lint and remove the group expansion lints after auditing remaining diagnostics as we get closer to the 2024 release
-# rust-2024-compatibility = "warn"
-# <expansion>
-boxed-slice-into-iter = "warn"
-dependency-on-unit-never-type-fallback = "warn"
-deprecated-safe-2024 = "warn"
-edition-2024-expr-fragment-specifier = "allow"        # Reason: the few macros where we use the `expr` fragment will not break with the new expressions
-if-let-rescope = "allow"                              # Reason: lint is too noisy and we are unlikely to have drop order dependencies
-impl-trait-overcaptures = "warn"
-keyword-idents-2024 = "warn"
-missing-unsafe-on-extern = "warn"
-never-type-fallback-flowing-into-unsafe = "warn"
-rust-2024-guarded-string-incompatible-syntax = "warn"
-rust-2024-incompatible-pat = "warn"
-rust-2024-prelude-collisions = "warn"
-static-mut-refs = "warn"
-tail-expr-drop-order = "allow"                        # Reason: lint is too noisy and we are unlikely to have drop order dependencies
-unsafe-attr-outside-unsafe = "warn"
-unsafe-op-in-unsafe-fn = "warn"
-# </expansion>
 
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "warn"

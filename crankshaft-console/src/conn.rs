@@ -122,12 +122,11 @@ impl Connection {
 
     /// Cancels a task.
     pub async fn cancel_task(&mut self, task_id: u64) {
-        if let ConnectionState::Connected { client, .. } = &mut self.state {
-            if let Err(e) = client.cancel_task(CancelTaskRequest { id: task_id }).await {
-                if e.code() != Code::NotFound {
-                    tracing::error!("failed to cancel task: {e}");
-                }
-            }
+        if let ConnectionState::Connected { client, .. } = &mut self.state
+            && let Err(e) = client.cancel_task(CancelTaskRequest { id: task_id }).await
+            && e.code() != Code::NotFound
+        {
+            tracing::error!("failed to cancel task: {e}");
         }
     }
 

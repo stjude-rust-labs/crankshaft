@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.7.0 - 11-24-2025
+
+### Crates
+
+* Updated Crankshaft crates to latest.
+
 ## 0.6.0 - 10-13-2025
 
 ### Crates

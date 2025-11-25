@@ -1,6 +1,6 @@
 //! Containers.
 
-use std::io::Cursor;
+use std::future::Future;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
 #[cfg(windows)]
@@ -8,15 +8,14 @@ use std::os::windows::process::ExitStatusExt as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
+use std::time::Duration;
 
 use bollard::Docker;
-use bollard::body_full;
 use bollard::container::LogOutput;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::RemoveContainerOptions;
 use bollard::query_parameters::StartContainerOptions;
-use bollard::query_parameters::UploadToContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use crankshaft_events::Event;
@@ -24,6 +23,10 @@ use futures::Stream;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::pin;
+use tokio_retry2::Retry;
+use tokio_retry2::RetryError;
+use tokio_retry2::strategy::ExponentialBackoff;
+use tokio_retry2::strategy::jitter;
 use tokio_stream::StreamExt as _;
 use tracing::debug;
 use tracing::info;
@@ -36,12 +39,50 @@ mod builder;
 
 pub use builder::Builder;
 
-/// The default capacity of bytes for a TAR being built.
+/// The default retry strategy for fallable Docker operations.
 ///
-/// It's unlikely that any file we send will be less than this number of
-/// bytes, so this is arbitrarily selected to avoid the first few
-/// allocations.
-const DEFAULT_TAR_CAPACITY: usize = 0xFFFF;
+/// Docker operations are often flaky due to the state of the system or the
+/// Docker daemon. This retry duration is used as a baseline for all operations
+/// that require communication with the Docker daemon.
+///
+/// Use the [`default_retry`] function to easily use this retry strategy.
+///
+/// See https://github.com/stjude-rust-labs/crankshaft/issues/68 for more
+/// information.
+fn default_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(50)
+        .factor(2)
+        .max_delay_millis(1000)
+        .map(jitter)
+        .take(5)
+}
+
+/// Helper to determine if a Docker error is retryable or not.
+fn is_retryable(err: bollard::errors::Error) -> RetryError<bollard::errors::Error> {
+    match err {
+        // A transient I/O issue.
+        bollard::errors::Error::IOError { .. } |
+        // A transient connection issue.
+        bollard::errors::Error::HyperResponseError { .. } => RetryError::transient(err),
+        // A docker server error, where Docker reports a conflict, which
+        // includes things like trying to stop a container that the daemon
+        // doesn't _think_ is currently stopped.
+        bollard::errors::Error::DockerResponseServerError { status_code: 409, .. } => RetryError::transient(err),
+        _ => {
+            RetryError::permanent(err)
+        }
+    }
+}
+
+/// Helper to perform the Docker operation with the default retry strategy.
+async fn default_retry<F, Fut, T>(op: F) -> std::result::Result<T, bollard::errors::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = std::result::Result<T, bollard::errors::Error>>,
+{
+    let action = || async { op().await.map_err(is_retryable) };
+    Retry::spawn(default_retry_strategy(), action).await
+}
 
 /// Helper for writing a container's logs to stdout/stderr files.
 ///
@@ -144,34 +185,6 @@ impl Container {
         &self.name
     }
 
-    /// Uploads an input file to the container.
-    pub async fn upload_file(&self, path: &str, contents: &[u8]) -> Result<()> {
-        let mut tar = tar::Builder::new(Vec::with_capacity(DEFAULT_TAR_CAPACITY));
-        let path = path.trim_start_matches("/");
-
-        let mut header = tar::Header::new_gnu();
-        header.set_path(path).unwrap();
-        header.set_size(contents.len() as u64);
-        header.set_mode(0o644);
-
-        // SAFETY: this is manually crafted to always unwrap.
-        tar.append_data(&mut header, path, Cursor::new(contents))
-            .unwrap();
-
-        self.client
-            .upload_to_container(
-                &self.name,
-                Some(UploadToContainerOptions {
-                    path: String::from("/"),
-                    ..Default::default()
-                }),
-                // SAFETY: this is manually crafted to always unwrap.
-                body_full(tar.into_inner().unwrap().into()),
-            )
-            .await
-            .map_err(Error::Docker)
-    }
-
     /// Runs a container and waits for the execution to end.
     pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
         if let Some(events) = &events {
@@ -190,10 +203,13 @@ impl Container {
         );
 
         // Start the container.
-        self.client
-            .start_container(&self.name, None::<StartContainerOptions>)
-            .await
-            .map_err(Error::Docker)?;
+
+        default_retry(|| {
+            self.client
+                .start_container(&self.name, None::<StartContainerOptions>)
+        })
+        .await
+        .map_err(Error::Docker)?;
 
         info!(
             "container `{name}` (task `{task_name}`) has started",
@@ -323,18 +339,17 @@ impl Container {
     /// versions made available: [`Self::remove()`] and
     /// [`Self::force_remove()`].
     async fn remove_inner(&self, force: bool) -> Result<()> {
-        self.client
-            .remove_container(
+        default_retry(|| {
+            self.client.remove_container(
                 &self.name,
                 Some(RemoveContainerOptions {
                     force,
                     ..Default::default()
                 }),
             )
-            .await
-            .map_err(Error::Docker)?;
-
-        Ok(())
+        })
+        .await
+        .map_err(Error::Docker)
     }
 
     /// Removes a container.

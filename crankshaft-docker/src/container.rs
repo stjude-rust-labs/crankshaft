@@ -236,19 +236,18 @@ impl Container {
             tar.append_data(&mut header, path, Cursor::new(&contents))
                 .unwrap();
 
-            self.client
-                .upload_to_container(
-                    &self.name,
-                    Some(UploadToContainerOptions {
-                        path: String::from("/"),
-                        ..Default::default()
-                    }),
-                    // SAFETY: this is manually crafted to always unwrap.
-                    body_full(tar.into_inner().unwrap().into()),
-                )
-        }).await.map_err(Error::Docker)
-
-
+            self.client.upload_to_container(
+                &self.name,
+                Some(UploadToContainerOptions {
+                    path: String::from("/"),
+                    ..Default::default()
+                }),
+                // SAFETY: this is manually crafted to always unwrap.
+                body_full(tar.into_inner().unwrap().into()),
+            )
+        })
+        .await
+        .map_err(Error::Docker)
     }
 
     /// Runs a container and waits for the execution to end.
@@ -409,10 +408,9 @@ impl Container {
         //                     // now.
         //                     return Ok(());
         //                 } else {
-        //                     return Err(RetryError::transient(Error::Message(String::from(
-        //                         "container status not `exited`",
-        //                     ))));
-        //                 }
+        //                     return
+        // Err(RetryError::transient(Error::Message(String::from("container status not
+        // `exited`"))));                 }
         //             }
         //         }
         //

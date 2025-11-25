@@ -76,14 +76,10 @@ fn is_retryable(err: bollard::errors::Error) -> RetryError<bollard::errors::Erro
         bollard::errors::Error::IOError { .. } |
         // A transient connection issue.
         bollard::errors::Error::HyperResponseError { .. } => RetryError::transient(err),
-        // A docker server error, where...
-        bollard::errors::Error::DockerResponseServerError { status_code, .. }
-          // Docker reports a conflict, which includes things like trying to
-          // stop a container that the daemon doesn't _think_ is currently
-          // stopped.
-          if status_code == 409 => {
-            RetryError::transient(err)
-          }
+        // A docker server error, where Docker reports a conflict, which
+        // includes things like trying to stop a container that the daemon
+        // doesn't _think_ is currently stopped.
+        bollard::errors::Error::DockerResponseServerError { status_code: 409, .. } => RetryError::transient(err),
         _ => {
             RetryError::permanent(err)
         }

@@ -223,30 +223,32 @@ impl Container {
 
     /// Uploads an input file to the container.
     pub async fn upload_file(&self, path: &str, contents: &[u8]) -> Result<()> {
-        let mut tar = tar::Builder::new(Vec::with_capacity(DEFAULT_TAR_CAPACITY));
         let path = path.trim_start_matches("/");
 
-        let mut header = tar::Header::new_gnu();
-        header.set_path(path).unwrap();
-        header.set_size(contents.len() as u64);
-        header.set_mode(0o644);
+        default_retry(|| {
+            let mut tar = tar::Builder::new(Vec::with_capacity(DEFAULT_TAR_CAPACITY));
+            let mut header = tar::Header::new_gnu();
+            header.set_path(path).unwrap();
+            header.set_size(contents.len() as u64);
+            header.set_mode(0o644);
 
-        // SAFETY: this is manually crafted to always unwrap.
-        tar.append_data(&mut header, path, Cursor::new(contents))
-            .unwrap();
+            // SAFETY: this is manually crafted to always unwrap.
+            tar.append_data(&mut header, path, Cursor::new(&contents))
+                .unwrap();
 
-        self.client
-            .upload_to_container(
-                &self.name,
-                Some(UploadToContainerOptions {
-                    path: String::from("/"),
-                    ..Default::default()
-                }),
-                // SAFETY: this is manually crafted to always unwrap.
-                body_full(tar.into_inner().unwrap().into()),
-            )
-            .await
-            .map_err(Error::Docker)
+            self.client
+                .upload_to_container(
+                    &self.name,
+                    Some(UploadToContainerOptions {
+                        path: String::from("/"),
+                        ..Default::default()
+                    }),
+                    // SAFETY: this is manually crafted to always unwrap.
+                    body_full(tar.into_inner().unwrap().into()),
+                )
+        }).await.map_err(Error::Docker)
+
+
     }
 
     /// Runs a container and waits for the execution to end.

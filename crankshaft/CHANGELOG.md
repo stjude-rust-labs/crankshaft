@@ -12,6 +12,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 * Updated lints and MSRV for Rust 2024 ([#66](https://github.com/stjude-rust-labs/crankshaft/pull/66)).
 
+## 0.7.0 - 11-24-2025
+
+### Crates
+
+* Updated Crankshaft crates to latest.
+
 ## 0.6.0 - 10-13-2025
 
 ### Crates

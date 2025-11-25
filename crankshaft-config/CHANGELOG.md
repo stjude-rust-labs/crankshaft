@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.6.0 - 11-24-2025
+
 ### Added
 
 * Added `gpu` field to resource defaults ([#64](https://github.com/stjude-rust-labs/crankshaft/pull/64)).

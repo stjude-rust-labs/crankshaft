@@ -275,20 +275,18 @@ impl TaskMonitor {
                         match task.state.unwrap_or_default() {
                             TesState::Running | TesState::Paused => {
                                 // The task is now running, send the started event
-                                if let Some(id) = state.ids.get(&task.id) {
-                                    if let Some(Task { name, .. }) = state.tasks.get(id) {
-                                        if state.running.insert(*id) {
-                                            info!(
-                                                "TES task `{tes_id}` (task `{name}`) is now \
-                                                 running",
-                                                tes_id = task.id
-                                            );
-                                            send_event!(
-                                                backend_state.events,
-                                                Event::TaskStarted { id: *id }
-                                            );
-                                        }
-                                    }
+                                if let Some(id) = state.ids.get(&task.id)
+                                    && let Some(Task { name, .. }) = state.tasks.get(id)
+                                    && state.running.insert(*id)
+                                {
+                                    info!(
+                                        "TES task `{tes_id}` (task `{name}`) is now running",
+                                        tes_id = task.id
+                                    );
+                                    send_event!(
+                                        backend_state.events,
+                                        Event::TaskStarted { id: *id }
+                                    );
                                 }
                             }
                             TesState::Complete

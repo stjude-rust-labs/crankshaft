@@ -11,7 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Revised
 
 * Added retry logic with exponential backoff to Docker operations to handle
-  transient failures ([#68](https://github.com/stjude-rust-labs/crankshaft/pull/68)).
+  transient failures ([#69](https://github.com/stjude-rust-labs/crankshaft/pull/69)).
 
 ## 0.3.0 - 09-03-2025
 

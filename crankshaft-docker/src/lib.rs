@@ -28,6 +28,9 @@ pub enum Error {
     /// A required value was missing for a builder field.
     #[error("missing required builder field `{0}`")]
     MissingBuilderField(&'static str),
+    /// An operation timed out.
+    #[error("an operation timed out: {0}")]
+    Timeout(String),
     /// An error from a message.
     #[error("{0}")]
     Message(String),

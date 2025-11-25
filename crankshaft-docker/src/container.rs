@@ -1,5 +1,7 @@
 //! Containers.
 
+use std::future::Future;
+use std::future::IntoFuture;
 use std::io::Cursor;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
@@ -8,6 +10,7 @@ use std::os::windows::process::ExitStatusExt as _;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
+use std::time::Duration;
 
 use bollard::Docker;
 use bollard::body_full;
@@ -21,9 +24,14 @@ use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use crankshaft_events::Event;
 use futures::Stream;
+use futures::TryFutureExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::pin;
+use tokio_retry2::Retry;
+use tokio_retry2::RetryError;
+use tokio_retry2::strategy::ExponentialBackoff;
+use tokio_retry2::strategy::jitter;
 use tokio_stream::StreamExt as _;
 use tracing::debug;
 use tracing::info;
@@ -42,6 +50,75 @@ pub use builder::Builder;
 /// bytes, so this is arbitrarily selected to avoid the first few
 /// allocations.
 const DEFAULT_TAR_CAPACITY: usize = 0xFFFF;
+
+/// The default retry strategy for fallable Docker operations.
+///
+/// Docker operations are often flaky due to the state of the system or the
+/// Docker daemon. This retry duration is used as a baseline for all operations
+/// that require communication with the Docker daemon.
+///
+/// Use the [`default_retry`] function to easily use this retry strategy.
+///
+/// See https://github.com/stjude-rust-labs/crankshaft/issues/68 for more
+/// information.
+fn default_retry_strategy() -> impl Iterator<Item = Duration> {
+    ExponentialBackoff::from_millis(50)
+        .factor(2)
+        .max_delay_millis(1000)
+        .map(jitter)
+        .take(5)
+}
+
+/// Helper to determine if a Docker error is retryable or not.
+fn is_retryable(err: bollard::errors::Error) -> RetryError<bollard::errors::Error> {
+    match err {
+        // A transient I/O issue.
+        bollard::errors::Error::IOError { .. } |
+        // A transient connection issue.
+        bollard::errors::Error::HyperResponseError { .. } => RetryError::transient(err),
+        // A docker server error, where...
+        bollard::errors::Error::DockerResponseServerError { status_code, .. }
+          // Docker reports a conflict, which includes things like trying to
+          // stop a container that the daemon doesn't _think_ is currently
+          // stopped.
+          if status_code == 409 => {
+            RetryError::transient(err)
+          }
+        _ => {
+            RetryError::permanent(err)
+        }
+    }
+}
+
+/// Helper to perform the Docker operation with the default retry strategy.
+async fn default_retry<F, Fut, T>(op: F) -> std::result::Result<T, bollard::errors::Error>
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = std::result::Result<T, bollard::errors::Error>>,
+{
+    let action = || async { op().await.map_err(is_retryable) };
+    Retry::spawn(default_retry_strategy(), action).await
+}
+
+/// The default timeout for an operation.
+///
+/// Use the [`default_timeout`] function to easily use this duration.
+///
+/// This value was picked because it's a reasonable compromise of being a
+/// sufficiently long amount of time while not being too long for operations
+/// occuring with containers.
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Helper to perform the operation with a default timeout.
+#[expect(unused)]
+async fn default_timeout<F>(msg: impl Into<String>, op: F) -> Result<F::Output>
+where
+    F: IntoFuture,
+{
+    tokio::time::timeout(DEFAULT_TIMEOUT, op)
+        .map_err(|_| Error::Timeout(msg.into()))
+        .await
+}
 
 /// Helper for writing a container's logs to stdout/stderr files.
 ///
@@ -190,10 +267,13 @@ impl Container {
         );
 
         // Start the container.
-        self.client
-            .start_container(&self.name, None::<StartContainerOptions>)
-            .await
-            .map_err(Error::Docker)?;
+
+        default_retry(|| {
+            self.client
+                .start_container(&self.name, None::<StartContainerOptions>)
+        })
+        .await
+        .map_err(Error::Docker)?;
 
         info!(
             "container `{name}` (task `{task_name}`) has started",
@@ -303,6 +383,46 @@ impl Container {
             name = self.name
         );
 
+        // NOTE(clay): this code is currently commented out because it's unclear if
+        // this is where the problem actually lies. I'm going to keep it around
+        // so that, if in the future we determine this is the true problem, we
+        // can easily uncomment it to fix the issue.
+        //
+        // // Before returning, we poll to make sure Docker reports the task as
+        // // stopped. See https://github.com/stjude-rust-labs/crankshaft/issues/68
+        // // for more information.
+        //
+        // default_timeout("inspecting container to ensure it has stopped", async {
+        //     Retry::spawn(default_retry_strategy(), || async {
+        //         let response = self
+        //             .client
+        //             .inspect_container(&self.name, None::<InspectContainerOptions>)
+        //             .await
+        //             .map_err(|err| RetryError::transient(Error::Docker(err)))?;
+        //
+        //         if let Some(state) = response.state {
+        //             if let Some(status) = state.status {
+        //                 if status == ContainerStateStatusEnum::EXITED {
+        //                     // The container reports as exited, we can return
+        //                     // now.
+        //                     return Ok(());
+        //                 } else {
+        //                     return Err(RetryError::transient(Error::Message(String::from(
+        //                         "container status not `exited`",
+        //                     ))));
+        //                 }
+        //             }
+        //         }
+        //
+        //         // Any other issues, we assume the issue is permanent.
+        //         Err(RetryError::permanent(Error::Message(String::from(
+        //             "unable to obtain container status",
+        //         ))))
+        //     })
+        //     .await
+        // })
+        // .await??;
+
         if let Some(events) = &events {
             events
                 .sender
@@ -323,18 +443,17 @@ impl Container {
     /// versions made available: [`Self::remove()`] and
     /// [`Self::force_remove()`].
     async fn remove_inner(&self, force: bool) -> Result<()> {
-        self.client
-            .remove_container(
+        default_retry(|| {
+            self.client.remove_container(
                 &self.name,
                 Some(RemoveContainerOptions {
                     force,
                     ..Default::default()
                 }),
             )
-            .await
-            .map_err(Error::Docker)?;
-
-        Ok(())
+        })
+        .await
+        .map_err(Error::Docker)
     }
 
     /// Removes a container.

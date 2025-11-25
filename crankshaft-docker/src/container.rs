@@ -1,7 +1,6 @@
 //! Containers.
 
 use std::future::Future;
-use std::io::Cursor;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
 #[cfg(windows)]
@@ -12,13 +11,11 @@ use std::process::ExitStatus;
 use std::time::Duration;
 
 use bollard::Docker;
-use bollard::body_full;
 use bollard::container::LogOutput;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::RemoveContainerOptions;
 use bollard::query_parameters::StartContainerOptions;
-use bollard::query_parameters::UploadToContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use crankshaft_events::Event;
@@ -41,13 +38,6 @@ use crate::Result;
 mod builder;
 
 pub use builder::Builder;
-
-/// The default capacity of bytes for a TAR being built.
-///
-/// It's unlikely that any file we send will be less than this number of
-/// bytes, so this is arbitrarily selected to avoid the first few
-/// allocations.
-const DEFAULT_TAR_CAPACITY: usize = 0xFFFF;
 
 /// The default retry strategy for fallable Docker operations.
 ///
@@ -193,35 +183,6 @@ impl Container {
     /// Gets the name of the container.
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    /// Uploads an input file to the container.
-    pub async fn upload_file(&self, path: &str, contents: &[u8]) -> Result<()> {
-        let path = path.trim_start_matches("/");
-
-        default_retry(|| {
-            let mut tar = tar::Builder::new(Vec::with_capacity(DEFAULT_TAR_CAPACITY));
-            let mut header = tar::Header::new_gnu();
-            header.set_path(path).unwrap();
-            header.set_size(contents.len() as u64);
-            header.set_mode(0o644);
-
-            // SAFETY: this is manually crafted to always unwrap.
-            tar.append_data(&mut header, path, Cursor::new(&contents))
-                .unwrap();
-
-            self.client.upload_to_container(
-                &self.name,
-                Some(UploadToContainerOptions {
-                    path: String::from("/"),
-                    ..Default::default()
-                }),
-                // SAFETY: this is manually crafted to always unwrap.
-                body_full(tar.into_inner().unwrap().into()),
-            )
-        })
-        .await
-        .map_err(Error::Docker)
     }
 
     /// Runs a container and waits for the execution to end.

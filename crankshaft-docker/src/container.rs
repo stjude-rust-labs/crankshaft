@@ -1,7 +1,6 @@
 //! Containers.
 
 use std::future::Future;
-use std::future::IntoFuture;
 use std::io::Cursor;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
@@ -24,7 +23,6 @@ use bollard::query_parameters::WaitContainerOptions;
 use bollard::secret::ContainerWaitResponse;
 use crankshaft_events::Event;
 use futures::Stream;
-use futures::TryFutureExt;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::pin;
@@ -94,26 +92,6 @@ where
 {
     let action = || async { op().await.map_err(is_retryable) };
     Retry::spawn(default_retry_strategy(), action).await
-}
-
-/// The default timeout for an operation.
-///
-/// Use the [`default_timeout`] function to easily use this duration.
-///
-/// This value was picked because it's a reasonable compromise of being a
-/// sufficiently long amount of time while not being too long for operations
-/// occuring with containers.
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// Helper to perform the operation with a default timeout.
-#[expect(unused)]
-async fn default_timeout<F>(msg: impl Into<String>, op: F) -> Result<F::Output>
-where
-    F: IntoFuture,
-{
-    tokio::time::timeout(DEFAULT_TIMEOUT, op)
-        .map_err(|_| Error::Timeout(msg.into()))
-        .await
 }
 
 /// Helper for writing a container's logs to stdout/stderr files.
@@ -379,45 +357,6 @@ impl Container {
             "container `{name}` (task `{task_name}`) has exited with {status}",
             name = self.name
         );
-
-        // NOTE(clay): this code is currently commented out because it's unclear if
-        // this is where the problem actually lies. I'm going to keep it around
-        // so that, if in the future we determine this is the true problem, we
-        // can easily uncomment it to fix the issue.
-        //
-        // // Before returning, we poll to make sure Docker reports the task as
-        // // stopped. See https://github.com/stjude-rust-labs/crankshaft/issues/68
-        // // for more information.
-        //
-        // default_timeout("inspecting container to ensure it has stopped", async {
-        //     Retry::spawn(default_retry_strategy(), || async {
-        //         let response = self
-        //             .client
-        //             .inspect_container(&self.name, None::<InspectContainerOptions>)
-        //             .await
-        //             .map_err(|err| RetryError::transient(Error::Docker(err)))?;
-        //
-        //         if let Some(state) = response.state {
-        //             if let Some(status) = state.status {
-        //                 if status == ContainerStateStatusEnum::EXITED {
-        //                     // The container reports as exited, we can return
-        //                     // now.
-        //                     return Ok(());
-        //                 } else {
-        //                     return
-        // Err(RetryError::transient(Error::Message(String::from("container status not
-        // `exited`"))));                 }
-        //             }
-        //         }
-        //
-        //         // Any other issues, we assume the issue is permanent.
-        //         Err(RetryError::permanent(Error::Message(String::from(
-        //             "unable to obtain container status",
-        //         ))))
-        //     })
-        //     .await
-        // })
-        // .await??;
 
         if let Some(events) = &events {
             events

@@ -208,13 +208,8 @@ impl Backend {
             | TesState::Canceling => Err(TaskRunError::Other(anyhow!(
                 "TES task is not in a completed state"
             ))),
-            TesState::Complete | TesState::ExecutorError => {
-                // Task completed or had an error
-                if task_state == TesState::Complete {
-                    info!("TES task `{tes_id}` (task `{task_name}`) has completed");
-                } else {
-                    info!("TES task `{tes_id}` (task `{task_name}`) has failed");
-                }
+            TesState::Complete => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has completed");
 
                 // There may be multiple task logs due to internal retries by the TES server
                 // Therefore, we're only interested in the last log
@@ -237,6 +232,12 @@ impl Backend {
                 .context(
                     "invalid response from TES server: completed task is missing executor logs",
                 )?)
+            }
+            TesState::ExecutorError => {
+                info!("TES task `{tes_id}` (task `{task_name}`) has failed");
+                Err(TaskRunError::Other(anyhow!(
+                    "task failed due to executor error"
+                )))
             }
             TesState::SystemError => {
                 info!("TES task `{tes_id}` (task `{task_name}`) has failed with a system error");

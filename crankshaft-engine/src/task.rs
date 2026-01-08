@@ -130,12 +130,6 @@ impl TryFrom<Task> for tes::v1::types::requests::Task {
             .map(TesInput::try_from)
             .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let inputs = if inputs.is_empty() {
-            None
-        } else {
-            Some(inputs)
-        };
-
         //=========//
         // Outputs //
         //=========//
@@ -145,39 +139,26 @@ impl TryFrom<Task> for tes::v1::types::requests::Task {
             .map(|output| TesOutput::from(output.clone()))
             .collect::<Vec<TesOutput>>();
 
-        let outputs = if outputs.is_empty() {
-            None
-        } else {
-            Some(outputs)
-        };
-
-        //============//
-        // Executions //
-        //============//
-
-        let executors = executions.map(Executor::from).into_iter().collect();
-
-        //===========//
-        // Resources //
-        //===========//
-
-        let resources = resources.map(TesResources::from);
-
-        //=========//
-        // Volumes //
-        //=========//
-
-        if !volumes.is_empty() {
-            todo!("volumes are not yet supported within Crankshaft");
-        }
-
         Ok(Self {
             name,
             description,
-            inputs,
-            outputs,
-            executors,
-            resources,
+            inputs: if inputs.is_empty() {
+                None
+            } else {
+                Some(inputs)
+            },
+            outputs: if outputs.is_empty() {
+                None
+            } else {
+                Some(outputs)
+            },
+            executors: executions.map(Executor::from).into_iter().collect(),
+            resources: resources.map(TesResources::from),
+            volumes: if volumes.is_empty() {
+                None
+            } else {
+                Some(volumes)
+            },
             ..Default::default()
         })
     }

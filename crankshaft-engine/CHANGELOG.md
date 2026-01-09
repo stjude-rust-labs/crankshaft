@@ -12,6 +12,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 * Removed `todo!` in TES backend when volumes was non-empty ([#71](https://github.com/stjude-rust-labs/crankshaft/pull/71)).
 
+### Changed
+
+* Refactored the TES monitor implement to reduce task blocking ([#73](https://github.com/stjude-rust-labs/crankshaft/pull/73)).
+
 ## 0.7.0 - 11-24-2025
 
 ### Added

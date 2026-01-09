@@ -62,6 +62,7 @@ struct TaskMonitorState {
 /// added for monitoring.
 #[derive(Debug, Clone)]
 pub struct TaskMonitor {
+    /// The base name used by the task monitor for formatting tags.
     name: Arc<String>,
     /// The shared task monitor state.
     state: Arc<Mutex<TaskMonitorState>>,
@@ -111,13 +112,7 @@ impl TaskMonitor {
             );
         }
 
-        state.tasks.insert(
-            id,
-            Task {
-                name,
-                completed,
-            },
-        );
+        state.tasks.insert(id, Task { name, completed });
 
         state.tag.clone()
     }
@@ -143,7 +138,10 @@ impl TaskMonitor {
     ///
     /// Responsible for sending task started events and for sending completion
     /// messages.
-    async fn update_tasks(state: &Arc<Mutex<TaskMonitorState>>, backend_state: &super::BackendState) {
+    async fn update_tasks(
+        state: &Arc<Mutex<TaskMonitorState>>,
+        backend_state: &super::BackendState,
+    ) {
         let mut page_token = None;
         loop {
             // Get the current tag from the state
@@ -157,7 +155,7 @@ impl TaskMonitor {
 
                 debug!(
                     "querying for the state of TES tasks with tag `{tag}` and page token \
-                    `{page_token:?}`",
+                     `{page_token:?}`",
                     tag = state.tag
                 );
 
@@ -208,7 +206,9 @@ impl TaskMonitor {
                         match task.state.unwrap_or_default() {
                             TesState::Running | TesState::Paused => {
                                 // The task is now running, send the started event
-                                if let Some(id) = state.ids.get(&task.id).copied() && state.running.insert(id) {
+                                if let Some(id) = state.ids.get(&task.id).copied()
+                                    && state.running.insert(id)
+                                {
                                     if let Some(Task { name, .. }) = state.tasks.get(&id) {
                                         info!(
                                             "TES task `{tes_id}` (task `{name}`) is now running",
@@ -216,10 +216,7 @@ impl TaskMonitor {
                                         );
                                     }
 
-                                    send_event!(
-                                        backend_state.events,
-                                        Event::TaskStarted { id }
-                                    );
+                                    send_event!(backend_state.events, Event::TaskStarted { id });
                                 }
                             }
                             TesState::Complete
@@ -269,7 +266,7 @@ impl TaskMonitor {
     async fn monitor(
         state: Arc<Mutex<TaskMonitorState>>,
         backend_state: Arc<super::BackendState>,
-        mut drop: oneshot::Receiver<()>
+        mut drop: oneshot::Receiver<()>,
     ) {
         info!(
             "TES task monitor is starting with polling interval of {interval} seconds",
@@ -280,7 +277,7 @@ impl TaskMonitor {
         let mut timer = tokio::time::interval(backend_state.interval);
         timer.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        loop {            
+        loop {
             select! {
                 _ = &mut drop => break,
                 _ = timer.tick() => Self::update_tasks(&state, backend_state.as_ref()).await,

@@ -8,9 +8,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.8.0 - 01-12-2026
+
 ### Fixed
 
 * Removed `todo!` in TES backend when volumes was non-empty ([#71](https://github.com/stjude-rust-labs/crankshaft/pull/71)).
+
+### Crates
+
+* Updated `crankshaft-docker` to v0.4.0
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-docker-v0.4.0)).
 
 ## 0.7.0 - 11-24-2025
 

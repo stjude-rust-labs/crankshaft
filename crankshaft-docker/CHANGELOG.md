@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.4.0 - 01-12-2026
+
 ### Revised
 
 * Added retry logic with exponential backoff to Docker operations to handle

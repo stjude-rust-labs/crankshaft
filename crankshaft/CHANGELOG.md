@@ -8,9 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.8.0 - 01-12-2026
+
 ### Changed
 
 * Updated lints and MSRV for Rust 2024 ([#66](https://github.com/stjude-rust-labs/crankshaft/pull/66)).
+
+### Crates
+
+* Updated `crankshaft-docker` to v0.4.0
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-docker-v0.4.0)).
+* Updated `crankshaft-engine` to v0.8.0
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-engine-v0.8.0)).
 
 ## 0.7.0 - 11-24-2025
 

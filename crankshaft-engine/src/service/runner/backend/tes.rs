@@ -364,7 +364,7 @@ impl crate::Backend for Backend {
                 drop(permit);
             }
 
-            monitor.remove_task(tes_id).await;
+            monitor.remove_task(&tes_id).await;
 
             // Send an event for the result
             match &result {

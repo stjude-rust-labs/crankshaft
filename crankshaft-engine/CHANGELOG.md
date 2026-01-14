@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* Refactored the TES monitor implement to reduce task blocking ([#73](https://github.com/stjude-rust-labs/crankshaft/pull/73)).
+
 ## 0.8.0 - 01-12-2026
 
 ### Fixed

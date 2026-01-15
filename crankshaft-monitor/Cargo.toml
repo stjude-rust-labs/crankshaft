@@ -10,7 +10,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 async-stream.workspace = true
 crankshaft-events = { version = "0.1.0", path = "../crankshaft-events" }
 futures-core.workspace = true
@@ -18,7 +17,6 @@ futures-util.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 tokio.workspace = true
-tokio-stream.workspace = true
 tokio-util.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true

@@ -125,7 +125,7 @@ impl Resources {
     pub fn use_service(&self) -> bool {
         match self {
             Self::Local(_) => false,
-            Self::Swarm(swarm) => swarm.nodes >= 2,
+            Self::Swarm(_) => true,
         }
     }
 }
@@ -465,6 +465,7 @@ impl crate::Backend for Backend {
                             .program(execution.program)
                             .args(execution.args)
                             .envs(execution.env)
+                            .mounts(mounts.clone())
                             .resources(task.resources.as_ref().map(Into::into).unwrap_or_default());
 
                         if let Some(stdout) = stdout {

@@ -10,12 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+* If the Docker daemon is in swarm mode, always use the swarm service
+  (instead of only when >2 nodes are in the swarm) ([#75](https://github.com/stjude-rust-labs/crankshaft/pull/75)).
 * Refactored the TES monitor implement to reduce task blocking ([#73](https://github.com/stjude-rust-labs/crankshaft/pull/73)).
 
 ## 0.8.0 - 01-12-2026
 
 ### Fixed
 
+* Properly set mounts when in use docker service ([#75](https://github.com/stjude-rust-labs/crankshaft/pull/75)).
 * Removed `todo!` in TES backend when volumes was non-empty ([#71](https://github.com/stjude-rust-labs/crankshaft/pull/71)).
 
 ### Crates

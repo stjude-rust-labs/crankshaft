@@ -18,7 +18,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-* Properly set mounts when in use docker service ([#75](https://github.com/stjude-rust-labs/crankshaft/pull/75)).
+* Properly set mounts when using the docker service ([#75](https://github.com/stjude-rust-labs/crankshaft/pull/75)).
 * Removed `todo!` in TES backend when volumes was non-empty ([#71](https://github.com/stjude-rust-labs/crankshaft/pull/71)).
 
 ### Crates

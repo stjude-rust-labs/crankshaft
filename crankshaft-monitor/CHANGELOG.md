@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.2.0 - 02-11-2026
+
+### Changed
+
+* Made `Monitor::start()` and `MonitorService::new()` async ([#60](https://github.com/stjude-rust-labs/crankshaft/pull/60)).
+
 ## 0.1.0 - 09-03-2025
 
 #### Added

@@ -1,7 +1,7 @@
 [package]
 name = "crankshaft-monitor"
 description = "An implementation of a Crankshaft monitor server"
-version = "0.1.0"
+version = "0.2.0"
 license.workspace = true
 edition.workspace = true
 authors.workspace = true

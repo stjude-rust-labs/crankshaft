@@ -11,7 +11,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.1.0" }
+crankshaft-monitor = { path = "../crankshaft-monitor", version = "0.2.0" }
 crossterm.workspace = true
 futures-util.workspace = true
 prost-types.workspace = true

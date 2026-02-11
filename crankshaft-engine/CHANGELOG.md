@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.9.0 - 02-11-2026
+
 ### Changed
 
 * If the Docker daemon is in swarm mode, always use the swarm service

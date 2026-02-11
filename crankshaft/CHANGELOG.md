@@ -8,6 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.9.0 - 02-11-2026
+
+### Crates
+
+* Updated `crankshaft-engine` to v0.9.0
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-engine-v0.9.0)).
+* Updated `crankshaft-monitor` to v0.2.0
+  ([release](https://github.com/stjude-rust-labs/crankshaft/releases/tag/crankshaft-monitor-v0.2.0)).
+
 ## 0.8.0 - 01-12-2026
 
 ### Changed

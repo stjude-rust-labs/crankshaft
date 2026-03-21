@@ -322,6 +322,11 @@ impl Backend {
         Self::initialize_default_with(Config::default(), names, events).await
     }
 
+    /// Gets a reference to the inner Docker client.
+    pub fn client(&self) -> &Docker {
+        &self.client
+    }
+
     /// Gets information about the resources available to the Docker backend.
     pub fn resources(&self) -> &Resources {
         &self.resources

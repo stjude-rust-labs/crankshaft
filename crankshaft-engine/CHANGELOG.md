@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added a `client()` accessor to the Docker backend
+  ([#76](https://github.com/stjude-rust-labs/crankshaft/pull/76)).
+
 ## 0.9.0 - 02-11-2026
 
 ### Changed

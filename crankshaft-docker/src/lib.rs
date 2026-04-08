@@ -87,7 +87,6 @@ impl Docker {
     ///
     /// * Confirming that the image already exists there, or
     /// * Pulling the image from the remote repository.
-    /// Ensures that an image exists in the Docker daemon.
     ///
     /// Returns `Ok(None)` if the pull was cancelled via the provided token.
     pub async fn ensure_image(

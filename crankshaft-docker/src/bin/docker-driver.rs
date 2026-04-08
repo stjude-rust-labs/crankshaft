@@ -11,6 +11,7 @@ use clap::Subcommand;
 use clap_verbosity_flag::Verbosity;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
+use tokio_util::sync::CancellationToken;
 use tracing_log::AsTrace;
 use tracing_subscriber::EnvFilter;
 
@@ -150,7 +151,10 @@ async fn run(args: Args) -> Result<()> {
             }
         }
         Command::EnsureImage { image } => {
-            docker.ensure_image(image).await?;
+            docker
+                .ensure_image(image, CancellationToken::new())
+                .await?
+                .expect("pull should not be cancelled");
         }
         Command::ListImages => {
             docker.list_images().await?;

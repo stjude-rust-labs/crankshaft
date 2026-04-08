@@ -37,6 +37,7 @@ shlex = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio.workspace = true
 tokio-retry2.workspace = true
+tokio-util.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
 tracing-log = { workspace = true, optional = true }

@@ -405,10 +405,14 @@ impl crate::Backend for Backend {
                     }
 
                     // First ensure the execution's image exists
-                    client
-                        .ensure_image(&execution.image)
+                    match client
+                        .ensure_image(&execution.image, token.clone())
                         .await
-                        .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?;
+                        .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?
+                    {
+                        Some(()) => {}
+                        None => return Err(TaskRunError::Canceled),
+                    }
 
                     // Look for the path where the caller wants stdout saved to
                     let stdout = execution.stdout.as_ref().and_then(|p| {

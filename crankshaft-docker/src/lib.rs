@@ -87,8 +87,14 @@ impl Docker {
     ///
     /// * Confirming that the image already exists there, or
     /// * Pulling the image from the remote repository.
-    pub async fn ensure_image(&self, image: impl Into<String>) -> Result<()> {
-        ensure_image(self, image).await
+    ///
+    /// Returns `Ok(None)` if the pull was cancelled via the provided token.
+    pub async fn ensure_image(
+        &self,
+        image: impl Into<String>,
+        token: tokio_util::sync::CancellationToken,
+    ) -> Result<Option<()>> {
+        ensure_image(self, image, token).await
     }
 
     /// Removes an image from the Docker daemon.

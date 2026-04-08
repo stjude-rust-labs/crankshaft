@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+* `ensure_image` now accepts a `CancellationToken` and returns
+  `Result<Option<()>>`, allowing image pulls to be cancelled mid-stream
+  ([#77](https://github.com/stjude-rust-labs/crankshaft/pull/77)).
+
 ## 0.4.0 - 01-12-2026
 
 ### Revised

@@ -130,13 +130,15 @@ impl Backend {
         }
 
         let state = Arc::new(BackendState {
-            // SAFETY: the only required field of `builder` is the `url`, which we provided earlier.
+            // SAFETY: the only required field of `builder` is the `url`, which we provided
+            // earlier.
             client: builder.try_build().expect("client to build"),
             interval: interval
                 .map(Duration::from_secs)
                 .unwrap_or(DEFAULT_INTERVAL),
             retries: http.retries.unwrap_or_default() as usize,
-            policy: ExponentialFactorBackoff::from_millis(1000, 2.0).max_delay(MAX_RETRY_DELAY),
+            policy: ExponentialFactorBackoff::from_millis(1000, 2.0)
+                .max_delay(MAX_RETRY_DELAY),
             permits: Semaphore::new(
                 http.max_concurrency
                     .unwrap_or(DEFAULT_MAX_CONCURRENT_REQUESTS),
@@ -183,7 +185,7 @@ impl Backend {
             .await
             .context("failed to acquire network request permit")?;
 
-        let task = state
+        let task = match state
             .client
             .get_task(
                 tes_id,
@@ -191,9 +193,38 @@ impl Backend {
                 state.policy(),
             )
             .await
-            .context("failed to get task information from TES server")?
-            .into_task()
-            .context("returned task is not a full view")?;
+        {
+            Ok(response) => response
+                .into_task()
+                .context("returned task is not a full view")?,
+            Err(e) => {
+                // Best-effort fallback probe: MINIMAL view has fewer fields and can still
+                // report state when FULL deserialization fails on optional/null fields.
+                let minimal_state = state
+                    .client
+                    .get_task(
+                        tes_id,
+                        Some(&GetTaskParams {
+                            view: View::Minimal,
+                        }),
+                        state.policy(),
+                    )
+                    .await
+                    .ok()
+                    .and_then(|r| r.into_minimal())
+                    .and_then(|t| t.state)
+                    .map(|s| format!("{s:?}"))
+                    .unwrap_or_else(|| "UNKNOWN".to_string());
+
+                let details = format!(
+                    "failed to get task information from TES server for tes_id `{tes_id}`; \
+                     MINIMAL fallback state: {minimal_state}; FULL response likely failed \
+                     deserialization"
+                );
+
+                return Err(TaskRunError::Other(anyhow::Error::from(e).context(details)));
+            }
+        };
 
         // Drop the permit now that the request has completed
         drop(permit);
@@ -224,16 +255,25 @@ impl Backend {
                 )?;
 
                 // Iterate the exit code from each executor log
-                Ok(NonEmpty::collect(task.logs.iter().map(|executor| {
-                    // See WEXITSTATUS from wait(2) to explain the shift
-                    #[cfg(unix)]
-                    let status = ExitStatus::from_raw(executor.exit_code << 8);
+                Ok(NonEmpty::collect(
+                    task.logs
+                        .iter()
+                        .map(|executor| {
+                            let exit_code = executor.exit_code.context(
+                                "invalid response from TES server: completed executor log is missing exit code",
+                            )?;
 
-                    #[cfg(windows)]
-                    let status = ExitStatus::from_raw(executor.exit_code as u32);
+                            // See WEXITSTATUS from wait(2) to explain the shift
+                            #[cfg(unix)]
+                            let status = ExitStatus::from_raw(exit_code << 8);
 
-                    status
-                }))
+                            #[cfg(windows)]
+                            let status = ExitStatus::from_raw(exit_code as u32);
+
+                            Ok::<_, anyhow::Error>(status)
+                        })
+                        .collect::<anyhow::Result<Vec<_>>>()?,
+                )
                 .context(
                     "invalid response from TES server: completed task is missing executor logs",
                 )?)
@@ -333,7 +373,7 @@ impl crate::Backend for Backend {
             let result = select! {
                 // Always poll the cancellation token first
                 biased;
-                _ = task_token.cancelled() =>{
+                _ = task_token.cancelled() => {
                     Err(TaskRunError::Canceled)
                 }
                 _ = token.cancelled() => {

@@ -391,6 +391,7 @@ impl crate::Backend for Backend {
                 generator.next().unwrap()
             });
 
+            let events_ctx = events.clone().map(|e| (e, task_id));
             let run = async {
                 let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
 
@@ -406,7 +407,7 @@ impl crate::Backend for Backend {
 
                     // First ensure the execution's image exists
                     match client
-                        .ensure_image(&execution.image, token.clone())
+                        .ensure_image(&execution.image, token.clone(), events_ctx.clone())
                         .await
                         .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?
                     {

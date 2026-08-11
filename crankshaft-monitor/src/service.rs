@@ -22,6 +22,9 @@ use crate::proto::CancelTaskRequest;
 use crate::proto::CancelTaskResponse;
 use crate::proto::Event;
 use crate::proto::ExitStatus;
+use crate::proto::ImagePullFailedEvent;
+use crate::proto::ImagePullFinishedEvent;
+use crate::proto::ImagePullStartedEvent;
 use crate::proto::ServiceStateRequest;
 use crate::proto::ServiceStateResponse;
 use crate::proto::SubscribeEventsRequest;
@@ -118,6 +121,15 @@ impl IntoProtobuf<EventKind> for CrankshaftEvent {
                 id,
                 message: message.to_vec(),
             }),
+            CrankshaftEvent::ImagePullStarted { id, name } => {
+                EventKind::ImagePullStarted(ImagePullStartedEvent { id, name })
+            }
+            CrankshaftEvent::ImagePullFailed { id, name, message } => {
+                EventKind::ImagePullFailed(ImagePullFailedEvent { id, name, message })
+            }
+            CrankshaftEvent::ImagePullFinished { id, name } => {
+                EventKind::ImagePullFinished(ImagePullFinishedEvent { id, name })
+            }
         }
     }
 }
@@ -177,6 +189,7 @@ impl MonitorService {
                 r = events.recv() => match r {
                     Ok(event) => {
                         let (id, remove) = match event {
+                            CrankshaftEvent::ImagePullStarted { .. } | CrankshaftEvent::ImagePullFailed { .. } | CrankshaftEvent::ImagePullFinished { .. } => continue,
                             CrankshaftEvent::TaskCreated { id, .. } |
                             CrankshaftEvent::TaskStarted { id }
                             | CrankshaftEvent::TaskContainerCreated { id, .. }

@@ -112,6 +112,29 @@ pub enum Event {
         /// The bytes logged to stdout.
         message: Bytes,
     },
+    /// A container image pull was started.
+    ImagePullStarted {
+        /// The id of the task that triggered the pull.
+        id: u64,
+        /// The name of the image being pulled.
+        name: String,
+    },
+    /// Failed to pull a container image.
+    ImagePullFailed {
+        /// The id of the task that triggered the pull.
+        id: u64,
+        /// The name of the image that failed.
+        name: String,
+        /// The error message.
+        message: String,
+    },
+    /// A container image was successfully pulled.
+    ImagePullFinished {
+        /// The id of the task that triggered the pull.
+        id: u64,
+        /// The name of the image that was pulled.
+        name: String,
+    },
 }
 
 /// Sends an event through a broadcast channel.

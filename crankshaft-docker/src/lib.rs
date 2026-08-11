@@ -93,8 +93,9 @@ impl Docker {
         &self,
         image: impl Into<String>,
         token: tokio_util::sync::CancellationToken,
+        events_ctx: Option<(broadcast::Sender<Event>, u64)>,
     ) -> Result<Option<()>> {
-        ensure_image(self, image, token).await
+        ensure_image(self, image, token, events_ctx).await
     }
 
     /// Removes an image from the Docker daemon.

@@ -63,6 +63,12 @@ message Event {
     TaskStdoutEvent stdout = 10;
     // The task stderr event.
     TaskStderrEvent stderr = 11;
+    // The image pull event.
+    ImagePullStartedEvent image_pull_started = 12;
+    // The image pull failed event.
+    ImagePullFailedEvent image_pull_failed = 13;
+    // The image pull finished event.
+    ImagePullFinishedEvent image_pull_finished = 14;
   }
 }
 
@@ -158,4 +164,30 @@ message TaskStderrEvent {
   uint64 id = 1;
   // The stderr message.
   bytes message = 2;
+}
+
+// Represents an image pull event.
+message ImagePullStartedEvent {
+  // The id of the task that triggered the pull.
+  uint64 id = 1;
+  // The name of the image being pulled.
+  string name = 2;
+}
+
+// Represents an image pull finished event.
+message ImagePullFailedEvent {
+  // The id of the task that triggered the pull.
+  uint64 id = 1;
+  // The name of the image that was pulled.
+  string name = 2;
+  // The error message.
+  string message = 3;
+}
+
+// Represents an image pull finished event.
+message ImagePullFinishedEvent {
+  // The id of the task that triggered the pull.
+  uint64 id = 1;
+  // The name of the image that was pulled.
+  string name = 2;
 }

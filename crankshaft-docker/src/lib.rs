@@ -13,6 +13,7 @@ pub mod service;
 use bollard::secret::Node;
 use bollard::secret::SystemInfo;
 use crankshaft_events::Event;
+use crankshaft_events::TaskId;
 use thiserror::Error;
 use tokio::sync::broadcast;
 
@@ -93,7 +94,7 @@ impl Docker {
         &self,
         image: impl Into<String>,
         token: tokio_util::sync::CancellationToken,
-        events_ctx: Option<(broadcast::Sender<Event>, u64)>,
+        events_ctx: Option<(broadcast::Sender<Event>, TaskId)>,
     ) -> Result<Option<()>> {
         ensure_image(self, image, token, events_ctx).await
     }
@@ -179,7 +180,7 @@ pub struct EventOptions {
     /// The sender for sending events.
     pub sender: broadcast::Sender<Event>,
     /// The task id for the events.
-    pub task_id: u64,
+    pub task_id: TaskId,
     /// Whether or not send the task started event.
     pub send_start: bool,
 }

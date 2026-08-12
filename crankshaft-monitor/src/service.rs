@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use crankshaft_events::Event as CrankshaftEvent;
+use crankshaft_events::TaskId;
 use futures_core::Stream;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
@@ -42,9 +43,6 @@ use crate::proto::TaskStdoutEvent;
 use crate::proto::event::EventKind;
 use crate::proto::exit_status::ExitStatusKind;
 use crate::proto::monitor_server::Monitor;
-
-/// Represents a task identifier.
-pub type TaskId = u64;
 
 /// Helper trait for converting Crankshaft types into Protobuf types.
 trait IntoProtobuf<T> {

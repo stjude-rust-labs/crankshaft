@@ -8,8 +8,11 @@ use bytes::Bytes;
 use nonempty::NonEmpty;
 use tokio_util::sync::CancellationToken;
 
+/// Represents a Crankshaft task identifier.
+pub type TaskId = u64;
+
 /// Gets the next task id.
-pub fn next_task_id() -> u64 {
+pub fn next_task_id() -> TaskId {
     static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(0);
     NEXT_TASK_ID.fetch_add(1, Ordering::SeqCst)
 }
@@ -25,7 +28,7 @@ pub enum Event {
     /// `TaskCanceled`, or `TaskPreempted` event.
     TaskCreated {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The name of the task.
         ///
         /// This may be a display name provided by the user or a name provided
@@ -44,14 +47,14 @@ pub enum Event {
     /// A task is considered "running" upon the receipt of this event.
     TaskStarted {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
     },
     /// A container has been created for a task.
     ///
     /// This event is only sent by the Docker backend.
     TaskContainerCreated {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The name of the container that was created.
         container: String,
     },
@@ -60,7 +63,7 @@ pub enum Event {
     /// This event is only sent by the Docker backend.
     TaskContainerExited {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The name of the container that has exited.
         container: String,
         /// The exit status of the container.
@@ -71,7 +74,7 @@ pub enum Event {
     /// This event occurs after all task executions have completed successfully.
     TaskCompleted {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The exit statuses for the task's executions.
         exit_statuses: NonEmpty<ExitStatus>,
     },
@@ -80,26 +83,26 @@ pub enum Event {
     /// This event occurs after any error encountered running a task.
     TaskFailed {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The error message.
         message: String,
     },
     /// A task has been canceled.
     TaskCanceled {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
     },
     /// The task was preempted.
     TaskPreempted {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
     },
     /// A task has logged stdout.
     ///
     /// Note: only locally executing tasks will send this event.
     TaskStdout {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The bytes logged to stdout.
         message: Bytes,
     },
@@ -108,21 +111,21 @@ pub enum Event {
     /// Note: only locally executing tasks will send this event.
     TaskStderr {
         /// The id of the task.
-        id: u64,
+        id: TaskId,
         /// The bytes logged to stdout.
         message: Bytes,
     },
     /// A container image pull was started.
     ImagePullStarted {
         /// The id of the task that triggered the pull.
-        id: u64,
+        id: TaskId,
         /// The name of the image being pulled.
         name: String,
     },
     /// Failed to pull a container image.
     ImagePullFailed {
         /// The id of the task that triggered the pull.
-        id: u64,
+        id: TaskId,
         /// The name of the image that failed.
         name: String,
         /// The error message.
@@ -131,7 +134,7 @@ pub enum Event {
     /// A container image was successfully pulled.
     ImagePullFinished {
         /// The id of the task that triggered the pull.
-        id: u64,
+        id: TaskId,
         /// The name of the image that was pulled.
         name: String,
     },

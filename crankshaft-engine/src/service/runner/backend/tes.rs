@@ -19,6 +19,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
 use crankshaft_events::Event;
+use crankshaft_events::TaskId;
 use crankshaft_events::next_task_id;
 use crankshaft_events::send_event;
 use futures::FutureExt as _;
@@ -159,7 +160,7 @@ impl Backend {
     async fn wait_task(
         state: &BackendState,
         monitor: &TaskMonitor,
-        task_id: u64,
+        task_id: TaskId,
         task_name: &str,
         tes_id: &str,
         completed: oneshot::Receiver<Result<()>>,

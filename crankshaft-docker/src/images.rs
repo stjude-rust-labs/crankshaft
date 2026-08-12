@@ -8,6 +8,7 @@ use bollard::query_parameters::RemoveImageOptions;
 use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
 use crankshaft_events::Event;
+use crankshaft_events::TaskId;
 use crankshaft_events::send_event;
 use futures::stream::FuturesUnordered;
 use tokio::sync::broadcast;
@@ -71,7 +72,7 @@ pub(crate) async fn ensure_image(
     docker: &Docker,
     image: impl Into<String>,
     token: CancellationToken,
-    events_ctx: Option<(broadcast::Sender<Event>, u64)>,
+    events_ctx: Option<(broadcast::Sender<Event>, TaskId)>,
 ) -> Result<Option<()>> {
     let image = image.into();
 

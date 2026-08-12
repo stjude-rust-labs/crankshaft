@@ -10,6 +10,7 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use crankshaft_events::Event;
+use crankshaft_events::TaskId;
 use crankshaft_events::send_event;
 use tes::v1::types::requests::ListTasksParams;
 use tes::v1::types::requests::MAX_PAGE_SIZE;
@@ -40,11 +41,11 @@ struct TaskMonitorState {
     /// The current tag to group TES tasks with.
     tag: String,
     /// The map of Crankshaft id to monitored task.
-    tasks: HashMap<u64, Task>,
+    tasks: HashMap<TaskId, Task>,
     /// The map of TES task id to Crankshaft task id
-    ids: HashMap<String, u64>,
+    ids: HashMap<String, TaskId>,
     /// Set of known running tasks
-    running: HashSet<u64>,
+    running: HashSet<TaskId>,
 }
 
 /// Represents a TES task monitor.
@@ -93,7 +94,7 @@ impl TaskMonitor {
     /// Returns the tag to use when creating the TES task.
     pub async fn add_task(
         &self,
-        id: u64,
+        id: TaskId,
         name: String,
         completed: oneshot::Sender<Result<()>>,
     ) -> String {
@@ -120,7 +121,7 @@ impl TaskMonitor {
     /// Associates a TES task id with a Crankshaft task id.
     ///
     /// This is called after the TES task has been created.
-    pub async fn associate_task_id(&self, id: u64, tes_id: String) {
+    pub async fn associate_task_id(&self, id: TaskId, tes_id: String) {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
         state.ids.insert(tes_id, id);
     }

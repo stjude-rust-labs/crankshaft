@@ -691,6 +691,65 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
 
 #[cfg(test)]
 mod test {
+    use std::io::Write;
+    use std::ops::Deref;
+
+    use anyhow::Context;
+
+    use super::*;
+    use crate::service::runner::NAME_BUFFER_LEN;
+    use crate::task::output::Type;
+
+    struct BackendTest {
+        backend: Backend,
+    }
+
+    impl BackendTest {
+        async fn redirect_stdio(mut event_rx: broadcast::Receiver<Event>) -> anyhow::Result<()> {
+            while let Ok(event) = event_rx.recv().await {
+                match event {
+                    Event::TaskStdout { message, .. } => {
+                        std::io::stdout()
+                            .write_all(&*message)
+                            .context("failed to write stdout")?;
+                    }
+                    Event::TaskStderr { message, .. } => {
+                        std::io::stderr()
+                            .write_all(&*message)
+                            .context("failed to write stderr")?;
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(())
+        }
+
+        async fn new(config: Config) -> anyhow::Result<Self> {
+            let names = Arc::new(Mutex::new(GeneratorIterator::new(
+                UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
+                NAME_BUFFER_LEN,
+            )));
+
+            let (event_tx, event_rx) = broadcast::channel(1024);
+            tokio::task::spawn(Self::redirect_stdio(event_rx));
+
+            let backend = Backend::initialize_default_with(config, names, Some(event_tx))
+                .await
+                .context("failed to create backend")?;
+
+            Ok(Self { backend })
+        }
+    }
+
+    impl Deref for BackendTest {
+        type Target = Backend;
+
+        fn deref(&self) -> &Self::Target {
+            &self.backend
+        }
+    }
+
     #[tokio::test]
     #[cfg(target_os = "linux")]
     async fn backend_adds_user_egid() -> anyhow::Result<()> {
@@ -703,19 +762,10 @@ mod test {
 
         use super::*;
         use crate::service::runner::Backend as _;
-        use crate::service::runner::NAME_BUFFER_LEN;
         use crate::task::Execution;
         use crate::task::Output;
-        use crate::task::output::Type;
 
-        let names = Arc::new(Mutex::new(GeneratorIterator::new(
-            UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
-            NAME_BUFFER_LEN,
-        )));
-
-        let backend = Backend::initialize_default_with(Config::default(), names, None)
-            .await
-            .context("failed to create backend")?;
+        let backend = BackendTest::new(Config::default()).await?;
 
         // Get the current user's effective gid
         let gid = Gid::effective();

@@ -39,7 +39,10 @@ pub struct Event {
     /// The timestamp of the event.
     #[prost(message, optional, tag = "1")]
     pub timestamp: ::core::option::Option<::prost_types::Timestamp>,
-    #[prost(oneof = "event::EventKind", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
+    #[prost(
+        oneof = "event::EventKind",
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14"
+    )]
     pub event_kind: ::core::option::Option<event::EventKind>,
 }
 /// Nested message and enum types in `Event`.
@@ -77,6 +80,15 @@ pub mod event {
         /// The task stderr event.
         #[prost(message, tag = "11")]
         Stderr(super::TaskStderrEvent),
+        /// The image pull event.
+        #[prost(message, tag = "12")]
+        ImagePullStarted(super::ImagePullStartedEvent),
+        /// The image pull failed event.
+        #[prost(message, tag = "13")]
+        ImagePullFailed(super::ImagePullFailedEvent),
+        /// The image pull finished event.
+        #[prost(message, tag = "14")]
+        ImagePullFinished(super::ImagePullFinishedEvent),
     }
 }
 /// Represents an exit status.
@@ -211,6 +223,42 @@ pub struct TaskStderrEvent {
     /// The stderr message.
     #[prost(bytes = "vec", tag = "2")]
     pub message: ::prost::alloc::vec::Vec<u8>,
+}
+/// Represents an image pull event.
+#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImagePullStartedEvent {
+    /// The id of the task that triggered the pull.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// The name of the image being pulled.
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+}
+/// Represents an image pull finished event.
+#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImagePullFailedEvent {
+    /// The id of the task that triggered the pull.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// The name of the image that was pulled.
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// The error message.
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Represents an image pull finished event.
+#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImagePullFinishedEvent {
+    /// The id of the task that triggered the pull.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// The name of the image that was pulled.
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
 }
 /// Generated client implementations.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]

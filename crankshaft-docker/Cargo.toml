@@ -29,6 +29,7 @@ anyhow.workspace = true
 bollard.workspace = true
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
+crankshaft-config = { path = "../crankshaft-config", version = "0.6.0" }
 crankshaft-events = { path = "../crankshaft-events", version = "0.1.0" }
 futures.workspace = true
 indexmap = { workspace = true }

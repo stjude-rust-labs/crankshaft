@@ -152,7 +152,7 @@ async fn run(args: Args) -> Result<()> {
         }
         Command::EnsureImage { image } => {
             docker
-                .ensure_image(image, CancellationToken::new())
+                .ensure_image(image, CancellationToken::new(), None)
                 .await?
                 .expect("pull should not be cancelled");
         }

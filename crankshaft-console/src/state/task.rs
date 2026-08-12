@@ -3,6 +3,9 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use crankshaft_monitor::proto::Event;
+use crankshaft_monitor::proto::ImagePullFailedEvent;
+use crankshaft_monitor::proto::ImagePullFinishedEvent;
+use crankshaft_monitor::proto::ImagePullStartedEvent;
 use crankshaft_monitor::proto::TaskCanceledEvent;
 use crankshaft_monitor::proto::TaskCompletedEvent;
 use crankshaft_monitor::proto::TaskContainerCreatedEvent;
@@ -31,7 +34,10 @@ impl TuiTasksState {
     /// Updates the state with a new event.
     pub fn update(&mut self, event: Event) {
         let id = match &event.event_kind {
-            Some(EventKind::Created(TaskCreatedEvent { id, .. }))
+            Some(EventKind::ImagePullStarted(ImagePullStartedEvent { id, .. }))
+            | Some(EventKind::ImagePullFailed(ImagePullFailedEvent { id, .. }))
+            | Some(EventKind::ImagePullFinished(ImagePullFinishedEvent { id, .. }))
+            | Some(EventKind::Created(TaskCreatedEvent { id, .. }))
             | Some(EventKind::Started(TaskStartedEvent { id, .. }))
             | Some(EventKind::ContainerCreated(TaskContainerCreatedEvent { id, .. }))
             | Some(EventKind::ContainerExited(TaskContainerExitedEvent { id, .. }))
@@ -185,6 +191,9 @@ impl Task {
     /// Gets the display status of the task.
     pub fn status(&self) -> &str {
         match &self.last_event().event_kind {
+            Some(EventKind::ImagePullStarted(_) | EventKind::ImagePullFinished(_)) => {
+                "Pulling image"
+            }
             Some(EventKind::Created(_)) => "Created",
             Some(EventKind::Started(_))
             | Some(EventKind::ContainerCreated(_))
@@ -192,7 +201,7 @@ impl Task {
             | Some(EventKind::Stdout(_))
             | Some(EventKind::Stderr(_)) => "Running",
             Some(EventKind::Completed(_)) => "Completed",
-            Some(EventKind::Failed(_)) => "Failed",
+            Some(EventKind::Failed(_) | EventKind::ImagePullFailed(_)) => "Failed",
             Some(EventKind::Canceled(_)) => "Canceled",
             Some(EventKind::Preempted(_)) => "Preempted",
             None => "Unknown",
@@ -209,6 +218,15 @@ impl Task {
     /// Gets the message representation of the task's most recent event.
     pub fn message(&self) -> String {
         match &self.last_event().event_kind {
+            Some(EventKind::ImagePullStarted(ImagePullStartedEvent { name, .. })) => {
+                format!("pulling image `{name}`")
+            }
+            Some(EventKind::ImagePullFailed(ImagePullFailedEvent { name, message, .. })) => {
+                format!("image pull for `{name}` failed: {message}")
+            }
+            Some(EventKind::ImagePullFinished(ImagePullFinishedEvent { name, .. })) => {
+                format!("finished pulling image `{name}`")
+            }
             Some(EventKind::Created(_)) => {
                 format!("task `{name}` has been created", name = self.name)
             }

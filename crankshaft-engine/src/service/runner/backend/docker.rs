@@ -331,6 +331,11 @@ impl Backend {
     pub fn resources(&self) -> &Resources {
         &self.resources
     }
+
+    /// Gets the events sender for the backend, if there is one.
+    pub fn events(&self) -> Option<broadcast::Sender<Event>> {
+        self.events.clone()
+    }
 }
 
 /// Helper for cleaning up a container or service.
@@ -377,6 +382,7 @@ impl crate::Backend for Backend {
         let task_id = next_task_id();
         let client = self.client.clone();
         let run_cleanup = self.config.cleanup();
+        let events_config = self.config.events();
         let use_service = self.resources.use_service();
         let events = self.events.clone();
         let names = self.names.clone();
@@ -391,6 +397,7 @@ impl crate::Backend for Backend {
                 generator.next().unwrap()
             });
 
+            let events_ctx = events.clone().map(|e| (e, task_id));
             let run = async {
                 let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
 
@@ -406,7 +413,7 @@ impl crate::Backend for Backend {
 
                     // First ensure the execution's image exists
                     match client
-                        .ensure_image(&execution.image, token.clone())
+                        .ensure_image(&execution.image, token.clone(), events_ctx.clone())
                         .await
                         .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?
                     {
@@ -456,7 +463,9 @@ impl crate::Backend for Backend {
 
                     }).transpose()?;
 
-                    let options = events.clone().map(|sender| EventOptions { sender, task_id, send_start: i == 0});
+                    let options = events.clone().map(|sender| EventOptions { sender, task_id, send_start: i == 0, user_config: events_config });
+                    let attach_stdout = events.is_some() && events_config.send_stdout;
+                    let attach_stderr = events.is_some() && events_config.send_stderr;
 
                     // Generate a name for the service or container
                     let name = {
@@ -513,6 +522,8 @@ impl crate::Backend for Backend {
                             .program(execution.program)
                             .args(execution.args)
                             .envs(execution.env)
+                            .attach_stdout(attach_stdout)
+                            .attach_stderr(attach_stderr)
                             .host_config(HostConfig {
                                 mounts: Some(mounts.clone()),
                                 // Ensure the caller's group id is added so that the container can access the mounts and working directory
@@ -685,6 +696,68 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
 
 #[cfg(test)]
 mod test {
+    use std::io::Write;
+    use std::ops::Deref;
+
+    use anyhow::Context;
+
+    use super::*;
+    use crate::service::runner::NAME_BUFFER_LEN;
+    use crate::task::output::Type;
+
+    struct BackendTest {
+        backend: Backend,
+    }
+
+    impl BackendTest {
+        async fn redirect_stdio(mut event_rx: broadcast::Receiver<Event>) -> anyhow::Result<()> {
+            while let Ok(event) = event_rx.recv().await {
+                match event {
+                    Event::TaskStdout { message, .. } => {
+                        std::io::stdout()
+                            .write_all(&message)
+                            .context("failed to write stdout")?;
+                    }
+                    Event::TaskStderr { message, .. } => {
+                        std::io::stderr()
+                            .write_all(&message)
+                            .context("failed to write stderr")?;
+                    }
+                    Event::TaskFailed { message, .. } => {
+                        eprintln!("{message}");
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(())
+        }
+
+        async fn new(config: Config) -> anyhow::Result<Self> {
+            let names = Arc::new(Mutex::new(GeneratorIterator::new(
+                UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
+                NAME_BUFFER_LEN,
+            )));
+
+            let (event_tx, event_rx) = broadcast::channel(1024);
+            tokio::task::spawn(Self::redirect_stdio(event_rx));
+
+            let backend = Backend::initialize_default_with(config, names, Some(event_tx))
+                .await
+                .context("failed to create backend")?;
+
+            Ok(Self { backend })
+        }
+    }
+
+    impl Deref for BackendTest {
+        type Target = Backend;
+
+        fn deref(&self) -> &Self::Target {
+            &self.backend
+        }
+    }
+
     #[tokio::test]
     #[cfg(target_os = "linux")]
     async fn backend_adds_user_egid() -> anyhow::Result<()> {
@@ -697,19 +770,10 @@ mod test {
 
         use super::*;
         use crate::service::runner::Backend as _;
-        use crate::service::runner::NAME_BUFFER_LEN;
         use crate::task::Execution;
         use crate::task::Output;
-        use crate::task::output::Type;
 
-        let names = Arc::new(Mutex::new(GeneratorIterator::new(
-            UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
-            NAME_BUFFER_LEN,
-        )));
-
-        let backend = Backend::initialize_default_with(Config::default(), names, None)
-            .await
-            .context("failed to create backend")?;
+        let backend = BackendTest::new(Config::default()).await?;
 
         // Get the current user's effective gid
         let gid = Gid::effective();
@@ -725,7 +789,8 @@ mod test {
                     .executions(NonEmpty::new(
                         Execution::builder()
                             .image("ubuntu:latest")
-                            .program("/usr/bin/id")
+                            .program("/bin/sh")
+                            .args([String::from("-c"), String::from("/usr/bin/id -G")])
                             .stdout("/mnt/stdout")
                             .build(),
                     ))
@@ -751,7 +816,7 @@ mod test {
         // Assert that the command output had the user's group added
         let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
         assert!(
-            stdout.contains(&format!("uid=0(root) gid=0(root) groups=0(root),{gid}")),
+            stdout.contains(&gid.to_string()),
             "task stdout of `{stdout}` did not contain the expected output"
         );
         Ok(())

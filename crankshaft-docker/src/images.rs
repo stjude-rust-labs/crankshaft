@@ -7,7 +7,11 @@ use bollard::query_parameters::ListImagesOptions;
 use bollard::query_parameters::RemoveImageOptions;
 use bollard::secret::ImageDeleteResponseItem;
 use bollard::secret::ImageSummary;
+use crankshaft_events::Event;
+use crankshaft_events::TaskId;
+use crankshaft_events::send_event;
 use futures::stream::FuturesUnordered;
+use tokio::sync::broadcast;
 use tokio_stream::StreamExt as _;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
@@ -68,6 +72,7 @@ pub(crate) async fn ensure_image(
     docker: &Docker,
     image: impl Into<String>,
     token: CancellationToken,
+    events_ctx: Option<(broadcast::Sender<Event>, TaskId)>,
 ) -> Result<Option<()>> {
     let image = image.into();
 
@@ -97,7 +102,18 @@ pub(crate) async fn ensure_image(
         return Ok(Some(()));
     }
 
+    let events = events_ctx.as_ref().map(|(sender, _)| sender.clone());
+    let task = events_ctx.as_ref().map(|(_, task_id)| *task_id);
+
     debug!("image `{image}` does not exist locally; attempting to pull from remote");
+    send_event!(
+        events,
+        Event::ImagePullStarted {
+            id: task.unwrap(),
+            name: image.clone()
+        }
+    );
+
     let mut stream = docker.inner().create_image(
         Some(CreateImageOptions {
             tag: Some(if image.contains(':') {
@@ -105,7 +121,7 @@ pub(crate) async fn ensure_image(
             } else {
                 String::from("latest")
             }),
-            from_image: Some(image),
+            from_image: Some(image.clone()),
             ..Default::default()
         }),
         None,
@@ -125,7 +141,20 @@ pub(crate) async fn ensure_image(
                     break;
                 };
 
-                let update = result.map_err(Error::Docker)?;
+                let update = match result {
+                    Ok(update) => update,
+                    Err(e) => {
+                        send_event!(
+                            events,
+                            Event::ImagePullFailed {
+                                id: task.unwrap(),
+                                name: image.clone(),
+                                message: e.to_string()
+                            }
+                        );
+                        return Err(Error::Docker(e));
+                    }
+                };
 
                 trace!(
                     "pull update: {}",
@@ -159,6 +188,14 @@ pub(crate) async fn ensure_image(
             }
         }
     }
+
+    send_event!(
+        events,
+        Event::ImagePullFinished {
+            id: task.unwrap(),
+            name: image
+        }
+    );
 
     Ok(Some(()))
 }

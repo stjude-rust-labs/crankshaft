@@ -200,13 +200,17 @@ impl Service {
                     }
 
                     // Write the logs
-                    if self.stdout.is_some() || self.stderr.is_some() {
+                    let stdout_enabled = self.stdout.is_some()
+                        || events.as_ref().is_some_and(|e| e.user_config.send_stdout);
+                    let stderr_enabled = self.stderr.is_some()
+                        || events.as_ref().is_some_and(|e| e.user_config.send_stderr);
+                    if stdout_enabled || stderr_enabled {
                         let logs = self.client.logs(
                             &container_id,
                             Some(
                                 LogsOptionsBuilder::new()
-                                    .stdout(true)
-                                    .stderr(true)
+                                    .stdout(stdout_enabled)
+                                    .stderr(stderr_enabled)
                                     .follow(true)
                                     .build(),
                             ),

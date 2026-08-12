@@ -34,8 +34,14 @@ pub struct Builder {
     /// The file path to write the container's stdout stream to.
     stdout: Option<PathBuf>,
 
+    /// Whether to attach the container's stdout stream.
+    attach_stdout: bool,
+
     /// The file path to write the container's stderr stream to.
     stderr: Option<PathBuf>,
+
+    /// Whether to attach the container's stderr stream.
+    attach_stderr: bool,
 
     /// Environment variables.
     env: IndexMap<String, String>,
@@ -58,6 +64,8 @@ impl Builder {
             args: Default::default(),
             stdout: None,
             stderr: None,
+            attach_stdout: false,
+            attach_stderr: false,
             env: Default::default(),
             work_dir: Default::default(),
             host_config: Default::default(),
@@ -100,9 +108,25 @@ impl Builder {
         self
     }
 
+    /// Sets whether to attach the container's stdout stream.
+    ///
+    /// NOTE: [`Self::stdout()`] implies this to be true.
+    pub fn attach_stdout(mut self, attach: bool) -> Self {
+        self.attach_stdout = attach;
+        self
+    }
+
     /// Sets the file to write the container's stderr stream to.
     pub fn stderr(mut self, path: impl Into<PathBuf>) -> Self {
         self.stderr = Some(path.into());
+        self
+    }
+
+    /// Sets whether to attach the container's stderr stream.
+    ///
+    /// NOTE: [`Self::stderr()`] implies this to be true.
+    pub fn attach_stderr(mut self, attach: bool) -> Self {
+        self.attach_stderr = attach;
         self
     }
 
@@ -165,8 +189,8 @@ impl Builder {
                     // Override the entrypoint to the default Docker entrypoint as we're providing
                     // the full command
                     entrypoint: Some(vec![String::new()]),
-                    attach_stdout: Some(self.stdout.is_some()),
-                    attach_stderr: Some(self.stderr.is_some()),
+                    attach_stdout: Some(self.stdout.is_some() || self.attach_stdout),
+                    attach_stderr: Some(self.stderr.is_some() || self.attach_stderr),
                     // END NOTE
                     working_dir: self.work_dir,
                     host_config: self.host_config,

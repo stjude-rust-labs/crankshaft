@@ -12,6 +12,25 @@ fn default_cleanup() -> bool {
     DEFAULT_CLEANUP
 }
 
+/// Configuration for events emitted by the Docker execution backend.
+#[derive(Copy, Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct EventConfig {
+    /// Whether or not to send the task stdout event.
+    pub send_stdout: bool,
+    /// Whether or not to send the task stderr event.
+    pub send_stderr: bool,
+}
+
+impl Default for EventConfig {
+    fn default() -> Self {
+        Self {
+            send_stdout: true,
+            send_stderr: true,
+        }
+    }
+}
+
 /// A configuration object for a Docker execution backend.
 #[derive(Builder, Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -22,6 +41,10 @@ pub struct Config {
     #[serde(default = "default_cleanup")]
     #[builder(default = DEFAULT_CLEANUP)]
     cleanup: bool,
+    /// Configuration for events emitted by the Docker execution backend.
+    #[serde(default)]
+    #[builder(default)]
+    events: EventConfig,
 }
 
 impl Config {
@@ -30,6 +53,11 @@ impl Config {
     /// failure).
     pub fn cleanup(&self) -> bool {
         self.cleanup
+    }
+
+    /// Gets the event configuration for the backend.
+    pub fn events(&self) -> EventConfig {
+        self.events
     }
 }
 

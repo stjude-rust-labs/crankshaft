@@ -382,6 +382,7 @@ impl crate::Backend for Backend {
         let task_id = next_task_id();
         let client = self.client.clone();
         let run_cleanup = self.config.cleanup();
+        let events_config = self.config.events();
         let use_service = self.resources.use_service();
         let events = self.events.clone();
         let names = self.names.clone();
@@ -462,7 +463,9 @@ impl crate::Backend for Backend {
 
                     }).transpose()?;
 
-                    let options = events.clone().map(|sender| EventOptions { sender, task_id, send_start: i == 0});
+                    let options = events.clone().map(|sender| EventOptions { sender, task_id, send_start: i == 0, user_config: events_config });
+                    let attach_stdout = events.is_some() && events_config.send_stdout;
+                    let attach_stderr = events.is_some() && events_config.send_stderr;
 
                     // Generate a name for the service or container
                     let name = {
@@ -519,6 +522,8 @@ impl crate::Backend for Backend {
                             .program(execution.program)
                             .args(execution.args)
                             .envs(execution.env)
+                            .attach_stdout(attach_stdout)
+                            .attach_stderr(attach_stderr)
                             .host_config(HostConfig {
                                 mounts: Some(mounts.clone()),
                                 // Ensure the caller's group id is added so that the container can access the mounts and working directory
@@ -710,13 +715,16 @@ mod test {
                 match event {
                     Event::TaskStdout { message, .. } => {
                         std::io::stdout()
-                            .write_all(&*message)
+                            .write_all(&message)
                             .context("failed to write stdout")?;
                     }
                     Event::TaskStderr { message, .. } => {
                         std::io::stderr()
-                            .write_all(&*message)
+                            .write_all(&message)
                             .context("failed to write stderr")?;
+                    }
+                    Event::TaskFailed { message, .. } => {
+                        eprintln!("{message}");
                     }
                     _ => {}
                 }
@@ -781,7 +789,8 @@ mod test {
                     .executions(NonEmpty::new(
                         Execution::builder()
                             .image("ubuntu:latest")
-                            .program("/usr/bin/id")
+                            .program("/bin/sh")
+                            .args([String::from("-c"), String::from("/usr/bin/id")])
                             .stdout("/mnt/stdout")
                             .build(),
                     ))

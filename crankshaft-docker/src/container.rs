@@ -108,7 +108,9 @@ pub(crate) async fn write_logs(
                     })?;
                 }
 
-                if let Some(events) = events {
+                if let Some(events) = events
+                    && events.user_config.send_stdout
+                {
                     events
                         .sender
                         .send(Event::TaskStdout {
@@ -128,7 +130,9 @@ pub(crate) async fn write_logs(
                     })?;
                 }
 
-                if let Some(events) = &events {
+                if let Some(events) = &events
+                    && events.user_config.send_stderr
+                {
                     events
                         .sender
                         .send(Event::TaskStderr {
@@ -226,13 +230,17 @@ impl Container {
         }
 
         // Write the log streams
-        if self.stdout.is_some() || self.stderr.is_some() {
+        let stdout_enabled =
+            self.stdout.is_some() || events.as_ref().is_some_and(|e| e.user_config.send_stdout);
+        let stderr_enabled =
+            self.stderr.is_some() || events.as_ref().is_some_and(|e| e.user_config.send_stderr);
+        if stdout_enabled || stderr_enabled {
             let logs = self.client.logs(
                 &self.name,
                 Some(
                     LogsOptionsBuilder::new()
-                        .stdout(self.stdout.is_some())
-                        .stderr(self.stderr.is_some())
+                        .stdout(stdout_enabled)
+                        .stderr(stderr_enabled)
                         .follow(true)
                         .build(),
                 ),

@@ -12,6 +12,7 @@ pub mod service;
 
 use bollard::secret::Node;
 use bollard::secret::SystemInfo;
+use crankshaft_config::backend::docker::EventConfig;
 use crankshaft_events::Event;
 use crankshaft_events::TaskId;
 use thiserror::Error;
@@ -183,6 +184,8 @@ pub struct EventOptions {
     pub task_id: TaskId,
     /// Whether or not send the task started event.
     pub send_start: bool,
+    /// User-controlled event configuration.
+    pub user_config: EventConfig,
 }
 
 #[cfg(test)]

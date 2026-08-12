@@ -790,10 +790,7 @@ mod test {
                         Execution::builder()
                             .image("ubuntu:latest")
                             .program("/bin/sh")
-                            .args([
-                                String::from("-c"),
-                                String::from("/usr/bin/id -G"),
-                            ])
+                            .args([String::from("-c"), String::from("/usr/bin/id -G")])
                             .stdout("/mnt/stdout")
                             .build(),
                     ))

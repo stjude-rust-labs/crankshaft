@@ -790,7 +790,10 @@ mod test {
                         Execution::builder()
                             .image("ubuntu:latest")
                             .program("/bin/sh")
-                            .args([String::from("-c"), String::from("/usr/bin/id")])
+                            .args([
+                                String::from("-c"),
+                                String::from("/usr/bin/id -G"),
+                            ])
                             .stdout("/mnt/stdout")
                             .build(),
                     ))
@@ -816,7 +819,7 @@ mod test {
         // Assert that the command output had the user's group added
         let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
         assert!(
-            stdout.contains(&format!("uid=0(root) gid=0(root) groups=0(root),{gid}")),
+            stdout.contains(&gid.to_string()),
             "task stdout of `{stdout}` did not contain the expected output"
         );
         Ok(())

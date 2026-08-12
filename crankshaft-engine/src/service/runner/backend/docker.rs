@@ -331,6 +331,11 @@ impl Backend {
     pub fn resources(&self) -> &Resources {
         &self.resources
     }
+
+    /// Gets the events sender for the backend, if there is one.
+    pub fn events(&self) -> Option<broadcast::Sender<Event>> {
+        self.events.clone()
+    }
 }
 
 /// Helper for cleaning up a container or service.

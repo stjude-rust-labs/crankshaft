@@ -10,7 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-* Added support for the `ImagePull{Started,Failed,Finished}` events ([#](https://github.com/stjude-rust-labs/crankshaft/pull/)).
+* Added support for the `ImagePull{Started,Failed,Finished}` events ([#82](https://github.com/stjude-rust-labs/crankshaft/pull/82)).
 
 ## 0.5.0 - 04-22-2026
 

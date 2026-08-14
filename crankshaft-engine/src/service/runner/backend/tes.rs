@@ -68,8 +68,6 @@ struct BackendState {
     policy: ExponentialFactorBackoff,
     /// The permits for ensuring a maximum number of concurrent server requests.
     permits: Semaphore,
-    /// The events sender for Crankshaft events.
-    events: Option<broadcast::Sender<Event>>,
 }
 
 impl BackendState {
@@ -114,7 +112,7 @@ impl Backend {
     /// )));
     ///
     /// # tokio_test::block_on(async {
-    /// let backend = Backend::initialize(config, names, None).await;
+    /// let backend = Backend::initialize(config, names).await;
     /// # });
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -122,7 +120,6 @@ impl Backend {
     pub async fn initialize(
         config: Config,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-        events: Option<broadcast::Sender<Event>>,
     ) -> Self {
         let (url, http, interval) = config.into_parts();
         let mut builder = Client::builder().url(url);
@@ -143,7 +140,6 @@ impl Backend {
                 http.max_concurrency
                     .unwrap_or(DEFAULT_MAX_CONCURRENT_REQUESTS),
             ),
-            events,
         });
 
         // SAFETY: the name generator should _never_ run out of entries.
@@ -282,6 +278,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
+        events: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let task_id = next_task_id();
@@ -300,7 +297,7 @@ impl crate::Backend for Backend {
 
             // Add the task to the monitor
             let (completed_tx, completed_rx) = oneshot::channel();
-            let tag = monitor.add_task(task_id, task_name.clone(), completed_tx).await;
+            let tag = monitor.add_task(task_id, task_name.clone(), events.clone(), completed_tx).await;
 
             task.tags
                 .get_or_insert_default()
@@ -329,7 +326,7 @@ impl crate::Backend for Backend {
             let task_token = CancellationToken::new();
 
             send_event!(
-                state.events,
+                events,
                 Event::TaskCreated {
                     id: task_id,
                     name: task_name.clone(),
@@ -377,7 +374,7 @@ impl crate::Backend for Backend {
             // Send an event for the result
             match &result {
                 Ok(results) => send_event!(
-                    state.events,
+                    events,
                     Event::TaskCompleted {
                         id: task_id,
                         // SAFETY: NonEmpty -> NonEmpty
@@ -385,13 +382,13 @@ impl crate::Backend for Backend {
                     }
                 ),
                 Err(TaskRunError::Canceled) => {
-                    send_event!(state.events, Event::TaskCanceled { id: task_id })
+                    send_event!(events, Event::TaskCanceled { id: task_id })
                 }
                 Err(TaskRunError::Preempted) => {
-                    send_event!(state.events, Event::TaskPreempted { id: task_id })
+                    send_event!(events, Event::TaskPreempted { id: task_id })
                 }
                 Err(TaskRunError::Other(e)) => send_event!(
-                    state.events,
+                    events,
                     Event::TaskFailed {
                         id: task_id,
                         message: format!("{e:#}")

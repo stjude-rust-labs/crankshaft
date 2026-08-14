@@ -18,6 +18,7 @@ use tes::v1::types::requests::View;
 use tes::v1::types::responses::ListTasks;
 use tes::v1::types::task::State as TesState;
 use tokio::select;
+use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::time::MissedTickBehavior;
 use tracing::debug;
@@ -31,6 +32,8 @@ pub const CRANKSHAFT_GROUP_TAG_NAME: &str = "crankshaft-task-group";
 struct Task {
     /// The name of the task.
     name: String,
+    /// The events sender for the task.
+    events: Option<broadcast::Sender<Event>>,
     /// The sender for the "completed" notification.
     completed: oneshot::Sender<Result<()>>,
 }
@@ -96,6 +99,7 @@ impl TaskMonitor {
         &self,
         id: TaskId,
         name: String,
+        events: Option<broadcast::Sender<Event>>,
         completed: oneshot::Sender<Result<()>>,
     ) -> String {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
@@ -113,7 +117,14 @@ impl TaskMonitor {
             );
         }
 
-        state.tasks.insert(id, Task { name, completed });
+        state.tasks.insert(
+            id,
+            Task {
+                name,
+                events,
+                completed,
+            },
+        );
 
         state.tag.clone()
     }
@@ -209,15 +220,14 @@ impl TaskMonitor {
                                 // The task is now running, send the started event
                                 if let Some(id) = state.ids.get(&task.id).copied()
                                     && state.running.insert(id)
+                                    && let Some(Task { name, events, .. }) = state.tasks.get(&id)
                                 {
-                                    if let Some(Task { name, .. }) = state.tasks.get(&id) {
-                                        info!(
-                                            "TES task `{tes_id}` (task `{name}`) is now running",
-                                            tes_id = task.id
-                                        );
-                                    }
+                                    info!(
+                                        "TES task `{tes_id}` (task `{name}`) is now running",
+                                        tes_id = task.id
+                                    );
 
-                                    send_event!(backend_state.events, Event::TaskStarted { id });
+                                    send_event!(events, Event::TaskStarted { id });
                                 }
                             }
                             TesState::Complete

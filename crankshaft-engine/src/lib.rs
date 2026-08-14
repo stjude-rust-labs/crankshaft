@@ -66,7 +66,7 @@ impl Engine {
     /// Adds a [`Backend`] to the engine.
     pub async fn with(mut self, config: Config) -> Result<Self> {
         let (name, kind, max_tasks, defaults) = config.into_parts();
-        let runner = Runner::initialize(kind, max_tasks, defaults, self.events.clone()).await?;
+        let runner = Runner::initialize(kind, max_tasks, defaults).await?;
         self.runners.insert(name, runner);
         Ok(self)
     }
@@ -125,7 +125,7 @@ impl Engine {
                 .unwrap_or_default(),
         );
 
-        backend.spawn(task, token).await
+        backend.spawn(task, self.events.clone(), token).await
     }
 
     /// Starts an instrumentation loop.

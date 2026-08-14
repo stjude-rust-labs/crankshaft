@@ -42,6 +42,7 @@ use crate::Task;
 use crate::service::name::GeneratorIterator;
 use crate::service::name::UniqueAlphanumeric;
 use crate::service::runner::backend::tes::monitor::TaskMonitor;
+use crate::task::ExecutionResult;
 
 mod monitor;
 
@@ -164,7 +165,7 @@ impl Backend {
         task_name: &str,
         tes_id: &str,
         completed: oneshot::Receiver<Result<()>>,
-    ) -> Result<NonEmpty<ExitStatus>, TaskRunError> {
+    ) -> Result<NonEmpty<ExecutionResult>, TaskRunError> {
         info!(
             "TES task `{tes_id}` (task `{task_name}`) has been created; waiting for task to start"
         );
@@ -220,24 +221,30 @@ impl Backend {
                 // There may be multiple task logs due to internal retries by the TES server
                 // Therefore, we're only interested in the last log
                 let logs = task.logs.unwrap_or_default();
-                let task = logs.last().context(
+                let task_log = logs.last().context(
                     "invalid response from TES server: completed task is missing task logs",
                 )?;
 
                 // Iterate the exit code from each executor log
-                Ok(NonEmpty::collect(task.logs.iter().map(|executor| {
-                    // See WEXITSTATUS from wait(2) to explain the shift
-                    #[cfg(unix)]
-                    let status = ExitStatus::from_raw(executor.exit_code << 8);
+                Ok(
+                    NonEmpty::collect(task_log.logs.iter().enumerate().map(|(idx, executor)| {
+                        // See WEXITSTATUS from wait(2) to explain the shift
+                        #[cfg(unix)]
+                        let status = ExitStatus::from_raw(executor.exit_code << 8);
 
-                    #[cfg(windows)]
-                    let status = ExitStatus::from_raw(executor.exit_code as u32);
+                        #[cfg(windows)]
+                        let status = ExitStatus::from_raw(executor.exit_code as u32);
 
-                    status
-                }))
-                .context(
-                    "invalid response from TES server: completed task is missing executor logs",
-                )?)
+                        ExecutionResult {
+                            // Realistically, the executor for any given log should always exist
+                            image: task.executors.get(idx).map(|e| e.image.clone()),
+                            status,
+                        }
+                    }))
+                    .context(
+                        "invalid response from TES server: completed task is missing executor logs",
+                    )?,
+                )
             }
             TesState::SystemError => {
                 info!("TES task `{tes_id}` (task `{task_name}`) has failed with a system error");
@@ -276,7 +283,7 @@ impl crate::Backend for Backend {
         &self,
         task: Task,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let task_id = next_task_id();
         let names = self.names.clone();
         let monitor = self.monitor.clone();
@@ -369,11 +376,12 @@ impl crate::Backend for Backend {
 
             // Send an event for the result
             match &result {
-                Ok(statuses) => send_event!(
+                Ok(results) => send_event!(
                     state.events,
                     Event::TaskCompleted {
                         id: task_id,
-                        exit_statuses: statuses.clone(),
+                        // SAFETY: NonEmpty -> NonEmpty
+                        exit_statuses: NonEmpty::collect(results.iter().map(|r| r.status)).unwrap(),
                     }
                 ),
                 Err(TaskRunError::Canceled) => {

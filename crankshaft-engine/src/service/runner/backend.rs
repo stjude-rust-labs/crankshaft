@@ -1,7 +1,6 @@
 //! Supported backends.
 
 use std::fmt::Debug;
-use std::process::ExitStatus;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -10,6 +9,7 @@ use nonempty::NonEmpty;
 use tokio_util::sync::CancellationToken;
 
 use crate::Task;
+use crate::task::execution::ExecutionResult;
 
 pub mod docker;
 pub mod generic;
@@ -49,5 +49,5 @@ pub trait Backend: Debug + Send + Sync + 'static {
         &self,
         task: Task,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>>;
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>>;
 }

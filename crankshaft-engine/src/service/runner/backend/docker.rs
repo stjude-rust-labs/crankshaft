@@ -2,7 +2,6 @@
 
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -23,6 +22,7 @@ use crankshaft_docker::Docker;
 use crankshaft_docker::EventOptions;
 use crankshaft_docker::service::Service;
 use crankshaft_events::Event;
+use crankshaft_events::TaskId;
 use crankshaft_events::next_task_id;
 use crankshaft_events::send_event;
 use futures::FutureExt;
@@ -39,7 +39,18 @@ use super::TaskRunError;
 use crate::Task;
 use crate::service::name::GeneratorIterator;
 use crate::service::name::UniqueAlphanumeric;
+use crate::task::Execution;
+use crate::task::ExecutionResult;
 use crate::task::Input;
+
+impl From<crankshaft_docker::container::ExecutionResult> for ExecutionResult {
+    fn from(execution_result: crankshaft_docker::container::ExecutionResult) -> Self {
+        Self {
+            image: Some(execution_result.image),
+            status: execution_result.status,
+        }
+    }
+}
 
 /// Represents resource information about a Docker swarm.
 #[derive(Debug, Default, Clone, Copy)]
@@ -368,6 +379,40 @@ impl Cleanup {
     }
 }
 
+/// Attempt to find a candidate image for the given execution.
+async fn find_candidate_image(
+    client: &Docker,
+    execution: &Execution,
+    token: CancellationToken,
+    events: Option<broadcast::Sender<Event>>,
+    task_id: TaskId,
+) -> Result<String, TaskRunError> {
+    let total_images = execution.images().len();
+    let events = events.map(|e| (e, task_id));
+
+    for (idx, try_image) in execution.images().iter().cloned().enumerate() {
+        match client
+            .ensure_image(&try_image, token.clone(), events.clone())
+            .await
+            .with_context(|| format!("failed to pull image `{try_image}`"))
+        {
+            Ok(Some(())) => {
+                return Ok(try_image);
+            }
+            Ok(None) => return Err(TaskRunError::Canceled),
+            Err(e) => {
+                if idx == total_images - 1 {
+                    return Err(TaskRunError::from(e));
+                }
+
+                continue;
+            }
+        }
+    }
+
+    unreachable!("there should always be at least one image available")
+}
+
 #[async_trait]
 impl crate::Backend for Backend {
     fn default_name(&self) -> &'static str {
@@ -378,7 +423,7 @@ impl crate::Backend for Backend {
         &self,
         task: Task,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let task_id = next_task_id();
         let client = self.client.clone();
         let run_cleanup = self.config.cleanup();
@@ -397,7 +442,6 @@ impl crate::Backend for Backend {
                 generator.next().unwrap()
             });
 
-            let events_ctx = events.clone().map(|e| (e, task_id));
             let run = async {
                 let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
 
@@ -411,15 +455,8 @@ impl crate::Backend for Backend {
                         return Err(TaskRunError::Canceled);
                     }
 
-                    // First ensure the execution's image exists
-                    match client
-                        .ensure_image(&execution.image, token.clone(), events_ctx.clone())
-                        .await
-                        .with_context(|| format!("failed to pull image `{image}`", image = execution.image))?
-                    {
-                        Some(()) => {}
-                        None => return Err(TaskRunError::Canceled),
-                    }
+                    // First, ensure the execution's image exists
+                    let image = find_candidate_image(&client, &execution, token.clone(), events.clone(), task_id).await?;
 
                     // Look for the path where the caller wants stdout saved to
                     let stdout = execution.stdout.as_ref().and_then(|p| {
@@ -479,7 +516,7 @@ impl crate::Backend for Backend {
                         let mut builder = client
                             .service_builder()
                             .name(&name)
-                            .image(execution.image)
+                            .image(image)
                             .program(execution.program)
                             .args(execution.args)
                             .envs(execution.env)
@@ -518,7 +555,7 @@ impl crate::Backend for Backend {
                         let mut builder = client
                             .container_builder()
                             .name(&name)
-                            .image(execution.image)
+                            .image(image)
                             .program(execution.program)
                             .args(execution.args)
                             .envs(execution.env)
@@ -581,18 +618,22 @@ impl crate::Backend for Backend {
             };
 
             // Send the created event
-            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: None, token:task_token.clone()  });
+            send_event!(events, Event::TaskCreated { id: task_id, name: task_name.clone(), tes_id: None, token: task_token.clone() });
 
             // Run the task to completion
-            let result = run.await;
+            let result: Result<NonEmpty<ExecutionResult>, _> = run.await.map(|results| {
+                // SAFETY: NonEmpty -> NonEmpty
+                NonEmpty::collect(results.into_iter().map(Into::into)).unwrap()
+            });
 
             // Send an event for the result
             match &result {
-                Ok(statuses) => send_event!(
+                Ok(results) => send_event!(
                     events,
                     Event::TaskCompleted {
                         id: task_id,
-                        exit_statuses: statuses.clone(),
+                        // SAFETY: NonEmpty -> NonEmpty
+                        exit_statuses: NonEmpty::collect(results.iter().map(|r| r.status)).unwrap(),
                     }
                 ),
                 Err(TaskRunError::Canceled) => send_event!(
@@ -696,21 +737,32 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
 
 #[cfg(test)]
 mod test {
+    use std::fs;
     use std::io::Write;
     use std::ops::Deref;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     use anyhow::Context;
+    use tempfile::NamedTempFile;
+    use url::Url;
 
     use super::*;
+    use crate::service::runner::Backend;
     use crate::service::runner::NAME_BUFFER_LEN;
+    use crate::task::Output;
     use crate::task::output::Type;
 
     struct BackendTest {
-        backend: Backend,
+        backend: super::Backend,
+        image_pull_fails: Arc<AtomicUsize>,
     }
 
     impl BackendTest {
-        async fn redirect_stdio(mut event_rx: broadcast::Receiver<Event>) -> anyhow::Result<()> {
+        async fn redirect_stdio(
+            mut event_rx: broadcast::Receiver<Event>,
+            image_pull_fails: Arc<AtomicUsize>,
+        ) -> anyhow::Result<()> {
             while let Ok(event) = event_rx.recv().await {
                 match event {
                     Event::TaskStdout { message, .. } => {
@@ -726,6 +778,9 @@ mod test {
                     Event::TaskFailed { message, .. } => {
                         eprintln!("{message}");
                     }
+                    Event::ImagePullFailed { .. } => {
+                        image_pull_fails.fetch_add(1, Ordering::Relaxed);
+                    }
                     _ => {}
                 }
             }
@@ -739,19 +794,23 @@ mod test {
                 NAME_BUFFER_LEN,
             )));
 
+            let image_pull_fails = Arc::new(AtomicUsize::new(0));
             let (event_tx, event_rx) = broadcast::channel(1024);
-            tokio::task::spawn(Self::redirect_stdio(event_rx));
+            tokio::task::spawn(Self::redirect_stdio(event_rx, image_pull_fails.clone()));
 
-            let backend = Backend::initialize_default_with(config, names, Some(event_tx))
+            let backend = super::Backend::initialize_default_with(config, names, Some(event_tx))
                 .await
                 .context("failed to create backend")?;
 
-            Ok(Self { backend })
+            Ok(Self {
+                backend,
+                image_pull_fails,
+            })
         }
     }
 
     impl Deref for BackendTest {
-        type Target = Backend;
+        type Target = super::Backend;
 
         fn deref(&self) -> &Self::Target {
             &self.backend
@@ -783,12 +842,12 @@ mod test {
             .into_temp_path();
 
         // Run the task
-        let statuses = backend
+        let results = backend
             .run(
                 Task::builder()
                     .executions(NonEmpty::new(
                         Execution::builder()
-                            .image("ubuntu:latest")
+                            .images(["ubuntu:latest"])?
                             .program("/bin/sh")
                             .args([String::from("-c"), String::from("/usr/bin/id -G")])
                             .stdout("/mnt/stdout")
@@ -811,7 +870,7 @@ mod test {
             .await
             .context("task execution failed")?;
 
-        assert!(statuses.first().success(), "container failed");
+        assert!(results.first().status.success(), "container failed");
 
         // Assert that the command output had the user's group added
         let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
@@ -819,6 +878,63 @@ mod test {
             stdout.contains(&gid.to_string()),
             "task stdout of `{stdout}` did not contain the expected output"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(target_os = "linux")]
+    async fn backend_supports_fallback_images() -> anyhow::Result<()> {
+        let backend = BackendTest::new(Config::default()).await?;
+
+        let stdout_path = NamedTempFile::new()
+            .context("failed to create temporary file")?
+            .into_temp_path();
+
+        let results = backend
+            .run(
+                Task::builder()
+                    .executions(NonEmpty::new(
+                        Execution::builder()
+                            .images([
+                                "ubuntu:super_fake_tag_that_doesnt_exist",
+                                "ubuntu:this_tag_is_even_more_fake",
+                                "ubuntu:latest",
+                            ])?
+                            .program("/bin/sh")
+                            .args([
+                                String::from("-c"),
+                                String::from("/usr/bin/echo \"Hello, world!\""),
+                            ])
+                            .stdout("/mnt/stdout")
+                            .build(),
+                    ))
+                    .outputs(vec![
+                        Output::builder()
+                            .ty(Type::File)
+                            .path("/mnt/stdout")
+                            .url(
+                                Url::from_file_path(&stdout_path)
+                                    .expect("failed to get URL for stdout path"),
+                            )
+                            .build(),
+                    ])
+                    .build(),
+                CancellationToken::new(),
+            )
+            .context("failed to run task")?
+            .await
+            .context("task execution failed")?;
+
+        assert!(results.first().status.success(), "container failed");
+        assert_eq!(backend.image_pull_fails.load(Ordering::Relaxed), 2);
+
+        // Assert that the command was run
+        let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
+        assert!(
+            stdout.contains("Hello, world!"),
+            "task stdout of `{stdout}` did not contain the expected output"
+        );
+
         Ok(())
     }
 }

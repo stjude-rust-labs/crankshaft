@@ -3,7 +3,6 @@
 //! Generic backends are intended to be relatively malleable and configurable by
 //! the end user without requiring the need to write Rust code.
 
-use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -29,6 +28,7 @@ use crate::Task;
 use crate::service::name::GeneratorIterator;
 use crate::service::name::UniqueAlphanumeric;
 use crate::service::runner::backend::generic::driver::Driver;
+use crate::task::ExecutionResult;
 use crate::task::Resources;
 
 pub mod driver;
@@ -117,7 +117,7 @@ impl crate::Backend for Backend {
         &self,
         task: Task,
         token: CancellationToken,
-    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExitStatus>, TaskRunError>>> {
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let driver = self.driver.clone();
         let config = self.config.clone();
 
@@ -141,7 +141,7 @@ impl crate::Backend for Backend {
             });
 
             let run = async {
-                let mut statuses = Vec::new();
+                let mut results = Vec::new();
                 let job_id_regex = config
                     .job_id_regex()
                     .as_ref()
@@ -160,9 +160,9 @@ impl crate::Backend for Backend {
                     // change the model of how tasks are done internally to remove
                     // this need.
                     warn!(
-                        "generic backends do not support images; as such, the directive to use a \
-                         `{}` image will be ignored",
-                        execution.image
+                        "generic backends do not support images; as such, the directive to use \
+                         the images: `{:?}` will be ignored",
+                        execution.images()
                     );
 
                     let mut substitutions = default_substitutions.clone();
@@ -249,7 +249,10 @@ impl crate::Backend for Backend {
 
                                 let output = result?;
                                 if !output.status.success() {
-                                    statuses.push(output.status);
+                                    results.push(ExecutionResult {
+                                        image: None,
+                                        status: output.status,
+                                    });
                                     break;
                                 }
 
@@ -262,14 +265,17 @@ impl crate::Backend for Backend {
                             }
                         }
                         None => {
-                            statuses.push(output.status);
+                            results.push(ExecutionResult {
+                                image: None,
+                                status: output.status,
+                            });
                         }
                     }
                 }
 
                 // SAFETY: each task _must_ have at least one execution, so at least one
                 // execution result _must_ exist at this stage. Thus, this will always unwrap.
-                Ok(NonEmpty::from_vec(statuses).unwrap())
+                Ok(NonEmpty::from_vec(results).unwrap())
             };
 
             // Send the created event
@@ -284,15 +290,16 @@ impl crate::Backend for Backend {
             );
 
             // Run the task to completion
-            let result = run.await;
+            let results = run.await;
 
             // Send an event for the result
-            match &result {
-                Ok(statuses) => send_event!(
+            match &results {
+                Ok(results) => send_event!(
                     events,
                     Event::TaskCompleted {
                         id: task_id,
-                        exit_statuses: statuses.clone()
+                        // SAFETY: NonEmpty -> NonEmpty
+                        exit_statuses: NonEmpty::collect(results.iter().map(|r| r.status)).unwrap(),
                     }
                 ),
                 Err(TaskRunError::Canceled) => {
@@ -310,7 +317,7 @@ impl crate::Backend for Backend {
                 ),
             }
 
-            result
+            results
         }
         .boxed())
     }

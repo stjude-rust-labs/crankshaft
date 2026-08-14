@@ -149,6 +149,14 @@ pub(crate) async fn write_logs(
     Ok(())
 }
 
+/// The result of a [`Container`] run.
+pub struct ExecutionResult {
+    /// The name of the container image that was used in this execution.
+    pub image: String,
+    /// The exit status of the execution.
+    pub status: ExitStatus,
+}
+
 /// A container.
 pub struct Container {
     /// A reference to the [`Docker`] client that will be used to create this
@@ -190,7 +198,11 @@ impl Container {
     }
 
     /// Runs a container and waits for the execution to end.
-    pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
+    pub async fn run(
+        &self,
+        task_name: &str,
+        events: Option<EventOptions>,
+    ) -> Result<ExecutionResult> {
         if let Some(events) = &events {
             events
                 .sender
@@ -207,6 +219,13 @@ impl Container {
         );
 
         // Start the container.
+
+        let inspect_response = default_retry(|| {
+            self.client
+                .inspect_container(&self.name, None::<InspectContainerOptions>)
+        })
+        .await
+        .map_err(Error::Docker)?;
 
         default_retry(|| {
             self.client
@@ -338,7 +357,12 @@ impl Container {
                 .ok();
         }
 
-        Ok(status)
+        Ok(ExecutionResult {
+            image: inspect_response
+                .image
+                .expect("Docker reported a container without an image"),
+            status,
+        })
     }
 
     /// Removes a container with the level of force specified.

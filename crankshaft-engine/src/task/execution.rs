@@ -1,17 +1,39 @@
 //! A unit of executable work.
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::process::ExitStatus;
 
 use bon::Builder;
 use indexmap::IndexMap;
+use nonempty::NonEmpty;
+
+/// An error used in [`Builder::images()`] when no images are specified.
+#[derive(Debug)]
+pub struct NoImageError;
+
+impl Display for NoImageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "no image specified")
+    }
+}
+
+impl std::error::Error for NoImageError {}
 
 /// An execution.
 #[derive(Builder, Clone, Debug)]
 #[builder(builder_type = Builder)]
 pub struct Execution {
-    /// The container image.
-    #[builder(into)]
-    pub(crate) image: String,
+    /// The container images.
+    ///
+    /// For backends that support it, multiple images can be specified to act as
+    /// fallbacks in the event that the previous fails to pull.
+    ///
+    /// NOTE: Images will be tried in the order provided.
+    #[builder(with = |iter: impl IntoIterator<Item = impl Into<String>>| -> Result<_, NoImageError> {
+        NonEmpty::collect(iter.into_iter().map(Into::into)).ok_or(NoImageError)
+    })]
+    pub(crate) images: NonEmpty<String>,
 
     /// The program to execute.
     #[builder(into)]
@@ -46,9 +68,9 @@ pub struct Execution {
 }
 
 impl Execution {
-    /// The image for the execution to run within.
-    pub fn image(&self) -> &str {
-        &self.image
+    /// The images for the execution to run within.
+    pub fn images(&self) -> &NonEmpty<String> {
+        &self.images
     }
 
     /// The program to execute.
@@ -101,7 +123,7 @@ impl From<Execution> for tes::v1::types::task::Executor {
         command.extend(execution.args);
 
         tes::v1::types::task::Executor {
-            image: execution.image.to_owned(),
+            image: execution.images.first().into(),
             command,
             workdir: execution.work_dir,
             stdin: execution.stdin,
@@ -111,4 +133,16 @@ impl From<Execution> for tes::v1::types::task::Executor {
             ignore_error: Some(true),
         }
     }
+}
+
+/// The result of an [`Execution`].
+#[derive(Clone, Debug)]
+pub struct ExecutionResult {
+    /// The name of the container image that was used in this execution.
+    ///
+    /// NOTE: While [`Execution`]s require an image, a backend is not
+    /// necessarily required to make use of it.
+    pub image: Option<String>,
+    /// The exit status of the execution.
+    pub status: ExitStatus,
 }

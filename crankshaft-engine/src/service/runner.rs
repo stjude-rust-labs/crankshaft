@@ -1,6 +1,5 @@
 //! Task runner services.
 
-use std::process::ExitStatus;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -25,19 +24,20 @@ use crate::service::name::UniqueAlphanumeric;
 use crate::service::runner::backend::docker;
 use crate::service::runner::backend::generic;
 use crate::service::runner::backend::tes;
+use crate::task::ExecutionResult;
 
 /// The size of the name buffer.
 const NAME_BUFFER_LEN: usize = 4096;
 
 /// A spawned task handle.
 #[derive(Debug)]
-pub struct TaskHandle(Receiver<Result<NonEmpty<ExitStatus>, backend::TaskRunError>>);
+pub struct TaskHandle(Receiver<Result<NonEmpty<ExecutionResult>, backend::TaskRunError>>);
 
 impl TaskHandle {
     /// Consumes the task handle and waits for the task to complete.
     ///
     /// Returns the exit statuses of the task's executors.
-    pub async fn wait(self) -> Result<NonEmpty<ExitStatus>, backend::TaskRunError> {
+    pub async fn wait(self) -> Result<NonEmpty<ExecutionResult>, backend::TaskRunError> {
         self.0
             .await
             .map_err(|e| backend::TaskRunError::Other(e.into()))?

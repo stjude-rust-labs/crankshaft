@@ -31,6 +31,7 @@ use tracing::trace;
 use crate::Error;
 use crate::EventOptions;
 use crate::Result;
+use crate::container::ExecutionResult;
 use crate::container::write_logs;
 
 /// A docker service.
@@ -82,7 +83,11 @@ impl Service {
     }
 
     /// Runs a service and waits for the task execution to end.
-    pub async fn run(&self, task_name: &str, events: Option<EventOptions>) -> Result<ExitStatus> {
+    pub async fn run(
+        &self,
+        task_name: &str,
+        events: Option<EventOptions>,
+    ) -> Result<ExecutionResult> {
         let stdout = match &self.stdout {
             Some(path) => Some((
                 path.as_path(),
@@ -109,7 +114,7 @@ impl Service {
             None => None,
         };
 
-        let (container_id, exit_code) = loop {
+        let (image, container_id, exit_code) = loop {
             trace!(
                 "polling tasks for service `{id}` (task `{task_name}`)",
                 id = self.id
@@ -140,6 +145,12 @@ impl Service {
             );
 
             let task = tasks.into_iter().next().unwrap();
+            let image = task
+                .spec
+                .as_ref()
+                .and_then(|spec| spec.container_spec.as_ref())
+                .and_then(|spec| spec.image.clone())
+                .expect("Docker reported a container without a state");
 
             let status = task.status.ok_or_else(|| {
                 Error::Message("Docker daemon reported a task with no status".into())
@@ -234,7 +245,7 @@ impl Service {
                                 code,
                                 ..
                             })) => {
-                                break (container_id, code);
+                                break (image, container_id, code);
                             }
                             Some(Err(e)) => return Err(e.into()),
                             None => {
@@ -249,6 +260,7 @@ impl Service {
                                     .map_err(Error::Docker)?;
 
                                 break (
+                                    image,
                                     container_id,
                                     container
                                         .state
@@ -271,6 +283,7 @@ impl Service {
                         }
                     } else {
                         break (
+                            image,
                             container_id,
                             container_status.exit_code.ok_or_else(|| {
                                 Error::Message(format!(
@@ -325,7 +338,7 @@ impl Service {
                 .ok();
         }
 
-        Ok(status)
+        Ok(ExecutionResult { image, status })
     }
 
     /// Deletes a service.

@@ -84,7 +84,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                         .display()
                         .to_string(),
                 )
-                .image("alpine")
+                .images(["alpine"])?
                 .program("echo")
                 .args([String::from("hello, world!")])
                 .build(),
@@ -130,7 +130,11 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
 
     for (i, result) in results.into_iter().enumerate() {
         match result {
-            Ok(output) => println!("task #{num} {status}", num = i + 1, status = output.first()),
+            Ok(output) => println!(
+                "task #{num} {status}",
+                num = i + 1,
+                status = output.first().status
+            ),
             Err(e) => println!("task #{num} failed: {e:#}", num = i + 1),
         }
     }

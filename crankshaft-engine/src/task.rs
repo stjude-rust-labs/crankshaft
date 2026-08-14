@@ -13,6 +13,7 @@ pub mod output;
 pub mod resources;
 
 pub use execution::Execution;
+pub use execution::ExecutionResult;
 pub use input::Input;
 pub use output::Output;
 pub use resources::Resources;

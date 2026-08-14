@@ -98,7 +98,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
                         .display()
                         .to_string(),
                 )
-                .image("alpine")
+                .images(["alpine"])?
                 .program("echo")
                 .args([String::from("hello, world!")])
                 .stdout("/stdout")
@@ -175,9 +175,10 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
 
     for (i, result) in results.into_iter().enumerate() {
         match result {
-            Ok((status, stdout, stderr)) => println!(
+            Ok((result, stdout, stderr)) => println!(
                 "task #{num} {status}, stdout: {stdout:?}, stderr: {stderr:?}",
                 num = i + 1,
+                status = result.status,
                 stdout = std::fs::read_to_string(&stdout).with_context(|| format!(
                     "failed to read stdout file `{stdout}`",
                     stdout = stdout.display()

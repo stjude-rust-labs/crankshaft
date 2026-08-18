@@ -359,6 +359,8 @@ impl Container {
 
         Ok(ExecutionResult {
             image: inspect_response
+                .config
+                .expect("Docker reported a container without a configuration")
                 .image
                 .expect("Docker reported a container without an image"),
             status,

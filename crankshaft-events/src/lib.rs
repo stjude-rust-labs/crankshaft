@@ -120,7 +120,7 @@ pub enum Event {
     /// ## Implementation Notes
     ///
     /// * This event indicates that an actual fetch process is initiated.
-    /// Backends **should not** emit this if the image is already present.
+    ///   Backends **should not** emit this if the image is already present.
     /// * Backends *may* emit this event multiple times for the same image if
     ///   multiple executions request it.
     ///

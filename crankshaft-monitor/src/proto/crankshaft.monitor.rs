@@ -225,6 +225,15 @@ pub struct TaskStderrEvent {
     pub message: ::prost::alloc::vec::Vec<u8>,
 }
 /// Represents an image pull event.
+///
+/// ## Implementation Notes
+///
+/// * This event indicates that an actual fetch process is initiated.
+///   Backends **should not** emit this if the image is already present.
+/// * Backends *may* emit this event multiple times for the same image if
+///   multiple executions request it.
+///
+/// This event is always paired with either an `ImagePullFinished` or `ImagePullFailed` event.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ImagePullStartedEvent {
@@ -236,6 +245,9 @@ pub struct ImagePullStartedEvent {
     pub name: ::prost::alloc::string::String,
 }
 /// Represents an image pull finished event.
+///
+/// Note: This indicates the termination of an image pull. It **will not** be paired with an
+/// `ImagePullFinished` event.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ImagePullFailedEvent {

@@ -22,7 +22,7 @@ pub fn next_task_id() -> TaskId {
 pub enum Event {
     /// A task has been created.
     ///
-    /// Note: a task is not "running" until the started event.
+    /// Note: a task is not "running" until the [`Event::TaskStarted`] event.
     ///
     /// This event is always paired with a `TaskCompleted`, `TaskFailed`,
     /// `TaskCanceled`, or `TaskPreempted` event.
@@ -116,6 +116,16 @@ pub enum Event {
         message: Bytes,
     },
     /// A container image pull was started.
+    ///
+    /// ## Implementation Notes
+    ///
+    /// * This event indicates that an actual fetch process is initiated.
+    ///   Backends **should not** emit this if the image is already present.
+    /// * Backends *may* emit this event multiple times for the same image if
+    ///   multiple executions request it.
+    ///
+    /// This event is always paired with either an [`Event::ImagePullFinished`]
+    /// or [`Event::ImagePullFailed`] event.
     ImagePullStarted {
         /// The id of the task that triggered the pull.
         id: TaskId,
@@ -123,6 +133,9 @@ pub enum Event {
         name: String,
     },
     /// Failed to pull a container image.
+    ///
+    /// Note: This indicates the termination of an image pull. It **will not**
+    /// be paired with an [`Event::ImagePullFinished`] event.
     ImagePullFailed {
         /// The id of the task that triggered the pull.
         id: TaskId,

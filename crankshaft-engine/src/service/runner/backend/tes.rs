@@ -70,6 +70,9 @@ struct BackendState {
     permits: Semaphore,
     /// The events sender for Crankshaft events.
     events: Option<broadcast::Sender<Event>>,
+    /// Whether to read task resource usage from the server's task log
+    /// metadata.
+    resource_usage_metadata: bool,
 }
 
 impl BackendState {
@@ -124,7 +127,7 @@ impl Backend {
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
         events: Option<broadcast::Sender<Event>>,
     ) -> Self {
-        let (url, http, interval) = config.into_parts();
+        let (url, http, interval, resource_usage_metadata) = config.into_parts();
         let mut builder = Client::builder().url(url);
 
         if let Some(auth) = &http.auth {
@@ -144,6 +147,7 @@ impl Backend {
                     .unwrap_or(DEFAULT_MAX_CONCURRENT_REQUESTS),
             ),
             events,
+            resource_usage_metadata,
         });
 
         // SAFETY: the name generator should _never_ run out of entries.

@@ -29,6 +29,7 @@ nix.workspace = true
 nonempty.workspace = true
 rand.workspace = true
 regex.workspace = true
+serde_json.workspace = true
 shlex.workspace = true
 ssh2.workspace = true
 tempfile.workspace = true

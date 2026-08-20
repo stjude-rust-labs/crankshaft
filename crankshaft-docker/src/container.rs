@@ -205,10 +205,12 @@ impl Container {
     pub async fn stats(&self) -> Result<Option<bollard::secret::ContainerStatsResponse>> {
         let mut stream = self.client.stats(
             &self.name,
-            Some(bollard::container::StatsOptions {
-                stream: false,
-                one_shot: true,
-            }),
+            Some(
+                bollard::query_parameters::StatsOptionsBuilder::default()
+                    .stream(false)
+                    .one_shot(true)
+                    .build(),
+            ),
         );
 
         match stream.next().await {

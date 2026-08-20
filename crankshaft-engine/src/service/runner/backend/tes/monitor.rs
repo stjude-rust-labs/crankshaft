@@ -11,6 +11,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use crankshaft_events::Event;
 use crankshaft_events::TaskId;
+use crankshaft_events::TaskResourceUsage;
 use crankshaft_events::send_event;
 use tes::v1::types::requests::ListTasksParams;
 use tes::v1::types::requests::MAX_PAGE_SIZE;
@@ -25,6 +26,59 @@ use tracing::info;
 
 /// The name of the tag used to group tasks together for monitoring.
 pub const CRANKSHAFT_GROUP_TAG_NAME: &str = "crankshaft-task-group";
+
+/// The identifier and state extracted from a polled TES task.
+struct MonitoredTaskState {
+    /// The TES task identifier.
+    id: String,
+    /// The TES task state.
+    state: Option<TesState>,
+}
+
+/// Parses the documented resource usage keys from a TES task log's metadata.
+///
+/// The TES specification designates `TaskLog.metadata` for
+/// implementation-specific data; servers that report resource usage are
+/// expected to use the following keys, with values as JSON numbers or numeric
+/// strings:
+///
+/// * `peak_rss_bytes` — maximum resident memory, in bytes
+/// * `avg_rss_bytes` — average resident memory, in bytes
+/// * `cpu_time_ms` — total CPU time, in milliseconds
+/// * `user_cpu_time_ms` — user-mode CPU time, in milliseconds
+/// * `system_cpu_time_ms` — system-mode CPU time, in milliseconds
+/// * `disk_used_bytes` — disk space used, in bytes
+///
+/// Unknown keys and unparseable values are ignored.
+#[allow(clippy::field_reassign_with_default)]
+fn parse_resource_usage_metadata(metadata: &serde_json::Value) -> TaskResourceUsage {
+    /// Gets a numeric metadata value as a `u64`, accepting JSON numbers and
+    /// numeric strings.
+    fn get_u64(metadata: &serde_json::Value, key: &str) -> Option<u64> {
+        let value = metadata.get(key)?;
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
+    }
+
+    /// Gets a numeric metadata value as an `i64`, accepting JSON numbers and
+    /// numeric strings.
+    fn get_i64(metadata: &serde_json::Value, key: &str) -> Option<i64> {
+        let value = metadata.get(key)?;
+        value
+            .as_i64()
+            .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
+    }
+
+    let mut usage = TaskResourceUsage::default();
+    usage.max_memory = get_u64(metadata, "peak_rss_bytes");
+    usage.avg_memory = get_u64(metadata, "avg_rss_bytes");
+    usage.cpu_time_ms = get_i64(metadata, "cpu_time_ms");
+    usage.user_cpu_time_ms = get_i64(metadata, "user_cpu_time_ms");
+    usage.system_cpu_time_ms = get_i64(metadata, "system_cpu_time_ms");
+    usage.disk_used = get_u64(metadata, "disk_used_bytes");
+    usage
+}
 
 /// Represents a monitored task.
 #[derive(Debug)]
@@ -178,7 +232,13 @@ impl TaskMonitor {
                             tag_values: Some(vec![tag]),
                             page_size: Some(MAX_PAGE_SIZE - 1),
                             page_token,
-                            view: Some(View::Minimal),
+                            view: Some(if backend_state.resource_usage_metadata {
+                                // The `BASIC` view includes task logs, whose
+                                // metadata may carry resource usage.
+                                View::Basic
+                            } else {
+                                View::Minimal
+                            }),
                             ..Default::default()
                         }),
                         backend_state.policy(),
@@ -200,10 +260,43 @@ impl TaskMonitor {
                     let mut state = state.lock().expect("failed to TES lock monitor state");
 
                     // For any task that is completed and in the map, notify of completion
-                    for task in tes_tasks
-                        .into_iter()
-                        .map(|t| t.into_minimal().expect("task should be minimal"))
-                    {
+                    for task in tes_tasks {
+                        // Extract the identifier, state, and any reported
+                        // resource usage from whichever view was requested.
+                        let (task_id, task_state, usage) = match task {
+                            tes::v1::types::responses::TaskResponse::Minimal(t) => {
+                                (t.id, t.state, None)
+                            }
+                            t => {
+                                let t = t.into_task().expect("task should be basic");
+                                let usage = t
+                                    .logs
+                                    .as_ref()
+                                    .and_then(|logs| logs.last())
+                                    .and_then(|log| log.metadata.as_ref())
+                                    .map(parse_resource_usage_metadata)
+                                    .filter(|usage| !usage.is_empty());
+                                (t.id.unwrap_or_default(), t.state, usage)
+                            }
+                        };
+
+                        // Report any resource usage the server included; each
+                        // report is a cumulative snapshot and the last one
+                        // received is authoritative.
+                        if let Some(usage) = usage
+                            && let Some(id) = state.ids.get(&task_id).copied()
+                        {
+                            send_event!(
+                                backend_state.events,
+                                Event::TaskResourceUsage { id, usage }
+                            );
+                        }
+
+                        let task = MonitoredTaskState {
+                            id: task_id,
+                            state: task_state,
+                        };
+
                         match task.state.unwrap_or_default() {
                             TesState::Running | TesState::Paused => {
                                 // The task is now running, send the started event
@@ -286,5 +379,49 @@ impl TaskMonitor {
         }
 
         info!("TES task monitor has shut down");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metadata_parses_numbers_and_numeric_strings() {
+        let metadata = serde_json::json!({
+            "peak_rss_bytes": 1073741824u64,
+            "avg_rss_bytes": "536870912",
+            "cpu_time_ms": "12500 ",
+            "user_cpu_time_ms": 12000,
+            "system_cpu_time_ms": 500,
+            "disk_used_bytes": "2147483648",
+            "some_other_key": "ignored",
+        });
+
+        let usage = parse_resource_usage_metadata(&metadata);
+        assert_eq!(usage.max_memory, Some(1073741824));
+        assert_eq!(usage.avg_memory, Some(536870912));
+        assert_eq!(usage.cpu_time_ms, Some(12500));
+        assert_eq!(usage.user_cpu_time_ms, Some(12000));
+        assert_eq!(usage.system_cpu_time_ms, Some(500));
+        assert_eq!(usage.disk_used, Some(2147483648));
+        assert!(!usage.is_empty());
+    }
+
+    #[test]
+    fn unparseable_and_missing_metadata_is_ignored() {
+        let metadata = serde_json::json!({
+            "peak_rss_bytes": "not a number",
+            "cpu_time_ms": true,
+        });
+
+        let usage = parse_resource_usage_metadata(&metadata);
+        assert!(usage.is_empty());
+
+        let usage = parse_resource_usage_metadata(&serde_json::json!("free-form string"));
+        assert!(usage.is_empty());
+
+        let usage = parse_resource_usage_metadata(&serde_json::json!({}));
+        assert!(usage.is_empty());
     }
 }

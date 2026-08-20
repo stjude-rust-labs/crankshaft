@@ -14,6 +14,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   emit `TaskResourceUsage` events, gated by the new `resource-usage-interval`
   configuration; usage folds across a task's executions (memory maximum and
   average, cumulative CPU time) ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+* The TES backend can now read task resource usage from the documented
+  `TaskLog.metadata` keys and emit `TaskResourceUsage` events, gated by the
+  new `resource-usage-metadata` configuration; when enabled, tasks are polled
+  with the `BASIC` view ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
 
 ### Changed
 

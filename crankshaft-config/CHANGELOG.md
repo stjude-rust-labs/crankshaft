@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+#### Added
+
+* Added the `resource-usage-interval` option to the Docker backend
+  configuration, which enables sampling a running container's resource usage
+  at the given interval in seconds ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+
 ## 0.6.0 - 11-24-2025
 
 ### Added

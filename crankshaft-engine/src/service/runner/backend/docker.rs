@@ -23,6 +23,7 @@ use crankshaft_docker::EventOptions;
 use crankshaft_docker::service::Service;
 use crankshaft_events::Event;
 use crankshaft_events::TaskId;
+use crankshaft_events::TaskResourceUsage;
 use crankshaft_events::next_task_id;
 use crankshaft_events::send_event;
 use futures::FutureExt;
@@ -138,6 +139,95 @@ impl Resources {
             Self::Local(_) => false,
             Self::Swarm(_) => true,
         }
+    }
+}
+
+/// Accumulates a task's resource usage across sampled container statistics.
+///
+/// A task may run more than one container (one per execution), and Docker's
+/// CPU counters are cumulative per container, so counters from finished
+/// containers are folded into offsets while memory statistics fold across all
+/// samples.
+#[derive(Debug, Default)]
+struct UsageFold {
+    /// The maximum memory usage observed across all samples, in bytes.
+    max_memory: Option<u64>,
+    /// The sum of sampled memory usage values, in bytes.
+    memory_sum: u128,
+    /// The number of memory samples taken.
+    memory_samples: u64,
+    /// Total CPU time of finished containers, in nanoseconds.
+    cpu_total_offset: u64,
+    /// User-mode CPU time of finished containers, in nanoseconds.
+    cpu_user_offset: u64,
+    /// System-mode CPU time of finished containers, in nanoseconds.
+    cpu_system_offset: u64,
+    /// The last observed cumulative total CPU time of the current container,
+    /// in nanoseconds.
+    cpu_total_last: u64,
+    /// The last observed cumulative user-mode CPU time of the current
+    /// container, in nanoseconds.
+    cpu_user_last: u64,
+    /// The last observed cumulative system-mode CPU time of the current
+    /// container, in nanoseconds.
+    cpu_system_last: u64,
+}
+
+impl UsageFold {
+    /// Folds a container statistics sample and returns the cumulative usage
+    /// snapshot.
+    fn observe(&mut self, stats: &bollard::secret::ContainerStatsResponse) -> TaskResourceUsage {
+        if let Some(usage) = stats.memory_stats.as_ref().and_then(|m| m.usage) {
+            self.max_memory = Some(self.max_memory.unwrap_or(0).max(usage));
+            self.memory_sum += usage as u128;
+            self.memory_samples += 1;
+        }
+
+        if let Some(cpu) = stats.cpu_stats.as_ref().and_then(|c| c.cpu_usage.as_ref()) {
+            if let Some(total) = cpu.total_usage {
+                self.cpu_total_last = total;
+            }
+            if let Some(user) = cpu.usage_in_usermode {
+                self.cpu_user_last = user;
+            }
+            if let Some(system) = cpu.usage_in_kernelmode {
+                self.cpu_system_last = system;
+            }
+        }
+
+        self.snapshot()
+    }
+
+    /// Folds the current container's cumulative CPU counters into the offsets
+    /// when the container finishes.
+    fn finish_container(&mut self) {
+        self.cpu_total_offset += self.cpu_total_last;
+        self.cpu_user_offset += self.cpu_user_last;
+        self.cpu_system_offset += self.cpu_system_last;
+        self.cpu_total_last = 0;
+        self.cpu_user_last = 0;
+        self.cpu_system_last = 0;
+    }
+
+    /// Produces the cumulative usage snapshot.
+    // `TaskResourceUsage` is `#[non_exhaustive]`, which prohibits both struct
+    // literal construction and functional update syntax from another crate.
+    #[allow(clippy::field_reassign_with_default)]
+    fn snapshot(&self) -> TaskResourceUsage {
+        /// Converts cumulative nanoseconds to milliseconds, mapping zero to
+        /// "not observed".
+        fn ns_to_ms(ns: u64) -> Option<i64> {
+            (ns > 0).then_some((ns / 1_000_000) as i64)
+        }
+
+        let mut usage = TaskResourceUsage::default();
+        usage.max_memory = self.max_memory;
+        usage.avg_memory = (self.memory_samples > 0)
+            .then(|| (self.memory_sum / self.memory_samples as u128) as u64);
+        usage.cpu_time_ms = ns_to_ms(self.cpu_total_offset + self.cpu_total_last);
+        usage.user_cpu_time_ms = ns_to_ms(self.cpu_user_offset + self.cpu_user_last);
+        usage.system_cpu_time_ms = ns_to_ms(self.cpu_system_offset + self.cpu_system_last);
+        usage
     }
 }
 
@@ -428,6 +518,7 @@ impl crate::Backend for Backend {
         let client = self.client.clone();
         let run_cleanup = self.config.cleanup();
         let events_config = self.config.events();
+        let resource_usage_interval = self.config.resource_usage_interval();
         let use_service = self.resources.use_service();
         let events = self.events.clone();
         let names = self.names.clone();
@@ -441,6 +532,10 @@ impl crate::Backend for Backend {
                 // SAFETY: the name generator should _never_ run out of entries.
                 generator.next().unwrap()
             });
+
+            // Accumulates the task's resource usage across every execution's
+            // sampled container statistics.
+            let usage = Arc::new(Mutex::new(UsageFold::default()));
 
             let run = async {
                 let tempdir = TempDir::new().context("failed to create temporary directory for mounts")?;
@@ -589,7 +684,53 @@ impl crate::Backend for Backend {
 
                         info!("created container `{name}` (task `{task_name}`)", name = container.name());
 
-                        select! {
+                        // Sample the container's resource usage while it
+                        // runs, when sampling is configured and there is an
+                        // events channel to report on.
+                        let sampler = match (resource_usage_interval, events.clone()) {
+                            (Some(secs), Some(events)) => {
+                                let container = container.clone();
+                                let usage = usage.clone();
+                                Some(tokio::spawn(async move {
+                                    let mut interval = tokio::time::interval(
+                                        std::time::Duration::from_secs(secs),
+                                    );
+                                    interval.set_missed_tick_behavior(
+                                        tokio::time::MissedTickBehavior::Delay,
+                                    );
+                                    // The first tick completes immediately;
+                                    // skip it so sampling starts one interval
+                                    // into the container's run.
+                                    interval.tick().await;
+                                    loop {
+                                        interval.tick().await;
+                                        match container.stats().await {
+                                            Ok(Some(stats)) => {
+                                                let snapshot =
+                                                    usage.lock().unwrap().observe(&stats);
+                                                let _ = events.send(Event::TaskResourceUsage {
+                                                    id: task_id,
+                                                    usage: snapshot,
+                                                });
+                                            }
+                                            // The container has already
+                                            // exited; stop sampling.
+                                            Ok(None) => break,
+                                            Err(e) => {
+                                                debug!(
+                                                    "failed to sample resource usage for \
+                                                     container `{name}`: {e:#}",
+                                                    name = container.name()
+                                                );
+                                            }
+                                        }
+                                    }
+                                }))
+                            }
+                            _ => None,
+                        };
+
+                        let result = select! {
                             // Always poll the cancellation token first
                             biased;
                             _ = task_token.cancelled() => {
@@ -601,7 +742,16 @@ impl crate::Backend for Backend {
                             res = container.run(&task_name, options) => {
                                 (res.context("failed to run Docker container").map_err(TaskRunError::Other), Cleanup::Container(container))
                             }
+                        };
+
+                        // Stop sampling and fold the finished container's
+                        // cumulative CPU counters into the task's offsets.
+                        if let Some(sampler) = sampler {
+                            sampler.abort();
                         }
+                        usage.lock().unwrap().finish_container();
+
+                        result
                     };
 
                     if run_cleanup {
@@ -936,5 +1086,84 @@ mod test {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod usage_tests {
+    use bollard::secret::ContainerCpuStats;
+    use bollard::secret::ContainerCpuUsage;
+    use bollard::secret::ContainerMemoryStats;
+    use bollard::secret::ContainerStatsResponse;
+
+    use super::UsageFold;
+
+    /// Builds a stats sample with the given memory usage (bytes) and
+    /// cumulative CPU counters (nanoseconds).
+    fn sample(memory: u64, total: u64, user: u64, system: u64) -> ContainerStatsResponse {
+        ContainerStatsResponse {
+            memory_stats: Some(ContainerMemoryStats {
+                usage: Some(memory),
+                ..Default::default()
+            }),
+            cpu_stats: Some(ContainerCpuStats {
+                cpu_usage: Some(ContainerCpuUsage {
+                    total_usage: Some(total),
+                    usage_in_usermode: Some(user),
+                    usage_in_kernelmode: Some(system),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn usage_folds_memory_and_cumulative_cpu() {
+        let mut fold = UsageFold::default();
+
+        let usage = fold.observe(&sample(100, 1_000_000, 600_000, 400_000));
+        assert_eq!(usage.max_memory, Some(100));
+        assert_eq!(usage.avg_memory, Some(100));
+        assert_eq!(usage.cpu_time_ms, Some(1));
+
+        // Memory folds max and average; CPU counters are cumulative, so the
+        // latest sample wins.
+        let usage = fold.observe(&sample(300, 4_000_000, 3_000_000, 1_000_000));
+        assert_eq!(usage.max_memory, Some(300));
+        assert_eq!(usage.avg_memory, Some(200));
+        assert_eq!(usage.cpu_time_ms, Some(4));
+        assert_eq!(usage.user_cpu_time_ms, Some(3));
+        assert_eq!(usage.system_cpu_time_ms, Some(1));
+
+        // A lower memory sample lowers the average but not the maximum.
+        let usage = fold.observe(&sample(200, 5_000_000, 3_500_000, 1_500_000));
+        assert_eq!(usage.max_memory, Some(300));
+        assert_eq!(usage.avg_memory, Some(200));
+        assert_eq!(usage.cpu_time_ms, Some(5));
+    }
+
+    #[test]
+    fn usage_accumulates_cpu_across_containers() {
+        let mut fold = UsageFold::default();
+
+        // First execution's container consumes 5ms of CPU.
+        fold.observe(&sample(100, 5_000_000, 4_000_000, 1_000_000));
+        fold.finish_container();
+
+        // The second execution's container restarts its cumulative counters;
+        // the fold must sum across containers rather than regress.
+        let usage = fold.observe(&sample(200, 2_000_000, 1_000_000, 1_000_000));
+        assert_eq!(usage.cpu_time_ms, Some(7));
+        assert_eq!(usage.user_cpu_time_ms, Some(5));
+        assert_eq!(usage.system_cpu_time_ms, Some(2));
+        assert_eq!(usage.max_memory, Some(200));
+    }
+
+    #[test]
+    fn empty_folds_produce_empty_snapshots() {
+        let fold = UsageFold::default();
+        assert!(fold.snapshot().is_empty());
     }
 }

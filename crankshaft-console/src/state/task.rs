@@ -14,6 +14,7 @@ use crankshaft_monitor::proto::TaskCreatedEvent;
 use crankshaft_monitor::proto::TaskEvents;
 use crankshaft_monitor::proto::TaskFailedEvent;
 use crankshaft_monitor::proto::TaskPreemptedEvent;
+use crankshaft_monitor::proto::TaskResourceUsageEvent;
 use crankshaft_monitor::proto::TaskStartedEvent;
 use crankshaft_monitor::proto::TaskStderrEvent;
 use crankshaft_monitor::proto::TaskStdoutEvent;
@@ -46,7 +47,8 @@ impl TuiTasksState {
             | Some(EventKind::Completed(TaskCompletedEvent { id, .. }))
             | Some(EventKind::Failed(TaskFailedEvent { id, .. }))
             | Some(EventKind::Canceled(TaskCanceledEvent { id, .. }))
-            | Some(EventKind::Preempted(TaskPreemptedEvent { id, .. })) => *id,
+            | Some(EventKind::Preempted(TaskPreemptedEvent { id, .. }))
+            | Some(EventKind::ResourceUsage(TaskResourceUsageEvent { id, .. })) => *id,
             None => return,
         };
 
@@ -199,7 +201,8 @@ impl Task {
             | Some(EventKind::ContainerCreated(_))
             | Some(EventKind::ContainerExited(_))
             | Some(EventKind::Stdout(_))
-            | Some(EventKind::Stderr(_)) => "Running",
+            | Some(EventKind::Stderr(_))
+            | Some(EventKind::ResourceUsage(_)) => "Running",
             Some(EventKind::Completed(_)) => "Completed",
             Some(EventKind::Failed(_) | EventKind::ImagePullFailed(_)) => "Failed",
             Some(EventKind::Canceled(_)) => "Canceled",
@@ -270,6 +273,9 @@ impl Task {
             }
             Some(EventKind::Preempted(_)) => {
                 format!("task `{name}` has been preempted", name = self.name)
+            }
+            Some(EventKind::ResourceUsage(_)) => {
+                format!("task `{name}` reported resource usage", name = self.name)
             }
             None => Default::default(),
         }

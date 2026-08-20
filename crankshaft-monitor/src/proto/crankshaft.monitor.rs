@@ -41,7 +41,7 @@ pub struct Event {
     pub timestamp: ::core::option::Option<::prost_types::Timestamp>,
     #[prost(
         oneof = "event::EventKind",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"
     )]
     pub event_kind: ::core::option::Option<event::EventKind>,
 }
@@ -89,6 +89,9 @@ pub mod event {
         /// The image pull finished event.
         #[prost(message, tag = "14")]
         ImagePullFinished(super::ImagePullFinishedEvent),
+        /// The task resource usage event.
+        #[prost(message, tag = "15")]
+        ResourceUsage(super::TaskResourceUsageEvent),
     }
 }
 /// Represents an exit status.
@@ -271,6 +274,36 @@ pub struct ImagePullFinishedEvent {
     /// The name of the image that was pulled.
     #[prost(string, tag = "2")]
     pub name: ::prost::alloc::string::String,
+}
+/// Represents a task resource usage event.
+///
+/// Each emission is a cumulative snapshot of the task's resource utilization;
+/// the last snapshot received for a task is authoritative. Fields that were
+/// not observed by the backend are unset.
+#[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TaskResourceUsageEvent {
+    /// The id of the task.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// The maximum resident memory observed, in bytes.
+    #[prost(uint64, optional, tag = "2")]
+    pub max_memory: ::core::option::Option<u64>,
+    /// The average resident memory observed, in bytes.
+    #[prost(uint64, optional, tag = "3")]
+    pub avg_memory: ::core::option::Option<u64>,
+    /// The total CPU time consumed, in milliseconds.
+    #[prost(int64, optional, tag = "4")]
+    pub cpu_time_ms: ::core::option::Option<i64>,
+    /// The user-mode CPU time consumed, in milliseconds.
+    #[prost(int64, optional, tag = "5")]
+    pub user_cpu_time_ms: ::core::option::Option<i64>,
+    /// The system-mode CPU time consumed, in milliseconds.
+    #[prost(int64, optional, tag = "6")]
+    pub system_cpu_time_ms: ::core::option::Option<i64>,
+    /// The disk space used, in bytes.
+    #[prost(uint64, optional, tag = "7")]
+    pub disk_used: ::core::option::Option<u64>,
 }
 /// Generated client implementations.
 #[allow(clippy::all, missing_docs, clippy::missing_docs_in_private_items)]

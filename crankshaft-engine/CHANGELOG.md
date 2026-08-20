@@ -8,6 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* The Docker backend can now sample a running container's resource usage and
+  emit `TaskResourceUsage` events, gated by the new `resource-usage-interval`
+  configuration; usage folds across a task's executions (memory maximum and
+  average, cumulative CPU time) ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+
 ### Changed
 
 * `Execution`s can now specify multiple container images to act as fallbacks ([#83](https://github.com/stjude-rust-labs/crankshaft/pull/83)).

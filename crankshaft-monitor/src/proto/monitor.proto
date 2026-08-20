@@ -69,6 +69,8 @@ message Event {
     ImagePullFailedEvent image_pull_failed = 13;
     // The image pull finished event.
     ImagePullFinishedEvent image_pull_finished = 14;
+    // The task resource usage event.
+    TaskResourceUsageEvent resource_usage = 15;
   }
 }
 
@@ -202,4 +204,26 @@ message ImagePullFinishedEvent {
   uint64 id = 1;
   // The name of the image that was pulled.
   string name = 2;
+}
+
+// Represents a task resource usage event.
+//
+// Each emission is a cumulative snapshot of the task's resource utilization;
+// the last snapshot received for a task is authoritative. Fields that were
+// not observed by the backend are unset.
+message TaskResourceUsageEvent {
+  // The id of the task.
+  uint64 id = 1;
+  // The maximum resident memory observed, in bytes.
+  optional uint64 max_memory = 2;
+  // The average resident memory observed, in bytes.
+  optional uint64 avg_memory = 3;
+  // The total CPU time consumed, in milliseconds.
+  optional int64 cpu_time_ms = 4;
+  // The user-mode CPU time consumed, in milliseconds.
+  optional int64 user_cpu_time_ms = 5;
+  // The system-mode CPU time consumed, in milliseconds.
+  optional int64 system_cpu_time_ms = 6;
+  // The disk space used, in bytes.
+  optional uint64 disk_used = 7;
 }

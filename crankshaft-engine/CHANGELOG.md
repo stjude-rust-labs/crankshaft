@@ -13,11 +13,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 * The Docker backend can now sample a running container's resource usage and
   emit `TaskResourceUsage` events, gated by the new `resource-usage-interval`
   configuration; usage folds across a task's executions (memory maximum and
-  average, cumulative CPU time) ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  average, cumulative CPU time) ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 * The TES backend can now read task resource usage from the documented
   `TaskLog.metadata` keys and emit `TaskResourceUsage` events, gated by the
   new `resource-usage-metadata` configuration; when enabled, tasks are polled
-  with the `BASIC` view ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  with the `BASIC` view ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 
 ### Changed
 

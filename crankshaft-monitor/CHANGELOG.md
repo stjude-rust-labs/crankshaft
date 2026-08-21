@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Added the `TaskResourceUsageEvent` protobuf message and forwarding of the
-  `TaskResourceUsage` event ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  `TaskResourceUsage` event ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 * Added support for the `ImagePull{Started,Failed,Finished}` events ([#82](https://github.com/stjude-rust-labs/crankshaft/pull/82)).
 
 ## 0.2.0 - 02-11-2026

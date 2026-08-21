@@ -11,7 +11,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 #### Added
 
 * Added `Container::stats` for sampling a container's current resource usage
-  statistics ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  statistics ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 
 ### Added
 

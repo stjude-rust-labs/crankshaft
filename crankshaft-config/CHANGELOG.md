@@ -12,15 +12,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 * Added the `resource-usage-interval` option to the Docker backend
   configuration, which enables sampling a running container's resource usage
-  at the given interval in seconds ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  at the given interval in seconds ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 * Added the `resource-usage-metadata` option to the TES backend
   configuration, which enables reading task resource usage from the
-  documented `TaskLog.metadata` keys ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  documented `TaskLog.metadata` keys ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 
 #### Changed
 
 * `tes::Config::into_parts` now also returns the `resource-usage-metadata`
-  flag ([#XX](https://github.com/stjude-rust-labs/crankshaft/pull/XX)).
+  flag ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 
 ## 0.6.0 - 11-24-2025
 

@@ -154,6 +154,9 @@ struct UsageFold {
     /// The maximum memory usage observed across all samples, in bytes.
     max_memory: Option<u64>,
     /// The sum of sampled memory usage values, in bytes.
+    ///
+    /// The reported average is the arithmetic mean of the polled samples; it
+    /// is not time-weighted, so missed or delayed sampling ticks skew it.
     memory_sum: u128,
     /// The number of memory samples taken.
     memory_samples: u64,
@@ -420,6 +423,21 @@ impl Backend {
             }
         };
 
+        // Resource usage sampling applies only to local container execution;
+        // warn once (rather than silently ignore) when it is configured for a
+        // Docker Swarm service
+        if resources.use_service()
+            && config
+                .resource_usage_interval()
+                .filter(|i| *i > 0)
+                .is_some()
+        {
+            warn!(
+                "`resource-usage-interval` is not supported for Docker Swarm services; resource \
+                 usage will not be sampled"
+            );
+        }
+
         Ok(Self {
             client,
             config,
@@ -540,16 +558,6 @@ impl crate::Backend for Backend {
         // panics on a zero duration
         let resource_usage_interval = self.config.resource_usage_interval().filter(|i| *i > 0);
         let use_service = self.resources.use_service();
-
-        // Resource usage sampling applies only to local container execution;
-        // warn (rather than silently ignore) when it is configured for a
-        // Docker Swarm service
-        if use_service && resource_usage_interval.is_some() {
-            warn!(
-                "`resource-usage-interval` is not supported for Docker Swarm services; resource \
-                 usage will not be sampled"
-            );
-        }
         let events = self.events.clone();
         let names = self.names.clone();
 

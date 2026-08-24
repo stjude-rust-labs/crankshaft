@@ -35,6 +35,13 @@ pub struct TaskResourceUsage {
     /// The maximum resident memory observed, in bytes.
     pub max_memory: Option<u64>,
     /// The average resident memory observed, in bytes.
+    ///
+    /// The averaging method is producer-defined and averages are therefore
+    /// not comparable across backends: sampling backends typically report an
+    /// arithmetic mean over polling samples (which is not time-weighted and
+    /// may be skewed by missed or delayed ticks), while backends that forward
+    /// externally reported values (e.g. a TES server's task log metadata)
+    /// inherit that source's weighting.
     pub avg_memory: Option<u64>,
     /// The total CPU time consumed, in milliseconds.
     pub cpu_time_ms: Option<i64>,

@@ -42,8 +42,8 @@ struct MonitoredTaskState {
 /// expected to use the following keys, with values as JSON numbers or numeric
 /// strings:
 ///
-/// * `peak_rss_bytes` — maximum resident memory, in bytes
-/// * `avg_rss_bytes` — average resident memory, in bytes
+/// * `peak_memory_bytes` — peak sampled memory, in bytes
+/// * `avg_memory_bytes` — average sampled memory, in bytes
 /// * `cpu_time_ms` — total CPU time, in milliseconds
 /// * `user_cpu_time_ms` — user-mode CPU time, in milliseconds
 /// * `system_cpu_time_ms` — system-mode CPU time, in milliseconds
@@ -71,8 +71,8 @@ fn parse_resource_usage_metadata(metadata: &serde_json::Value) -> TaskResourceUs
     }
 
     let mut usage = TaskResourceUsage::default();
-    usage.max_memory = get_u64(metadata, "peak_rss_bytes");
-    usage.avg_memory = get_u64(metadata, "avg_rss_bytes");
+    usage.max_memory = get_u64(metadata, "peak_memory_bytes");
+    usage.avg_memory = get_u64(metadata, "avg_memory_bytes");
     usage.cpu_time_ms = get_i64(metadata, "cpu_time_ms");
     usage.user_cpu_time_ms = get_i64(metadata, "user_cpu_time_ms");
     usage.system_cpu_time_ms = get_i64(metadata, "system_cpu_time_ms");
@@ -389,8 +389,8 @@ mod tests {
     #[test]
     fn metadata_parses_numbers_and_numeric_strings() {
         let metadata = serde_json::json!({
-            "peak_rss_bytes": 1073741824u64,
-            "avg_rss_bytes": "536870912",
+            "peak_memory_bytes": 1073741824u64,
+            "avg_memory_bytes": "536870912",
             "cpu_time_ms": "12500 ",
             "user_cpu_time_ms": 12000,
             "system_cpu_time_ms": 500,
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn unparseable_and_missing_metadata_is_ignored() {
         let metadata = serde_json::json!({
-            "peak_rss_bytes": "not a number",
+            "peak_memory_bytes": "not a number",
             "cpu_time_ms": true,
         });
 

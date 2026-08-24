@@ -32,8 +32,8 @@ pub struct Config {
     /// `MINIMAL`, which omits logs) and the following metadata keys, when
     /// present, are reported as task resource usage events:
     ///
-    /// * `peak_rss_bytes` — maximum resident memory, in bytes
-    /// * `avg_rss_bytes` — average resident memory, in bytes
+    /// * `peak_memory_bytes` — peak sampled memory, in bytes
+    /// * `avg_memory_bytes` — average sampled memory, in bytes
     /// * `cpu_time_ms` — total CPU time, in milliseconds
     /// * `user_cpu_time_ms` — user-mode CPU time, in milliseconds
     /// * `system_cpu_time_ms` — system-mode CPU time, in milliseconds

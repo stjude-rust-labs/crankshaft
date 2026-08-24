@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+* Event channels are now passed to `run` instead of at the time of backend
+  construction ([#85](https://github.com/stjude-rust-labs/crankshaft/pull/85)).
 * `Execution`s can now specify multiple container images to act as fallbacks ([#83](https://github.com/stjude-rust-labs/crankshaft/pull/83)).
 * `Backend::run()` now returns a collection of `ExecutionResult`s, rather than `ExitStatus` ([#83](https://github.com/stjude-rust-labs/crankshaft/pull/83)).
 

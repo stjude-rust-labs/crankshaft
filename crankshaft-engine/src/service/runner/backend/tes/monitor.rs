@@ -32,6 +32,10 @@ pub const CRANKSHAFT_GROUP_TAG_NAME: &str = "crankshaft-task-group";
 struct Task {
     /// The name of the task.
     name: String,
+    /// The TES id of the task.
+    ///
+    /// This is `None` until the task is created on the TES server.
+    tes_id: Option<String>,
     /// The events sender for the task.
     events: Option<broadcast::Sender<Event>>,
     /// The sender for the "completed" notification.
@@ -122,10 +126,10 @@ impl TaskMonitor {
             Task {
                 name,
                 events,
+                tes_id: None,
                 completed,
             },
         );
-
         state.tag.clone()
     }
 
@@ -134,16 +138,22 @@ impl TaskMonitor {
     /// This is called after the TES task has been created.
     pub async fn associate_task_id(&self, id: TaskId, tes_id: String) {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
-        state.ids.insert(tes_id, id);
+        if let Some(task) = state.tasks.get_mut(&id) {
+            task.tes_id = Some(tes_id.clone());
+            state.ids.insert(tes_id, id);
+        }
     }
 
     /// Removes a task from the monitor.
-    pub async fn remove_task(&self, tes_id: &str) {
+    pub async fn remove_task(&self, id: u64) {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
-        if let Some(id) = state.ids.get(tes_id).copied() {
-            state.tasks.remove(&id);
-            state.running.remove(&id);
+        if let Some(task) = state.tasks.remove(&id)
+            && let Some(tes_id) = task.tes_id
+        {
+            state.ids.remove(&tes_id);
         }
+
+        state.running.remove(&id);
     }
 
     /// Updates the tasks by querying the TES server for the current task state.

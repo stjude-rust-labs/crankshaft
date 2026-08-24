@@ -100,6 +100,9 @@ struct TaskMonitorState {
     ids: HashMap<String, TaskId>,
     /// Set of known running tasks
     running: HashSet<TaskId>,
+    /// The last resource usage snapshot sent for each task, used to avoid
+    /// resending identical snapshots on every poll.
+    usage: HashMap<TaskId, TaskResourceUsage>,
 }
 
 /// Represents a TES task monitor.
@@ -183,9 +186,10 @@ impl TaskMonitor {
     /// Removes a task from the monitor.
     pub async fn remove_task(&self, tes_id: &str) {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
-        if let Some(id) = state.ids.get(tes_id).copied() {
+        if let Some(id) = state.ids.remove(tes_id) {
             state.tasks.remove(&id);
             state.running.remove(&id);
+            state.usage.remove(&id);
         }
     }
 
@@ -282,10 +286,15 @@ impl TaskMonitor {
 
                         // Report any resource usage the server included; each
                         // report is a cumulative snapshot and the last one
-                        // received is authoritative.
+                        // received is authoritative. Only emit for tasks that
+                        // are still monitored, and only when the snapshot
+                        // changed since the last emission.
                         if let Some(usage) = usage
                             && let Some(id) = state.ids.get(&task_id).copied()
+                            && state.tasks.contains_key(&id)
+                            && state.usage.get(&id) != Some(&usage)
                         {
+                            state.usage.insert(id, usage.clone());
                             send_event!(
                                 backend_state.events,
                                 Event::TaskResourceUsage { id, usage }
@@ -321,6 +330,7 @@ impl TaskMonitor {
                                 // The task has completed, send the completion message
                                 if let Some(id) = state.ids.remove(&task.id) {
                                     state.running.remove(&id);
+                                    state.usage.remove(&id);
                                     if let Some(task) = state.tasks.remove(&id) {
                                         let _ = task.completed.send(Ok(()));
                                     }

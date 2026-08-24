@@ -48,10 +48,12 @@ pub struct Config {
     /// The interval, in seconds, at which to sample a running container's
     /// resource usage and emit task resource usage events.
     ///
-    /// When unset, resource usage is not sampled and no resource usage events
-    /// are emitted.
+    /// When unset or zero, resource usage is not sampled and no resource
+    /// usage events are emitted.
+    ///
+    /// Sampling applies only to local container execution; it is not
+    /// supported for Docker Swarm services.
     #[serde(default)]
-    #[builder(into)]
     resource_usage_interval: Option<u64>,
 }
 

@@ -1,4 +1,5 @@
 //! Renders the tasks view.
+use crankshaft_monitor::proto::TaskResourceUsageEvent;
 use ratatui::Frame;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
@@ -29,6 +30,7 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
         "Name",
         "TES ID",
         "Status",
+        "Usage",
         "Last Update",
         "Message",
     ]
@@ -53,6 +55,7 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
             Cell::from(task.name()),
             Cell::from(task.tes_id().unwrap_or_default()),
             Cell::from(task.status()),
+            Cell::from(format_usage(task.usage())),
             Cell::from(task.timestamp().to_string()),
             Cell::from(task.message()),
         ];
@@ -70,6 +73,7 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
             Constraint::Max(20),
             Constraint::Max(20),
             Constraint::Max(10),
+            Constraint::Max(24),
             Constraint::Max(30),
             Constraint::Fill(1),
         ],
@@ -79,4 +83,23 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
     .row_highlight_style(Style::default().bg(Color::DarkGray));
 
     frame.render_stateful_widget(table, area[0], &mut table_state);
+}
+
+/// Formats a task's latest resource usage for display.
+fn format_usage(usage: Option<&TaskResourceUsageEvent>) -> String {
+    let Some(usage) = usage else {
+        return String::new();
+    };
+
+    let mut parts = Vec::new();
+    if let Some(max) = usage.max_memory {
+        parts.push(format!(
+            "peak {:.1} GiB",
+            max as f64 / (1024.0 * 1024.0 * 1024.0)
+        ));
+    }
+    if let Some(cpu) = usage.cpu_time_ms {
+        parts.push(format!("cpu {:.1}s", cpu as f64 / 1000.0));
+    }
+    parts.join(", ")
 }

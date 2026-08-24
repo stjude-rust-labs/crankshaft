@@ -227,6 +227,23 @@ impl MonitorService {
                             let event: Event = event.into_protobuf();
                             let mut state = state.write().await;
                             if let Some(task) = state.tasks.get_mut(&id) {
+                                // Resource usage events are cumulative
+                                // snapshots where only the latest is
+                                // authoritative; replace the previously
+                                // retained snapshot instead of growing the
+                                // task's history once per sampling interval
+                                if matches!(
+                                    event.event_kind,
+                                    Some(EventKind::ResourceUsage(_))
+                                ) {
+                                    task.events.retain(|e| {
+                                        !matches!(
+                                            e.event_kind,
+                                            Some(EventKind::ResourceUsage(_))
+                                        )
+                                    });
+                                }
+
                                 task.events.push(event);
                             }
                         }

@@ -729,11 +729,9 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
 #[cfg(target_os = "linux")]
 mod test {
     use std::fs;
-    use std::io::Write;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
 
     use anyhow::Context;
+    use futures::future::join_all;
     use nix::unistd::Gid;
     use tempfile::NamedTempFile;
     use url::Url;
@@ -745,33 +743,13 @@ mod test {
     use crate::task::Output;
     use crate::task::output::Type;
 
-    async fn redirect_stdio(
-        mut event_rx: broadcast::Receiver<Event>,
-        image_pull_fails: Arc<AtomicUsize>,
-    ) -> anyhow::Result<()> {
-        while let Ok(event) = event_rx.recv().await {
-            match event {
-                Event::TaskStdout { message, .. } => {
-                    std::io::stdout()
-                        .write_all(&message)
-                        .context("failed to write stdout")?;
-                }
-                Event::TaskStderr { message, .. } => {
-                    std::io::stderr()
-                        .write_all(&message)
-                        .context("failed to write stderr")?;
-                }
-                Event::TaskFailed { message, .. } => {
-                    eprintln!("{message}");
-                }
-                Event::ImagePullFailed { .. } => {
-                    image_pull_fails.fetch_add(1, Ordering::Relaxed);
-                }
-                _ => {}
-            }
+    async fn events(mut rx: broadcast::Receiver<Event>) -> Vec<Event> {
+        let mut events = Vec::new();
+        while let Ok(event) = rx.recv().await {
+            events.push(event);
         }
 
-        Ok(())
+        events
     }
 
     async fn create_backend(config: Config) -> Result<Backend> {
@@ -796,10 +774,6 @@ mod test {
             .context("failed to create temporary file")?
             .into_temp_path();
 
-        let image_pull_fails = Arc::new(AtomicUsize::new(0));
-        let (event_tx, event_rx) = broadcast::channel(1024);
-        tokio::task::spawn(redirect_stdio(event_rx, image_pull_fails.clone()));
-
         // Run the task
         let results = backend
             .run(
@@ -823,7 +797,7 @@ mod test {
                             .build(),
                     ])
                     .build(),
-                Some(event_tx),
+                None,
                 CancellationToken::new(),
             )
             .context("failed to run task")?
@@ -838,6 +812,7 @@ mod test {
             stdout.contains(&gid.to_string()),
             "task stdout of `{stdout}` did not contain the expected output"
         );
+
         Ok(())
     }
 
@@ -849,9 +824,8 @@ mod test {
             .context("failed to create temporary file")?
             .into_temp_path();
 
-        let image_pull_fails = Arc::new(AtomicUsize::new(0));
-        let (event_tx, event_rx) = broadcast::channel(1024);
-        tokio::task::spawn(redirect_stdio(event_rx, image_pull_fails.clone()));
+        let (events_tx, events_rx) = broadcast::channel(1024);
+        let events = tokio::task::spawn(events(events_rx));
 
         let results = backend
             .run(
@@ -882,21 +856,152 @@ mod test {
                             .build(),
                     ])
                     .build(),
-                Some(event_tx),
+                Some(events_tx),
                 CancellationToken::new(),
             )
             .context("failed to run task")?
             .await
             .context("task execution failed")?;
 
+        let events = events.await.unwrap();
+
         assert!(results.first().status.success(), "container failed");
-        assert_eq!(image_pull_fails.load(Ordering::Relaxed), 2);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| matches!(e, Event::ImagePullFailed { .. }))
+                .count(),
+            2
+        );
 
         // Assert that the command was run
         let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
         assert!(
             stdout.contains("Hello, world!"),
             "task stdout of `{stdout}` did not contain the expected output"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn concurrent_task_events() -> anyhow::Result<()> {
+        let backend = Arc::new(create_backend(Config::default()).await?);
+
+        let (events1_tx, events1_rx) = broadcast::channel(1024);
+        let events1 = tokio::task::spawn(events(events1_rx));
+
+        let (events2_tx, events2_rx) = broadcast::channel(1024);
+        let events2 = tokio::task::spawn(events(events2_rx));
+
+        // Spawn the first task
+        let backend1 = backend.clone();
+        let task1 = tokio::spawn(async move {
+            backend1
+                .run(
+                    Task::builder()
+                        .executions(NonEmpty::new(
+                            Execution::builder()
+                                .images(["ubuntu:latest"])?
+                                .program("/bin/sh")
+                                .args([String::from("-c"), String::from("echo task1")])
+                                .build(),
+                        ))
+                        .build(),
+                    Some(events1_tx),
+                    CancellationToken::new(),
+                )
+                .expect("failed to run task")
+                .await?;
+
+            anyhow::Ok(())
+        });
+
+        // Spawn the second task
+        let task2 = tokio::spawn(async move {
+            backend
+                .run(
+                    Task::builder()
+                        .executions(NonEmpty::new(
+                            Execution::builder()
+                                .images(["ubuntu:latest"])?
+                                .program("/bin/sh")
+                                .args([String::from("-c"), String::from("echo task2")])
+                                .build(),
+                        ))
+                        .build(),
+                    Some(events2_tx),
+                    CancellationToken::new(),
+                )
+                .expect("failed to run task")
+                .await?;
+
+            anyhow::Ok(())
+        });
+
+        // Wait for the tasks to complete and check for errors
+        for result in join_all([task1, task2]).await {
+            result
+                .context("failed to join task")?
+                .context("task failed")?;
+        }
+
+        let events1 = events1
+            .await
+            .context("failed to wait for the first task's events")?;
+        let events2 = events2
+            .await
+            .context("failed to wait for the first task's events")?;
+
+        // Ensure there is one started event per events list
+        assert_eq!(
+            events1
+                .iter()
+                .filter(|e| matches!(e, Event::TaskStarted { .. }))
+                .count(),
+            1
+        );
+
+        assert_eq!(
+            events2
+                .iter()
+                .filter(|e| matches!(e, Event::TaskStarted { .. }))
+                .count(),
+            1
+        );
+
+        // Ensure there is one completed event per events list
+        assert_eq!(
+            events1
+                .iter()
+                .filter(|e| matches!(e, Event::TaskCompleted { .. }))
+                .count(),
+            1
+        );
+
+        assert_eq!(
+            events2
+                .iter()
+                .filter(|e| matches!(e, Event::TaskCompleted { .. }))
+                .count(),
+            1
+        );
+
+        // Ensure there is one a stdout event per events list
+        assert_eq!(
+            events1
+                .iter()
+                .filter(|e| matches!(e, Event::TaskStdout { message, .. } if message.as_ref() == b"task1\n"))
+                .count(),
+            1
+        );
+
+        assert_eq!(
+            events2
+                .iter()
+                .filter(|e| matches!(e, Event::TaskStdout { message, .. } if message.as_ref() == b"task2\n"))
+                .count(),
+            1
         );
 
         Ok(())

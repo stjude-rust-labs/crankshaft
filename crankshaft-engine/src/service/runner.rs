@@ -59,7 +59,6 @@ impl Runner {
         config: Kind,
         max_tasks: usize,
         defaults: Option<Defaults>,
-        events: Option<broadcast::Sender<Event>>,
     ) -> Result<Self> {
         let names = Arc::new(Mutex::new(GeneratorIterator::new(
             UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
@@ -68,15 +67,14 @@ impl Runner {
 
         let backend = match config {
             Kind::Docker(config) => {
-                let backend =
-                    docker::Backend::initialize_default_with(config, names, events).await?;
+                let backend = docker::Backend::initialize_default_with(config, names).await?;
                 Arc::new(backend) as Arc<dyn Backend>
             }
             Kind::Generic(config) => {
-                let backend = generic::Backend::initialize(config, defaults, names, events).await?;
+                let backend = generic::Backend::initialize(config, defaults, names).await?;
                 Arc::new(backend)
             }
-            Kind::TES(config) => Arc::new(tes::Backend::initialize(config, names, events).await),
+            Kind::TES(config) => Arc::new(tes::Backend::initialize(config, names).await),
         };
 
         Ok(Self {
@@ -87,12 +85,17 @@ impl Runner {
 
     /// Spawns a task to be executed by the backend.
     ///
-    /// The `started` callback is called for each execution of the task that has
-    /// started; the parameter is the index of the execution from the task's
-    /// executions collection.
+    /// The optional `events` parameter is used to broadcast Crankshaft events
+    /// for the task's execution. Events are not broadcast when passed a `None`.
     ///
-    /// The `cancellation` token can be used to gracefully cancel the task.
-    pub async fn spawn(&self, task: Task, token: CancellationToken) -> anyhow::Result<TaskHandle> {
+    /// The `token` parameter is a cancellation token that can be used to cancel
+    /// the task's execution.
+    pub async fn spawn(
+        &self,
+        task: Task,
+        events: Option<broadcast::Sender<Event>>,
+        token: CancellationToken,
+    ) -> anyhow::Result<TaskHandle> {
         trace!(backend = ?self.backend, task = ?task);
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -101,7 +104,7 @@ impl Runner {
 
         tokio::spawn(async move {
             let _permit = lock.acquire().await?;
-            let result = backend.clone().run(task, token)?.await;
+            let result = backend.clone().run(task, events, token)?.await;
 
             // NOTE: if the send does not succeed, that is almost certainly
             // because the receiver was dropped. That is a relatively standard

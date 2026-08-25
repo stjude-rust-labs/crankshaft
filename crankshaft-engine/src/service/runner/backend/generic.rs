@@ -45,8 +45,6 @@ pub struct Backend {
     config: Config,
     /// The execution defaults.
     defaults: Option<Defaults>,
-    /// The events sender for the backend.
-    events: Option<broadcast::Sender<Event>>,
     /// The unique name generator for tasks without names.
     names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 }
@@ -58,7 +56,6 @@ impl Backend {
         config: Config,
         defaults: Option<Defaults>,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-        events: Option<broadcast::Sender<Event>>,
     ) -> Result<Self> {
         // TODO(clay): this could be "taken" instead to avoid the clone.
         let driver = Driver::initialize(config.driver().clone())
@@ -69,7 +66,6 @@ impl Backend {
             driver,
             config,
             defaults,
-            events,
             names,
         })
     }
@@ -116,6 +112,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
+        events: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let driver = self.driver.clone();
@@ -127,7 +124,6 @@ impl crate::Backend for Backend {
             .unwrap_or_default();
 
         let task_id = next_task_id();
-        let events = self.events.clone();
         let names = self.names.clone();
 
         let task_token = CancellationToken::new();

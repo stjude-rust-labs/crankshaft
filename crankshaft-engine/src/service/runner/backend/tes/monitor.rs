@@ -18,6 +18,7 @@ use tes::v1::types::requests::View;
 use tes::v1::types::responses::ListTasks;
 use tes::v1::types::task::State as TesState;
 use tokio::select;
+use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::time::MissedTickBehavior;
 use tracing::debug;
@@ -31,6 +32,12 @@ pub const CRANKSHAFT_GROUP_TAG_NAME: &str = "crankshaft-task-group";
 struct Task {
     /// The name of the task.
     name: String,
+    /// The TES id of the task.
+    ///
+    /// This is `None` until the task is created on the TES server.
+    tes_id: Option<String>,
+    /// The events sender for the task.
+    events: Option<broadcast::Sender<Event>>,
     /// The sender for the "completed" notification.
     completed: oneshot::Sender<Result<()>>,
 }
@@ -96,6 +103,7 @@ impl TaskMonitor {
         &self,
         id: TaskId,
         name: String,
+        events: Option<broadcast::Sender<Event>>,
         completed: oneshot::Sender<Result<()>>,
     ) -> String {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
@@ -113,8 +121,15 @@ impl TaskMonitor {
             );
         }
 
-        state.tasks.insert(id, Task { name, completed });
-
+        state.tasks.insert(
+            id,
+            Task {
+                name,
+                events,
+                tes_id: None,
+                completed,
+            },
+        );
         state.tag.clone()
     }
 
@@ -123,16 +138,22 @@ impl TaskMonitor {
     /// This is called after the TES task has been created.
     pub async fn associate_task_id(&self, id: TaskId, tes_id: String) {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
-        state.ids.insert(tes_id, id);
+        if let Some(task) = state.tasks.get_mut(&id) {
+            task.tes_id = Some(tes_id.clone());
+            state.ids.insert(tes_id, id);
+        }
     }
 
     /// Removes a task from the monitor.
-    pub async fn remove_task(&self, tes_id: &str) {
+    pub async fn remove_task(&self, id: u64) {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
-        if let Some(id) = state.ids.get(tes_id).copied() {
-            state.tasks.remove(&id);
-            state.running.remove(&id);
+        if let Some(task) = state.tasks.remove(&id)
+            && let Some(tes_id) = task.tes_id
+        {
+            state.ids.remove(&tes_id);
         }
+
+        state.running.remove(&id);
     }
 
     /// Updates the tasks by querying the TES server for the current task state.
@@ -209,15 +230,14 @@ impl TaskMonitor {
                                 // The task is now running, send the started event
                                 if let Some(id) = state.ids.get(&task.id).copied()
                                     && state.running.insert(id)
+                                    && let Some(Task { name, events, .. }) = state.tasks.get(&id)
                                 {
-                                    if let Some(Task { name, .. }) = state.tasks.get(&id) {
-                                        info!(
-                                            "TES task `{tes_id}` (task `{name}`) is now running",
-                                            tes_id = task.id
-                                        );
-                                    }
+                                    info!(
+                                        "TES task `{tes_id}` (task `{name}`) is now running",
+                                        tes_id = task.id
+                                    );
 
-                                    send_event!(backend_state.events, Event::TaskStarted { id });
+                                    send_event!(events, Event::TaskStarted { id });
                                 }
                             }
                             TesState::Complete

@@ -728,6 +728,7 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
 #[cfg(test)]
 #[cfg(target_os = "linux")]
 mod test {
+    use std::assert_matches;
     use std::fs;
 
     use anyhow::Context;
@@ -886,6 +887,38 @@ mod test {
 
     #[tokio::test]
     async fn concurrent_task_events() -> anyhow::Result<()> {
+        fn assert_events(events: &[Event], stdout: &[u8]) -> TaskId {
+            // There should be six or eight events generated
+            // Eight events indicates the image was pulled
+            assert!(events.len() == 6 || events.len() == 8);
+
+            // The first event should be the created event; extract the id
+            let task_id = match &events[0] {
+                Event::TaskCreated { id, .. } => *id,
+                _ => panic!("the first event should be the created event"),
+            };
+
+            if events.len() == 6 {
+                assert_matches!(&events[1], Event::TaskContainerCreated { id, .. } if *id == task_id);
+                assert_matches!(&events[2], Event::TaskStarted { id } if *id == task_id);
+                assert_matches!(&events[3], Event::TaskStdout { id, message } if *id == task_id && message == stdout);
+                assert_matches!(&events[4], Event::TaskContainerExited { id, exit_status, .. } if *id == task_id && exit_status.success());
+                assert_matches!(&events[5], Event::TaskCompleted { id, exit_statuses } if *id == task_id && exit_statuses[0].success());
+            } else if events.len() == 8 {
+                assert_matches!(&events[1], Event::ImagePullStarted { id, name } if *id == task_id && name == "ubuntu:latest");
+                assert_matches!(&events[2], Event::ImagePullFinished { id, name } if *id == task_id && name == "ubuntu:latest");
+                assert_matches!(&events[3], Event::TaskContainerCreated { id, .. } if *id == task_id);
+                assert_matches!(&events[4], Event::TaskStarted { id } if *id == task_id);
+                assert_matches!(&events[5], Event::TaskStdout { id, message } if *id == task_id && message == stdout);
+                assert_matches!(&events[6], Event::TaskContainerExited { id, exit_status, .. } if *id == task_id && exit_status.success());
+                assert_matches!(&events[7], Event::TaskCompleted { id, exit_statuses } if *id == task_id && exit_statuses[0].success());
+            } else {
+                panic!("unexpected number of events");
+            }
+
+            task_id
+        }
+
         let backend = Arc::new(create_backend(Config::default()).await?);
 
         let (events1_tx, events1_rx) = broadcast::channel(1024);
@@ -953,56 +986,9 @@ mod test {
             .await
             .context("failed to wait for the first task's events")?;
 
-        // Ensure there is one started event per events list
-        assert_eq!(
-            events1
-                .iter()
-                .filter(|e| matches!(e, Event::TaskStarted { .. }))
-                .count(),
-            1
-        );
-
-        assert_eq!(
-            events2
-                .iter()
-                .filter(|e| matches!(e, Event::TaskStarted { .. }))
-                .count(),
-            1
-        );
-
-        // Ensure there is one completed event per events list
-        assert_eq!(
-            events1
-                .iter()
-                .filter(|e| matches!(e, Event::TaskCompleted { .. }))
-                .count(),
-            1
-        );
-
-        assert_eq!(
-            events2
-                .iter()
-                .filter(|e| matches!(e, Event::TaskCompleted { .. }))
-                .count(),
-            1
-        );
-
-        // Ensure there is one a stdout event per events list
-        assert_eq!(
-            events1
-                .iter()
-                .filter(|e| matches!(e, Event::TaskStdout { message, .. } if message.as_ref() == b"task1\n"))
-                .count(),
-            1
-        );
-
-        assert_eq!(
-            events2
-                .iter()
-                .filter(|e| matches!(e, Event::TaskStdout { message, .. } if message.as_ref() == b"task2\n"))
-                .count(),
-            1
-        );
+        let task_id1 = assert_events(&events1, b"task1\n");
+        let task_id2 = assert_events(&events2, b"task2\n");
+        assert!(task_id1 != task_id2, "expected different task identifiers");
 
         Ok(())
     }

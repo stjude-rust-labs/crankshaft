@@ -35,6 +35,7 @@ use tokio::sync::Semaphore;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
+use tracing::error;
 use tracing::info;
 
 use super::TaskRunError;
@@ -68,8 +69,6 @@ struct BackendState {
     policy: ExponentialFactorBackoff,
     /// The permits for ensuring a maximum number of concurrent server requests.
     permits: Semaphore,
-    /// The events sender for Crankshaft events.
-    events: Option<broadcast::Sender<Event>>,
     /// Whether to read task resource usage from the server's task log
     /// metadata.
     resource_usage_metadata: bool,
@@ -117,7 +116,7 @@ impl Backend {
     /// )));
     ///
     /// # tokio_test::block_on(async {
-    /// let backend = Backend::initialize(config, names, None).await;
+    /// let backend = Backend::initialize(config, names).await;
     /// # });
     ///
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -125,7 +124,6 @@ impl Backend {
     pub async fn initialize(
         config: Config,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-        events: Option<broadcast::Sender<Event>>,
     ) -> Self {
         let (url, http, interval, resource_usage_metadata) = config.into_parts();
         let mut builder = Client::builder().url(url);
@@ -146,7 +144,6 @@ impl Backend {
                 http.max_concurrency
                     .unwrap_or(DEFAULT_MAX_CONCURRENT_REQUESTS),
             ),
-            events,
             resource_usage_metadata,
         });
 
@@ -286,6 +283,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
+        events: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let task_id = next_task_id();
@@ -304,103 +302,117 @@ impl crate::Backend for Backend {
 
             // Add the task to the monitor
             let (completed_tx, completed_rx) = oneshot::channel();
-            let tag = monitor.add_task(task_id, task_name.clone(), completed_tx).await;
+            let tag = monitor
+                .add_task(task_id, task_name.clone(), events.clone(), completed_tx)
+                .await;
 
-            task.tags
-                .get_or_insert_default()
-                .insert(monitor::CRANKSHAFT_GROUP_TAG_NAME.to_string(), tag);
+            // Create the TES task and wait for it to complete
+            let mut tes_id = None;
+            let result = async {
+                task.tags
+                    .get_or_insert_default()
+                    .insert(monitor::CRANKSHAFT_GROUP_TAG_NAME.to_string(), tag);
 
-            let permit = state
-                .permits
-                .acquire()
-                .await
-                .context("failed to acquire network request permit")?;
-
-            let tes_id = select! {
-                // Always poll the cancellation token first
-                biased;
-                _ = token.cancelled() => {
-                    return Err(TaskRunError::Canceled);
-                }
-                res = state.client.create_task(&task, state.policy()) => {
-                    res.context("failed to create task with TES server")?.id
-                }
-            };
-
-            // Drop the permit now that the request has completed
-            drop(permit);
-
-            let task_token = CancellationToken::new();
-
-            send_event!(
-                state.events,
-                Event::TaskCreated {
-                    id: task_id,
-                    name: task_name.clone(),
-                    tes_id: Some(tes_id.clone()),
-                    token: task_token.clone()
-                }
-            );
-
-            let result = select! {
-                // Always poll the cancellation token first
-                biased;
-                _ = task_token.cancelled() =>{
-                    Err(TaskRunError::Canceled)
-                }
-                _ = token.cancelled() => {
-                    Err(TaskRunError::Canceled)
-                }
-                res = Self::wait_task(&state, &monitor, task_id, &task_name, &tes_id, completed_rx) => {
-                    res
-                }
-            };
-
-            if let Err(TaskRunError::Canceled) = &result {
                 let permit = state
                     .permits
                     .acquire()
                     .await
-                    .context("failed to acquire permit")?;
+                    .context("failed to acquire network request permit")?;
 
-                info!("canceling TES task `{tes_id}` (task `{task_name}`)");
-
-                // Cancel the task
-                state
-                    .client
-                    .cancel_task(&tes_id, state.policy())
-                    .await
-                    .context("failed to cancel task with TES server")?;
+                let id = select! {
+                    // Always poll the cancellation token first
+                    biased;
+                    _ = token.cancelled() => {
+                        return Err(TaskRunError::Canceled);
+                    }
+                    res = state.client.create_task(&task, state.policy()) => {
+                        res.context("failed to create task with TES server")?.id
+                    }
+                };
 
                 // Drop the permit now that the request has completed
                 drop(permit);
+
+                tes_id = Some(id);
+
+                let task_token = CancellationToken::new();
+
+                send_event!(
+                    events,
+                    Event::TaskCreated {
+                        id: task_id,
+                        name: task_name.clone(),
+                        tes_id: tes_id.clone(),
+                        token: task_token.clone()
+                    }
+                );
+
+                select! {
+                    // Always poll the cancellation token first
+                    biased;
+                    _ = task_token.cancelled() =>{
+                        Err(TaskRunError::Canceled)
+                    }
+                    _ = token.cancelled() => {
+                        Err(TaskRunError::Canceled)
+                    }
+                    res = Self::wait_task(&state, &monitor, task_id, &task_name, tes_id.as_deref().unwrap(), completed_rx) => {
+                        res
+                    }
+                }
+            }
+            .await;
+
+            // Remove the task from the monitor
+            monitor.remove_task(task_id).await;
+
+            // Cancel the TES task if the task was canceled
+            // At this point, log errors instead of returning a different one
+            if let (Some(tes_id), Err(TaskRunError::Canceled)) = (&tes_id, &result) {
+                match state.permits.acquire().await {
+                    Ok(permit) => {
+                        info!("canceling TES task `{tes_id}` (task `{task_name}`)");
+
+                        // Cancel the task
+                        if let Err(e) = state.client.cancel_task(&tes_id, state.policy()).await {
+                            error!("failed to cancel task with TES server: {e:#}");
+                        }
+
+                        // Drop the permit now that the request has completed
+                        drop(permit);
+                    }
+                    Err(e) => {
+                        error!("failed to acquire permit to cancel TES task: {e}");
+                    }
+                }
             }
 
-            monitor.remove_task(&tes_id).await;
-
-            // Send an event for the result
-            match &result {
-                Ok(results) => send_event!(
-                    state.events,
-                    Event::TaskCompleted {
-                        id: task_id,
-                        // SAFETY: NonEmpty -> NonEmpty
-                        exit_statuses: NonEmpty::collect(results.iter().map(|r| r.status)).unwrap(),
+            // If the TES task was created, send a corresponding completion event
+            if tes_id.is_some() {
+                match &result {
+                    Ok(results) => send_event!(
+                        events,
+                        Event::TaskCompleted {
+                            id: task_id,
+                            // SAFETY: NonEmpty -> NonEmpty
+                            exit_statuses: NonEmpty::collect(results.iter().map(|r| r.status))
+                                .unwrap(),
+                        }
+                    ),
+                    Err(TaskRunError::Canceled) => {
+                        send_event!(events, Event::TaskCanceled { id: task_id })
                     }
-                ),
-                Err(TaskRunError::Canceled) => {
-                    send_event!(state.events, Event::TaskCanceled { id: task_id })
-                }
-                Err(TaskRunError::Preempted) => {
-                    send_event!(state.events, Event::TaskPreempted { id: task_id })
-                }
-                Err(TaskRunError::Other(e)) => send_event!(
-                    state.events,
-                    Event::TaskFailed {
-                        id: task_id,
-                        message: format!("{e:#}")
+                    Err(TaskRunError::Preempted) => {
+                        send_event!(events, Event::TaskPreempted { id: task_id })
                     }
-                ),
+                    Err(TaskRunError::Other(e)) => send_event!(
+                        events,
+                        Event::TaskFailed {
+                            id: task_id,
+                            message: format!("{e:#}")
+                        }
+                    ),
+                }
             }
 
             result

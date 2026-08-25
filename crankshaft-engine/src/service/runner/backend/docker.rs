@@ -261,8 +261,6 @@ pub struct Backend {
     config: Config,
     /// The available resources reported by Docker.
     resources: Resources,
-    /// The events sender for the backend.
-    events: Option<broadcast::Sender<Event>>,
     /// The unique name generator for tasks without names.
     names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
 }
@@ -276,7 +274,6 @@ impl Backend {
     pub async fn initialize_default_with(
         config: Config,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-        events: Option<broadcast::Sender<Event>>,
     ) -> Result<Self> {
         let client =
             Docker::with_defaults().context("failed to connect to the local Docker daemon")?;
@@ -442,7 +439,6 @@ impl Backend {
             client,
             config,
             resources,
-            events,
             names,
         })
     }
@@ -454,9 +450,8 @@ impl Backend {
     /// when attempting to connect to the Docker daemon.
     pub async fn initialize_default(
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
-        events: Option<broadcast::Sender<Event>>,
     ) -> Result<Self> {
-        Self::initialize_default_with(Config::default(), names, events).await
+        Self::initialize_default_with(Config::default(), names).await
     }
 
     /// Gets a reference to the inner Docker client.
@@ -467,11 +462,6 @@ impl Backend {
     /// Gets information about the resources available to the Docker backend.
     pub fn resources(&self) -> &Resources {
         &self.resources
-    }
-
-    /// Gets the events sender for the backend, if there is one.
-    pub fn events(&self) -> Option<broadcast::Sender<Event>> {
-        self.events.clone()
     }
 }
 
@@ -548,6 +538,7 @@ impl crate::Backend for Backend {
     fn run(
         &self,
         task: Task,
+        events: Option<broadcast::Sender<Event>>,
         token: CancellationToken,
     ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
         let task_id = next_task_id();
@@ -558,7 +549,6 @@ impl crate::Backend for Backend {
         // panics on a zero duration
         let resource_usage_interval = self.config.resource_usage_interval().filter(|i| *i > 0);
         let use_service = self.resources.use_service();
-        let events = self.events.clone();
         let names = self.names.clone();
 
         let task_token = CancellationToken::new();
@@ -927,103 +917,47 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod test {
+    use std::assert_matches;
     use std::fs;
-    use std::io::Write;
-    use std::ops::Deref;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
 
     use anyhow::Context;
+    use futures::future::join_all;
+    use nix::unistd::Gid;
     use tempfile::NamedTempFile;
     use url::Url;
 
     use super::*;
-    use crate::service::runner::Backend;
+    use crate::service::runner::Backend as _;
     use crate::service::runner::NAME_BUFFER_LEN;
+    use crate::task::Execution;
     use crate::task::Output;
     use crate::task::output::Type;
 
-    struct BackendTest {
-        backend: super::Backend,
-        image_pull_fails: Arc<AtomicUsize>,
+    async fn events(mut rx: broadcast::Receiver<Event>) -> Vec<Event> {
+        let mut events = Vec::new();
+        while let Ok(event) = rx.recv().await {
+            events.push(event);
+        }
+
+        events
     }
 
-    impl BackendTest {
-        async fn redirect_stdio(
-            mut event_rx: broadcast::Receiver<Event>,
-            image_pull_fails: Arc<AtomicUsize>,
-        ) -> anyhow::Result<()> {
-            while let Ok(event) = event_rx.recv().await {
-                match event {
-                    Event::TaskStdout { message, .. } => {
-                        std::io::stdout()
-                            .write_all(&message)
-                            .context("failed to write stdout")?;
-                    }
-                    Event::TaskStderr { message, .. } => {
-                        std::io::stderr()
-                            .write_all(&message)
-                            .context("failed to write stderr")?;
-                    }
-                    Event::TaskFailed { message, .. } => {
-                        eprintln!("{message}");
-                    }
-                    Event::ImagePullFailed { .. } => {
-                        image_pull_fails.fetch_add(1, Ordering::Relaxed);
-                    }
-                    _ => {}
-                }
-            }
+    async fn create_backend(config: Config) -> Result<Backend> {
+        let names = Arc::new(Mutex::new(GeneratorIterator::new(
+            UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
+            NAME_BUFFER_LEN,
+        )));
 
-            Ok(())
-        }
-
-        async fn new(config: Config) -> anyhow::Result<Self> {
-            let names = Arc::new(Mutex::new(GeneratorIterator::new(
-                UniqueAlphanumeric::default_with_expected_generations(NAME_BUFFER_LEN),
-                NAME_BUFFER_LEN,
-            )));
-
-            let image_pull_fails = Arc::new(AtomicUsize::new(0));
-            let (event_tx, event_rx) = broadcast::channel(1024);
-            tokio::task::spawn(Self::redirect_stdio(event_rx, image_pull_fails.clone()));
-
-            let backend = super::Backend::initialize_default_with(config, names, Some(event_tx))
-                .await
-                .context("failed to create backend")?;
-
-            Ok(Self {
-                backend,
-                image_pull_fails,
-            })
-        }
-    }
-
-    impl Deref for BackendTest {
-        type Target = super::Backend;
-
-        fn deref(&self) -> &Self::Target {
-            &self.backend
-        }
+        Backend::initialize_default_with(config, names)
+            .await
+            .context("failed to create backend")
     }
 
     #[tokio::test]
-    #[cfg(target_os = "linux")]
     async fn backend_adds_user_egid() -> anyhow::Result<()> {
-        use std::fs;
-
-        use anyhow::Context;
-        use nix::unistd::Gid;
-        use tempfile::NamedTempFile;
-        use url::Url;
-
-        use super::*;
-        use crate::service::runner::Backend as _;
-        use crate::task::Execution;
-        use crate::task::Output;
-
-        let backend = BackendTest::new(Config::default()).await?;
+        let backend = create_backend(Config::default()).await?;
 
         // Get the current user's effective gid
         let gid = Gid::effective();
@@ -1055,6 +989,7 @@ mod test {
                             .build(),
                     ])
                     .build(),
+                None,
                 CancellationToken::new(),
             )
             .context("failed to run task")?
@@ -1069,17 +1004,20 @@ mod test {
             stdout.contains(&gid.to_string()),
             "task stdout of `{stdout}` did not contain the expected output"
         );
+
         Ok(())
     }
 
     #[tokio::test]
-    #[cfg(target_os = "linux")]
     async fn backend_supports_fallback_images() -> anyhow::Result<()> {
-        let backend = BackendTest::new(Config::default()).await?;
+        let backend = create_backend(Config::default()).await?;
 
         let stdout_path = NamedTempFile::new()
             .context("failed to create temporary file")?
             .into_temp_path();
+
+        let (events_tx, events_rx) = broadcast::channel(1024);
+        let events = tokio::task::spawn(events(events_rx));
 
         let results = backend
             .run(
@@ -1110,14 +1048,23 @@ mod test {
                             .build(),
                     ])
                     .build(),
+                Some(events_tx),
                 CancellationToken::new(),
             )
             .context("failed to run task")?
             .await
             .context("task execution failed")?;
 
+        let events = events.await.unwrap();
+
         assert!(results.first().status.success(), "container failed");
-        assert_eq!(backend.image_pull_fails.load(Ordering::Relaxed), 2);
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| matches!(e, Event::ImagePullFailed { .. }))
+                .count(),
+            2
+        );
 
         // Assert that the command was run
         let stdout = fs::read_to_string(&stdout_path).context("failed to read stdout file")?;
@@ -1125,6 +1072,114 @@ mod test {
             stdout.contains("Hello, world!"),
             "task stdout of `{stdout}` did not contain the expected output"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn concurrent_task_events() -> anyhow::Result<()> {
+        fn assert_events(events: &[Event], stdout: &[u8]) -> TaskId {
+            // There should be six or eight events generated
+            // Eight events indicates the image was pulled
+            assert!(events.len() == 6 || events.len() == 8);
+
+            // The first event should be the created event; extract the id
+            let task_id = match &events[0] {
+                Event::TaskCreated { id, .. } => *id,
+                _ => panic!("the first event should be the created event"),
+            };
+
+            if events.len() == 6 {
+                assert_matches!(&events[1], Event::TaskContainerCreated { id, .. } if *id == task_id);
+                assert_matches!(&events[2], Event::TaskStarted { id } if *id == task_id);
+                assert_matches!(&events[3], Event::TaskStdout { id, message } if *id == task_id && message == stdout);
+                assert_matches!(&events[4], Event::TaskContainerExited { id, exit_status, .. } if *id == task_id && exit_status.success());
+                assert_matches!(&events[5], Event::TaskCompleted { id, exit_statuses } if *id == task_id && exit_statuses[0].success());
+            } else if events.len() == 8 {
+                assert_matches!(&events[1], Event::ImagePullStarted { id, name } if *id == task_id && name == "ubuntu:latest");
+                assert_matches!(&events[2], Event::ImagePullFinished { id, name } if *id == task_id && name == "ubuntu:latest");
+                assert_matches!(&events[3], Event::TaskContainerCreated { id, .. } if *id == task_id);
+                assert_matches!(&events[4], Event::TaskStarted { id } if *id == task_id);
+                assert_matches!(&events[5], Event::TaskStdout { id, message } if *id == task_id && message == stdout);
+                assert_matches!(&events[6], Event::TaskContainerExited { id, exit_status, .. } if *id == task_id && exit_status.success());
+                assert_matches!(&events[7], Event::TaskCompleted { id, exit_statuses } if *id == task_id && exit_statuses[0].success());
+            } else {
+                panic!("unexpected number of events");
+            }
+
+            task_id
+        }
+
+        let backend = Arc::new(create_backend(Config::default()).await?);
+
+        let (events1_tx, events1_rx) = broadcast::channel(1024);
+        let events1 = tokio::task::spawn(events(events1_rx));
+
+        let (events2_tx, events2_rx) = broadcast::channel(1024);
+        let events2 = tokio::task::spawn(events(events2_rx));
+
+        // Spawn the first task
+        let backend1 = backend.clone();
+        let task1 = tokio::spawn(async move {
+            backend1
+                .run(
+                    Task::builder()
+                        .executions(NonEmpty::new(
+                            Execution::builder()
+                                .images(["ubuntu:latest"])?
+                                .program("/bin/sh")
+                                .args([String::from("-c"), String::from("echo task1")])
+                                .build(),
+                        ))
+                        .build(),
+                    Some(events1_tx),
+                    CancellationToken::new(),
+                )
+                .expect("failed to run task")
+                .await?;
+
+            anyhow::Ok(())
+        });
+
+        // Spawn the second task
+        let task2 = tokio::spawn(async move {
+            backend
+                .run(
+                    Task::builder()
+                        .executions(NonEmpty::new(
+                            Execution::builder()
+                                .images(["ubuntu:latest"])?
+                                .program("/bin/sh")
+                                .args([String::from("-c"), String::from("echo task2")])
+                                .build(),
+                        ))
+                        .build(),
+                    Some(events2_tx),
+                    CancellationToken::new(),
+                )
+                .expect("failed to run task")
+                .await?;
+
+            anyhow::Ok(())
+        });
+
+        // Wait for the tasks to complete and check for errors
+        for result in join_all([task1, task2]).await {
+            result
+                .context("failed to join task")?
+                .context("task failed")?;
+        }
+
+        let events1 = events1
+            .await
+            .context("failed to wait for the first task's events")?;
+        let events2 = events2
+            .await
+            .context("failed to wait for the first task's events")?;
+
+        let task_id1 = assert_events(&events1, b"task1\n");
+        let task_id2 = assert_events(&events2, b"task2\n");
+        assert!(task_id1 != task_id2, "expected different task identifiers");
 
         Ok(())
     }

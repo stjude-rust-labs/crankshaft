@@ -1,7 +1,7 @@
 [package]
 name = "crankshaft-docker"
 description = "Docker facilities for Crankshaft"
-version = "0.5.0"
+version = "0.6.0"
 license.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -29,8 +29,8 @@ anyhow.workspace = true
 bollard.workspace = true
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
-crankshaft-config = { path = "../crankshaft-config", version = "0.6.0" }
-crankshaft-events = { path = "../crankshaft-events", version = "0.1.0" }
+crankshaft-config = { path = "../crankshaft-config", version = "0.7.0" }
+crankshaft-events = { path = "../crankshaft-events", version = "0.2.0" }
 futures.workspace = true
 indexmap = { workspace = true }
 nix.workspace = true
@@ -38,8 +38,8 @@ shlex = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio.workspace = true
 tokio-retry2.workspace = true
-tokio-util.workspace = true
 tokio-stream.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 tracing-log = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }

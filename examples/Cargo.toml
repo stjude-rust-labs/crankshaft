@@ -12,18 +12,22 @@ rust-version.workspace = true
 [[bin]]
 name = "docker"
 path = "src/docker/main.rs"
+doc = false
 
 [[bin]]
 name = "docker-monitored"
 path = "src/docker/monitored.rs"
+doc = false
 required-features = ["monitoring"]
 
 [[bin]]
 name = "lsf"
+doc = false
 path = "src/lsf/main.rs"
 
 [[bin]]
 name = "tes"
+doc = false
 path = "src/tes/main.rs"
 
 [features]

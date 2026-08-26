@@ -17,7 +17,7 @@ use crankshaft_config::backend::generic::driver::Config;
 use crankshaft_config::backend::generic::driver::Locale;
 use crankshaft_config::backend::generic::driver::Shell;
 use crankshaft_config::backend::generic::driver::ssh;
-use rand::Rng as _;
+use rand::RngExt;
 use ssh2::Channel;
 use ssh2::Session;
 use thiserror::Error;
@@ -251,7 +251,7 @@ async fn create_ssh_transport(config: &ssh::Config) -> Result<Transport> {
                 )
             })?;
     } else {
-        let username = whoami::username();
+        let username = whoami::username().context("failed to retrieve user name")?;
 
         agent
             .userauth(&username, key)

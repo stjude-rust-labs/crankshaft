@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.7.0 - 08-25-2026
+
+### Dependencies
+
+* Updated dependencies to latest
+
 ## 0.6.0 - 11-24-2025
 
 ### Added

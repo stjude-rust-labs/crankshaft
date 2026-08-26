@@ -12,12 +12,12 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::container::LogOutput;
+use bollard::models::ContainerWaitResponse;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::RemoveContainerOptions;
 use bollard::query_parameters::StartContainerOptions;
 use bollard::query_parameters::WaitContainerOptions;
-use bollard::secret::ContainerWaitResponse;
 use crankshaft_events::Event;
 use futures::Stream;
 use tokio::fs::File;

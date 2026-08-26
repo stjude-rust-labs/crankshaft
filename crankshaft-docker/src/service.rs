@@ -10,12 +10,12 @@ use std::process::ExitStatus;
 use std::time::Duration;
 
 use bollard::Docker;
+use bollard::models::ContainerWaitResponse;
+use bollard::models::TaskState;
 use bollard::query_parameters::InspectContainerOptions;
 use bollard::query_parameters::ListTasksOptions;
 use bollard::query_parameters::LogsOptionsBuilder;
 use bollard::query_parameters::WaitContainerOptions;
-use bollard::secret::ContainerWaitResponse;
-use bollard::secret::TaskState;
 
 mod builder;
 

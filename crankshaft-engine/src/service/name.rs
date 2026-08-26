@@ -2,6 +2,7 @@
 
 use growable_bloom_filter::GrowableBloom;
 use rand::Rng;
+use rand::RngExt;
 use rand::rngs::ThreadRng;
 
 /// A name generator.

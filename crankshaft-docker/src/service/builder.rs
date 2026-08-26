@@ -3,15 +3,15 @@
 use std::path::PathBuf;
 
 use bollard::Docker;
-use bollard::secret::Mount;
-use bollard::secret::ServiceSpec;
-use bollard::secret::ServiceSpecMode;
-use bollard::secret::ServiceSpecModeReplicated;
-use bollard::secret::TaskSpec;
-use bollard::secret::TaskSpecContainerSpec;
-use bollard::secret::TaskSpecResources;
-use bollard::secret::TaskSpecRestartPolicy;
-use bollard::secret::TaskSpecRestartPolicyConditionEnum;
+use bollard::models::Mount;
+use bollard::models::ServiceSpec;
+use bollard::models::ServiceSpecMode;
+use bollard::models::ServiceSpecModeReplicated;
+use bollard::models::TaskSpec;
+use bollard::models::TaskSpecContainerSpec;
+use bollard::models::TaskSpecResources;
+use bollard::models::TaskSpecRestartPolicy;
+use bollard::models::TaskSpecRestartPolicyConditionEnum;
 use indexmap::IndexMap;
 use tracing::warn;
 

@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 
+use bollard::models::ImageDeleteResponseItem;
+use bollard::models::ImageSummary;
 use bollard::query_parameters::CreateImageOptions;
 use bollard::query_parameters::ListImagesOptions;
 use bollard::query_parameters::RemoveImageOptions;
-use bollard::secret::ImageDeleteResponseItem;
-use bollard::secret::ImageSummary;
 use crankshaft_events::Event;
 use crankshaft_events::TaskId;
 use crankshaft_events::send_event;
@@ -160,25 +160,20 @@ pub(crate) async fn ensure_image(
                     "pull update: {}",
                     [
                         update.id.map(|id| format!("id: {id}")),
-                        update.error.map(|err| format!("error: {err}")),
+                        update.error_detail.and_then(|err| err.message).map(|err| format!("error: {err}")),
                         update.status.map(|status| format!("status: {status}")),
-                        update.progress.map(|progress| format!(
-                            "progress: {progress}{}",
-                            update
-                                .progress_detail
-                                .map(|detailed| format!(
-                                    " ({}/{})",
-                                    detailed
+                        update.progress_detail.map(|progress|
+                            format!(
+                                    "progress: {}/{}",
+                                    progress
                                         .current
                                         .map(|v| v.to_string())
                                         .unwrap_or(String::from("?")),
-                                    detailed
+                                    progress
                                         .total
                                         .map(|v| v.to_string())
                                         .unwrap_or(String::from("?"))
                                 ))
-                                .unwrap_or_default()
-                        ))
                     ]
                     .into_iter()
                     .flatten()

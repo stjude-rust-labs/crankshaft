@@ -10,12 +10,12 @@ use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::bail;
 use async_trait::async_trait;
-use bollard::secret::HostConfig;
-use bollard::secret::LocalNodeState;
-use bollard::secret::Mount;
-use bollard::secret::MountTypeEnum;
-use bollard::secret::NodeSpecAvailabilityEnum;
-use bollard::secret::NodeState;
+use bollard::models::HostConfig;
+use bollard::models::LocalNodeState;
+use bollard::models::Mount;
+use bollard::models::MountType;
+use bollard::models::NodeSpecAvailabilityEnum;
+use bollard::models::NodeState;
 use crankshaft_config::backend::docker::Config;
 use crankshaft_docker::Container;
 use crankshaft_docker::Docker;
@@ -680,7 +680,7 @@ async fn add_input_mounts(
                     })?
                     .to_string(),
             ),
-            typ: Some(MountTypeEnum::BIND),
+            typ: Some(MountType::BIND),
             read_only: Some(input.read_only),
             ..Default::default()
         });
@@ -716,7 +716,7 @@ fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Moun
         mounts.push(Mount {
             target: Some(volume),
             source: Some(path),
-            typ: Some(MountTypeEnum::BIND),
+            typ: Some(MountType::BIND),
             read_only: Some(false),
             ..Default::default()
         });

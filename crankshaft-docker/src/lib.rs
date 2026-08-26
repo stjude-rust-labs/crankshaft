@@ -2,16 +2,16 @@
 
 use std::path::PathBuf;
 
+use bollard::models::ImageDeleteResponseItem;
+use bollard::models::ImageSummary;
 use bollard::query_parameters::ListNodesOptions;
-use bollard::secret::ImageDeleteResponseItem;
-use bollard::secret::ImageSummary;
 
 pub mod container;
 pub mod images;
 pub mod service;
 
-use bollard::secret::Node;
-use bollard::secret::SystemInfo;
+use bollard::models::Node;
+use bollard::models::SystemInfo;
 use crankshaft_config::backend::docker::EventConfig;
 use crankshaft_events::Event;
 use crankshaft_events::TaskId;

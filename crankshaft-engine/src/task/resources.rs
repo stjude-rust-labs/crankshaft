@@ -3,9 +3,9 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use bollard::secret::DeviceRequest;
-use bollard::secret::HostConfig;
-use bollard::secret::TaskSpecResources;
+use bollard::models::DeviceRequest;
+use bollard::models::HostConfig;
+use bollard::models::TaskSpecResources;
 use bon::Builder;
 use crankshaft_config::backend::Defaults;
 use tracing::debug;

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.2.0 - 08-25-2026
+
 #### Added
 
 * Added the `TaskResourceUsage` event, carrying a cumulative
@@ -19,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for `TaskResourceUsage`
   ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 * Added `ImagePullStarted`, `ImagePullFinished`, and `ImagePullFailed` events ([#82](https://github.com/stjude-rust-labs/crankshaft/pull/82)).
+
+#### Dependencies
+
+* Updated dependencies to latest ([#87](https://github.com/stjude-rust-labs/crankshaft/pull/87)).
 
 ## 0.1.0 - 09-03-2025
 

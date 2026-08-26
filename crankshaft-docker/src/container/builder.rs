@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use bollard::Docker;
 use bollard::models::ContainerCreateBody;
+use bollard::models::HostConfig;
 use bollard::query_parameters::CreateContainerOptions;
-use bollard::secret::HostConfig;
 use indexmap::IndexMap;
 use tracing::warn;
 

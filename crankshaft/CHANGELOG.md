@@ -10,7 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Dependencies
 
-* Updated dependencies to latest
+* Updated dependencies to latest ([#87](https://github.com/stjude-rust-labs/crankshaft/pull/87)).
 
 ## 0.10.0 - 04-22-2026
 

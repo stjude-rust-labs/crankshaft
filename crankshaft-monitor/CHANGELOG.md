@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Dependencies
 
-* Updated dependencies to latest
+* Updated dependencies to latest ([#87](https://github.com/stjude-rust-labs/crankshaft/pull/87)).
 
 ## 0.2.0 - 02-11-2026
 

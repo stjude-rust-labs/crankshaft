@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added `docker::Backend::run_without_events()` for internal tasks that must not
+  expose externally cancelable task tokens
+  ([#88](https://github.com/stjude-rust-labs/crankshaft/pull/88)).
+
 ### Changed
 
 * Event channels are now passed to `run` instead of at the time of backend

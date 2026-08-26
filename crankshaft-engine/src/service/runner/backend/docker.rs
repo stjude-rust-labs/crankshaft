@@ -328,6 +328,20 @@ impl Backend {
         Self::initialize_default_with(Config::default(), names).await
     }
 
+    /// Runs an internal task without broadcasting events.
+    ///
+    /// Use this for backend housekeeping that was not requested by the user and
+    /// must not expose a per-task cancellation token through
+    /// [`Event::TaskCreated`]. The task can only be canceled through the
+    /// `token` supplied by the caller.
+    pub fn run_without_events(
+        &self,
+        task: Task,
+        token: CancellationToken,
+    ) -> Result<BoxFuture<'static, Result<NonEmpty<ExecutionResult>, TaskRunError>>> {
+        <Self as crate::Backend>::run(self, task, None, token)
+    }
+
     /// Gets a reference to the inner Docker client.
     pub fn client(&self) -> &Docker {
         &self.client
@@ -989,6 +1003,51 @@ mod test {
         let task_id1 = assert_events(&events1, b"task1\n");
         let task_id2 = assert_events(&events2, b"task2\n");
         assert!(task_id1 != task_id2, "expected different task identifiers");
+
+        Ok(())
+    }
+
+    fn internal_task() -> Result<Task> {
+        Ok(Task::builder()
+            .executions(NonEmpty::new(
+                Execution::builder()
+                    .images(["ubuntu:latest"])?
+                    .program("/bin/true")
+                    .build(),
+            ))
+            .build())
+    }
+
+    #[tokio::test]
+    async fn backend_run_without_events_completes() -> anyhow::Result<()> {
+        let backend = create_backend(Config::default()).await?;
+
+        let results = backend
+            .run_without_events(internal_task()?, CancellationToken::new())
+            .context("failed to run internal task")?
+            .await
+            .context("internal task execution failed")?;
+
+        assert!(
+            results.first().status.success(),
+            "internal container failed"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn backend_run_without_events_honors_caller_token() -> anyhow::Result<()> {
+        let backend = create_backend(Config::default()).await?;
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result = backend
+            .run_without_events(internal_task()?, token)
+            .context("failed to run internal task")?
+            .await;
+
+        assert_matches!(result, Err(TaskRunError::Canceled));
 
         Ok(())
     }

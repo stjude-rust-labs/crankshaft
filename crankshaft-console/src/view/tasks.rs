@@ -93,13 +93,45 @@ fn format_usage(usage: Option<&TaskResourceUsageEvent>) -> String {
 
     let mut parts = Vec::new();
     if let Some(max) = usage.max_memory {
-        parts.push(format!(
-            "peak {:.1} GiB",
-            max as f64 / (1024.0 * 1024.0 * 1024.0)
-        ));
+        parts.push(format!("peak {}", format_bytes(max)));
     }
     if let Some(cpu) = usage.cpu_time_ms {
         parts.push(format!("cpu {:.1}s", cpu as f64 / 1000.0));
     }
     parts.join(", ")
+}
+
+/// Formats a byte count using a unit scaled to its magnitude.
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KiB", "MiB", "GiB"];
+
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {unit}", unit = UNITS[unit])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_bytes;
+
+    #[test]
+    fn bytes_format_with_scaled_units() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(2048), "2.0 KiB");
+        assert_eq!(format_bytes(48 * 1024 * 1024), "48.0 MiB");
+        assert_eq!(
+            format_bytes(3 * 1024 * 1024 * 1024 + 512 * 1024 * 1024),
+            "3.5 GiB"
+        );
+    }
 }

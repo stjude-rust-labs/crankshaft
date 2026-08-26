@@ -18,6 +18,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 bollard.workspace = true
 bon.workspace = true
+chrono.workspace = true
 crankshaft-config = { path = "../crankshaft-config", version = "0.6.0" }
 crankshaft-docker = { path = "../crankshaft-docker", version = "0.5.0" }
 crankshaft-events = { path = "../crankshaft-events", version = "0.1.0" }

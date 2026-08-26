@@ -44,11 +44,11 @@ pub struct TaskResourceUsage {
     /// inherit that source's weighting.
     pub avg_memory: Option<u64>,
     /// The total CPU time consumed, in milliseconds.
-    pub cpu_time_ms: Option<i64>,
+    pub cpu_time_ms: Option<u64>,
     /// The user-mode CPU time consumed, in milliseconds.
-    pub user_cpu_time_ms: Option<i64>,
+    pub user_cpu_time_ms: Option<u64>,
     /// The system-mode CPU time consumed, in milliseconds.
-    pub system_cpu_time_ms: Option<i64>,
+    pub system_cpu_time_ms: Option<u64>,
     /// The disk space used, in bytes.
     pub disk_used: Option<u64>,
 }

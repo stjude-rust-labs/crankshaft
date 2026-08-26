@@ -293,14 +293,14 @@ pub struct TaskResourceUsageEvent {
     #[prost(uint64, optional, tag = "3")]
     pub avg_memory: ::core::option::Option<u64>,
     /// The total CPU time consumed, in milliseconds.
-    #[prost(int64, optional, tag = "4")]
-    pub cpu_time_ms: ::core::option::Option<i64>,
+    #[prost(uint64, optional, tag = "4")]
+    pub cpu_time_ms: ::core::option::Option<u64>,
     /// The user-mode CPU time consumed, in milliseconds.
-    #[prost(int64, optional, tag = "5")]
-    pub user_cpu_time_ms: ::core::option::Option<i64>,
+    #[prost(uint64, optional, tag = "5")]
+    pub user_cpu_time_ms: ::core::option::Option<u64>,
     /// The system-mode CPU time consumed, in milliseconds.
-    #[prost(int64, optional, tag = "6")]
-    pub system_cpu_time_ms: ::core::option::Option<i64>,
+    #[prost(uint64, optional, tag = "6")]
+    pub system_cpu_time_ms: ::core::option::Option<u64>,
     /// The disk space used, in bytes.
     #[prost(uint64, optional, tag = "7")]
     pub disk_used: ::core::option::Option<u64>,

@@ -204,15 +204,18 @@ impl UsageFold {
             self.memory_samples += 1;
         }
 
+        // The counters are kept monotonic: Docker returns a successful,
+        // zero-valued stats object once a container has exited, and a sample
+        // landing in that gap must not reset previously observed CPU time
         if let Some(cpu) = stats.cpu_stats.as_ref().and_then(|c| c.cpu_usage.as_ref()) {
             if let Some(total) = cpu.total_usage {
-                self.cpu_total_last = total;
+                self.cpu_total_last = self.cpu_total_last.max(total);
             }
             if let Some(user) = cpu.usage_in_usermode {
-                self.cpu_user_last = user;
+                self.cpu_user_last = self.cpu_user_last.max(user);
             }
             if let Some(system) = cpu.usage_in_kernelmode {
-                self.cpu_system_last = system;
+                self.cpu_system_last = self.cpu_system_last.max(system);
             }
         }
 
@@ -237,8 +240,8 @@ impl UsageFold {
     fn snapshot(&self) -> TaskResourceUsage {
         /// Converts cumulative nanoseconds to milliseconds, mapping zero to
         /// "not observed".
-        fn ns_to_ms(ns: u64) -> Option<i64> {
-            (ns > 0).then_some((ns / 1_000_000) as i64)
+        fn ns_to_ms(ns: u64) -> Option<u64> {
+            (ns > 0).then_some(ns / 1_000_000)
         }
 
         let mut usage = TaskResourceUsage::default();
@@ -736,10 +739,18 @@ impl crate::Backend for Backend {
                                             Ok(Some(stats)) => {
                                                 let snapshot =
                                                     usage.lock().unwrap().observe(&stats);
-                                                let _ = events.send(Event::TaskResourceUsage {
-                                                    id: task_id,
-                                                    usage: snapshot,
-                                                });
+                                                // Docker can return a
+                                                // successful sample carrying
+                                                // no measurements; skip
+                                                // snapshots with nothing to
+                                                // report
+                                                if !snapshot.is_empty() {
+                                                    let _ =
+                                                        events.send(Event::TaskResourceUsage {
+                                                            id: task_id,
+                                                            usage: snapshot,
+                                                        });
+                                                }
                                             }
                                             // The container has already
                                             // exited; stop sampling.
@@ -1261,6 +1272,25 @@ mod usage_tests {
     fn empty_folds_produce_empty_snapshots() {
         let fold = UsageFold::default();
         assert!(fold.snapshot().is_empty());
+    }
+
+    #[test]
+    fn zero_valued_samples_do_not_reset_cpu_counters() {
+        let mut fold = UsageFold::default();
+
+        fold.observe(&sample(100, 5_000_000, 4_000_000, 1_000_000));
+
+        // Docker returns a successful, zero-valued stats object once a
+        // container has exited; such a sample must not reset the counters
+        let usage = fold.observe(&sample(0, 0, 0, 0));
+        assert_eq!(usage.cpu_time_ms, Some(5));
+        assert_eq!(usage.user_cpu_time_ms, Some(4));
+        assert_eq!(usage.system_cpu_time_ms, Some(1));
+
+        // And the real values are banked, not the zeroes
+        fold.finish_container();
+        let usage = fold.snapshot();
+        assert_eq!(usage.cpu_time_ms, Some(5));
     }
 
     #[test]

@@ -63,23 +63,99 @@ fn parse_resource_usage_metadata(metadata: &serde_json::Value) -> TaskResourceUs
             .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
     }
 
-    /// Gets a numeric metadata value as an `i64`, accepting JSON numbers and
-    /// numeric strings.
-    fn get_i64(metadata: &serde_json::Value, key: &str) -> Option<i64> {
-        let value = metadata.get(key)?;
-        value
-            .as_i64()
-            .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
-    }
-
     let mut usage = TaskResourceUsage::default();
     usage.max_memory = get_u64(metadata, "peak_memory_bytes");
     usage.avg_memory = get_u64(metadata, "avg_memory_bytes");
-    usage.cpu_time_ms = get_i64(metadata, "cpu_time_ms");
-    usage.user_cpu_time_ms = get_i64(metadata, "user_cpu_time_ms");
-    usage.system_cpu_time_ms = get_i64(metadata, "system_cpu_time_ms");
+    usage.cpu_time_ms = get_u64(metadata, "cpu_time_ms");
+    usage.user_cpu_time_ms = get_u64(metadata, "user_cpu_time_ms");
+    usage.system_cpu_time_ms = get_u64(metadata, "system_cpu_time_ms");
     usage.disk_used = get_u64(metadata, "disk_used_bytes");
     usage
+}
+
+/// Folds resource usage from a task's logs into a cumulative snapshot.
+///
+/// TES servers create a new `TaskLog` for each internal retry, so usage must
+/// be folded across every attempt rather than read from the latest log:
+///
+/// * peak memory and disk used take the maximum across attempts;
+/// * CPU times sum across attempts (saturating);
+/// * average memory is the duration-weighted mean of the attempts' averages,
+///   weighted by each log's `start_time`/`end_time` span (an attempt still in
+///   flight is weighted by the time elapsed since its start); if any
+///   contributing log lacks timestamps, an unweighted mean is used instead.
+///
+/// Returns `None` if no log carries any usage.
+fn fold_task_log_usage(logs: &[tes::v1::types::responses::TaskLog]) -> Option<TaskResourceUsage> {
+    /// An attempt's average memory and its duration weight, in seconds.
+    struct Average {
+        /// The attempt's reported average memory, in bytes.
+        avg: u64,
+        /// The attempt's duration, in seconds, if its log carries timestamps.
+        weight: Option<f64>,
+    }
+
+    let mut usage = TaskResourceUsage::default();
+    let mut averages = Vec::new();
+    let mut any = false;
+
+    for log in logs {
+        let Some(metadata) = log.metadata.as_ref() else {
+            continue;
+        };
+
+        let parsed = parse_resource_usage_metadata(metadata);
+        if parsed.is_empty() {
+            continue;
+        }
+
+        any = true;
+
+        if let Some(peak) = parsed.max_memory {
+            usage.max_memory = Some(usage.max_memory.unwrap_or(0).max(peak));
+        }
+
+        if let Some(disk) = parsed.disk_used {
+            usage.disk_used = Some(usage.disk_used.unwrap_or(0).max(disk));
+        }
+
+        for (total, value) in [
+            (&mut usage.cpu_time_ms, parsed.cpu_time_ms),
+            (&mut usage.user_cpu_time_ms, parsed.user_cpu_time_ms),
+            (&mut usage.system_cpu_time_ms, parsed.system_cpu_time_ms),
+        ] {
+            if let Some(value) = value {
+                *total = Some(total.unwrap_or(0).saturating_add(value));
+            }
+        }
+
+        if let Some(avg) = parsed.avg_memory {
+            let weight = log.start_time.map(|start| {
+                let end = log.end_time.unwrap_or_else(chrono::Utc::now);
+                (end - start).num_milliseconds().max(0) as f64 / 1_000.0
+            });
+            averages.push(Average { avg, weight });
+        }
+    }
+
+    if !averages.is_empty() {
+        // Weight by duration only when every contributing attempt has one
+        let weighted = averages.iter().all(|a| a.weight.is_some());
+        let mut sum = 0.0;
+        let mut total_weight = 0.0;
+        for a in &averages {
+            let weight = if weighted {
+                a.weight.expect("checked above").max(f64::EPSILON)
+            } else {
+                1.0
+            };
+            sum += a.avg as f64 * weight;
+            total_weight += weight;
+        }
+        usage.avg_memory = Some((sum / total_weight) as u64);
+    }
+
+    if any { Some(usage) } else { None }
 }
 
 /// Represents a monitored task.
@@ -224,7 +300,7 @@ impl TaskMonitor {
         backend_state: &super::BackendState,
     ) {
         let mut page_token = None;
-        loop {
+        'poll: loop {
             // Get the current tag from the state
             let tag = {
                 let state = state.lock().expect("failed to TES lock monitor state");
@@ -295,14 +371,31 @@ impl TaskMonitor {
                             }
                             t => {
                                 let t = t.into_task().expect("task should be basic");
+
+                                // A task response without an identifier
+                                // cannot be attributed to any monitored task;
+                                // if it were ignored, that task's terminal
+                                // state would never be observed and its
+                                // runner would wait forever. Fail the
+                                // monitored tasks explicitly instead.
+                                let Some(id) = t.id else {
+                                    state.running.clear();
+                                    state.ids.clear();
+                                    state.usage.clear();
+                                    for (_, task) in state.tasks.drain() {
+                                        let _ = task.completed.send(Err(anyhow!(
+                                            "TES server returned a task response without an id"
+                                        )));
+                                    }
+                                    break 'poll;
+                                };
+
                                 let usage = t
                                     .logs
-                                    .as_ref()
-                                    .and_then(|logs| logs.last())
-                                    .and_then(|log| log.metadata.as_ref())
-                                    .map(parse_resource_usage_metadata)
+                                    .as_deref()
+                                    .and_then(fold_task_log_usage)
                                     .filter(|usage| !usage.is_empty());
-                                (t.id.unwrap_or_default(), t.state, usage)
+                                (id, t.state, usage)
                             }
                         };
 
@@ -414,7 +507,85 @@ impl TaskMonitor {
 
 #[cfg(test)]
 mod tests {
+    use tes::v1::types::responses::TaskLog;
+
     use super::*;
+
+    /// Builds a task log with the given metadata and optional start/end
+    /// times (RFC 3339).
+    fn task_log(metadata: serde_json::Value, start: Option<&str>, end: Option<&str>) -> TaskLog {
+        TaskLog {
+            logs: Vec::new(),
+            metadata: Some(metadata),
+            start_time: start.map(|s| s.parse().expect("valid timestamp")),
+            end_time: end.map(|s| s.parse().expect("valid timestamp")),
+            outputs: Vec::new(),
+            system_logs: None,
+        }
+    }
+
+    #[test]
+    fn usage_folds_across_task_logs() {
+        // Two attempts: the second (a server-side retry) reports lower
+        // values, which must not regress the cumulative snapshot
+        let logs = [
+            task_log(
+                serde_json::json!({
+                    "peak_memory_bytes": "1000",
+                    "avg_memory_bytes": "800",
+                    "cpu_time_ms": "5000",
+                    "disk_used_bytes": "300",
+                }),
+                // 30 second attempt
+                Some("2026-08-26T00:00:00Z"),
+                Some("2026-08-26T00:00:30Z"),
+            ),
+            task_log(
+                serde_json::json!({
+                    "peak_memory_bytes": "400",
+                    "avg_memory_bytes": "200",
+                    "cpu_time_ms": "1000",
+                    "disk_used_bytes": "100",
+                }),
+                // 10 second attempt
+                Some("2026-08-26T00:01:00Z"),
+                Some("2026-08-26T00:01:10Z"),
+            ),
+        ];
+
+        let usage = fold_task_log_usage(&logs).expect("should have usage");
+        // Peaks take the maximum
+        assert_eq!(usage.max_memory, Some(1000));
+        assert_eq!(usage.disk_used, Some(300));
+        // CPU sums across attempts
+        assert_eq!(usage.cpu_time_ms, Some(6000));
+        // Average memory is duration-weighted: (800*30 + 200*10) / 40 = 650
+        assert_eq!(usage.avg_memory, Some(650));
+    }
+
+    #[test]
+    fn averages_fall_back_to_unweighted_without_timestamps() {
+        let logs = [
+            task_log(
+                serde_json::json!({ "avg_memory_bytes": "800" }),
+                Some("2026-08-26T00:00:00Z"),
+                Some("2026-08-26T00:00:30Z"),
+            ),
+            // No timestamps: the fold must not weight by duration
+            task_log(serde_json::json!({ "avg_memory_bytes": "200" }), None, None),
+        ];
+
+        let usage = fold_task_log_usage(&logs).expect("should have usage");
+        assert_eq!(usage.avg_memory, Some(500));
+    }
+
+    #[test]
+    fn logs_without_usage_fold_to_none() {
+        let logs = [task_log(serde_json::json!({}), None, None)];
+        assert!(fold_task_log_usage(&logs).is_none());
+
+        assert!(fold_task_log_usage(&[]).is_none());
+    }
 
     #[test]
     fn metadata_parses_numbers_and_numeric_strings() {

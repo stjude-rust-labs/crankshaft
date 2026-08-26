@@ -219,11 +219,11 @@ message TaskResourceUsageEvent {
   // The average resident memory observed, in bytes.
   optional uint64 avg_memory = 3;
   // The total CPU time consumed, in milliseconds.
-  optional int64 cpu_time_ms = 4;
+  optional uint64 cpu_time_ms = 4;
   // The user-mode CPU time consumed, in milliseconds.
-  optional int64 user_cpu_time_ms = 5;
+  optional uint64 user_cpu_time_ms = 5;
   // The system-mode CPU time consumed, in milliseconds.
-  optional int64 system_cpu_time_ms = 6;
+  optional uint64 system_cpu_time_ms = 6;
   // The disk space used, in bytes.
   optional uint64 disk_used = 7;
 }

@@ -69,6 +69,9 @@ struct BackendState {
     policy: ExponentialFactorBackoff,
     /// The permits for ensuring a maximum number of concurrent server requests.
     permits: Semaphore,
+    /// Whether to read task resource usage from the server's task log
+    /// metadata.
+    resource_usage_metadata: bool,
 }
 
 impl BackendState {
@@ -122,7 +125,7 @@ impl Backend {
         config: Config,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
     ) -> Self {
-        let (url, http, interval) = config.into_parts();
+        let (url, http, interval, resource_usage_metadata) = config.into_parts();
         let mut builder = Client::builder().url(url);
 
         if let Some(auth) = &http.auth {
@@ -141,6 +144,7 @@ impl Backend {
                 http.max_concurrency
                     .unwrap_or(DEFAULT_MAX_CONCURRENT_REQUESTS),
             ),
+            resource_usage_metadata,
         });
 
         // SAFETY: the name generator should _never_ run out of entries.

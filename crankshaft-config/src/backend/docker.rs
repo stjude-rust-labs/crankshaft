@@ -45,6 +45,16 @@ pub struct Config {
     #[serde(default)]
     #[builder(default)]
     events: EventConfig,
+    /// The interval, in seconds, at which to sample a running container's
+    /// resource usage and emit task resource usage events.
+    ///
+    /// When unset or zero, resource usage is not sampled and no resource
+    /// usage events are emitted.
+    ///
+    /// Sampling applies only to local container execution; it is not
+    /// supported for Docker Swarm services.
+    #[serde(default)]
+    resource_usage_interval: Option<u64>,
 }
 
 impl Config {
@@ -53,6 +63,14 @@ impl Config {
     /// failure).
     pub fn cleanup(&self) -> bool {
         self.cleanup
+    }
+
+    /// Gets the interval, in seconds, at which to sample a running
+    /// container's resource usage.
+    ///
+    /// Returns `None` when resource usage sampling is disabled.
+    pub fn resource_usage_interval(&self) -> Option<u64> {
+        self.resource_usage_interval
     }
 
     /// Gets the event configuration for the backend.

@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+* Added `Container::stats` for sampling a container's current resource usage
+  statistics ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 * Added support for the `ImagePull{Started,Failed,Finished}` events ([#82](https://github.com/stjude-rust-labs/crankshaft/pull/82)).
 
 ### Dependencies

@@ -12,7 +12,14 @@ rust-version.workspace = true
 [dependencies]
 bytes.workspace = true
 nonempty.workspace = true
+serde = { workspace = true, optional = true }
 tokio-util.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[features]
+serde = ["dep:serde"]
 
 [lints]
 workspace = true

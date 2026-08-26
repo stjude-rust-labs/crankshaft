@@ -7,13 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## 0.7.0 - 08-25-2026
+## 0.2.0 - 08-25-2026
 
 #### Added
 
 * Added `ImagePullStarted`, `ImagePullFinished`, and `ImagePullFailed` events ([#82](https://github.com/stjude-rust-labs/crankshaft/pull/82)).
 
-### Dependencies
+#### Dependencies
 
 * Updated dependencies to latest ([#87](https://github.com/stjude-rust-labs/crankshaft/pull/87)).
 

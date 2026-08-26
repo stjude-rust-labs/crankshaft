@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.1.0 - 08-25-2026
+
 #### Added
 
 * Added cancellation of tasks from the TUI ([#53](https://github.com/stjude-rust-labs/crankshaft/pull/53))

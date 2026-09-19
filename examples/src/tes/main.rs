@@ -69,14 +69,14 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let username = std::env::var(USER_ENV).ok();
     let password = std::env::var(PASSWORD_ENV).ok();
 
-    if (username.is_some() && password.is_none()) || (username.is_none() && password.is_some()) {
+    if username.is_none() && password.is_some() {
         bail!("both username and password must be provided for authentication");
     }
 
     let mut http_config = http::Config::default();
 
     // If username and password are available, add them to the config.
-    if let (Some(username), Some(password)) = (username, password) {
+    if let Some(username) = username {
         http_config.auth = Some(http::HttpAuthConfig::Basic { username, password });
     }
 

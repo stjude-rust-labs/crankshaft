@@ -76,6 +76,49 @@ cargo add crankshaft
 Once you've added `crankshaft` to your dependencies, you should head over to the
 [`examples`] to see how you can use the library in your projects.
 
+### Task Resource Usage
+
+Backends that can observe task resource usage emit cumulative
+`TaskResourceUsage` events. Every measurement is optional, and the latest event
+for a task is authoritative.
+
+Docker sampling is disabled by default. Set `resource-usage-interval` to a
+positive number of seconds to sample local containers:
+
+```rust
+let config = crankshaft::config::backend::docker::Config::builder()
+    .resource_usage_interval(5)
+    .build();
+```
+
+Sampling requires an event channel and is unavailable for Docker Swarm
+services. Memory measurements follow Docker CLI semantics by subtracting
+inactive file cache from the container's reported usage. The average is the
+arithmetic mean of successful polling samples, not a time-weighted value.
+
+TES metadata reporting is also disabled by default. Enable
+`resource-usage-metadata` to poll with the TES `BASIC` view and read supported
+keys from `TaskLog.metadata`:
+
+```rust
+let config = crankshaft::config::backend::tes::Config::builder()
+    .url(url)
+    .resource_usage_metadata(true)
+    .build();
+```
+
+Crankshaft accepts `peak_memory_bytes`, `avg_memory_bytes`, `cpu_time_ms`,
+`user_cpu_time_ms`, `system_cpu_time_ms`, and `disk_used_bytes` as JSON numbers
+or numeric strings. The meaning of memory measurements and averages is defined
+by the TES server.
+
+Planetary currently emits top-level `peak_memory_bytes`, `avg_memory_bytes`,
+and `cpu_time_ms` numeric strings aggregated across executor containers only.
+Its memory values are Kubernetes working set, not process RSS; its average is
+the arithmetic mean of samples; and CPU time is cumulative and rounded to
+milliseconds. Planetary's nested `resource_usage` per-container breakdown is
+not represented by Crankshaft's task-level event and is ignored.
+
 ## 🖥️ Development
 
 ### Prerequisites

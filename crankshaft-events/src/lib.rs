@@ -32,9 +32,9 @@ pub fn next_task_id() -> TaskId {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub struct TaskResourceUsage {
-    /// The maximum resident memory observed, in bytes.
+    /// The maximum memory usage observed, in bytes.
     pub max_memory: Option<u64>,
-    /// The average resident memory observed, in bytes.
+    /// The average memory usage observed, in bytes.
     ///
     /// The averaging method is producer-defined and averages are therefore
     /// not comparable across backends: sampling backends typically report an

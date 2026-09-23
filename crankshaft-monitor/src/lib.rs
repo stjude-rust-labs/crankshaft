@@ -32,8 +32,9 @@ impl Monitor {
     ///
     /// Note that a failure to bind to the address will disable monitoring.
     pub async fn start(addr: SocketAddr, events: broadcast::Sender<Event>) -> Self {
-        // Immediately subscribe here before we spawn the server task; this allows the
-        // server to receive all events after `start` is called
+        // Immediately subscribe here before we spawn the server task; this
+        // allows the server to receive all events after `start` is
+        // called
         let rx = events.subscribe();
 
         let token = CancellationToken::new();

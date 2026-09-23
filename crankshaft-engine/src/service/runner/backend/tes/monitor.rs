@@ -361,7 +361,8 @@ impl TaskMonitor {
                 }) => {
                     let mut state = state.lock().expect("failed to TES lock monitor state");
 
-                    // For any task that is completed and in the map, notify of completion
+                    // For any task that is completed and in the map, notify of
+                    // completion
                     for task in tes_tasks {
                         // Extract the identifier, state, and any reported
                         // resource usage from whichever view was requested.
@@ -422,7 +423,8 @@ impl TaskMonitor {
 
                         match task.state.unwrap_or_default() {
                             TesState::Running | TesState::Paused => {
-                                // The task is now running, send the started event
+                                // The task is now running, send the started
+                                // event
                                 if let Some(id) = state.ids.get(&task.id).copied()
                                     && state.running.insert(id)
                                     && let Some(Task { name, events, .. }) = state.tasks.get(&id)
@@ -440,7 +442,8 @@ impl TaskMonitor {
                             | TesState::SystemError
                             | TesState::Canceled
                             | TesState::Preempted => {
-                                // The task has completed, send the completion message
+                                // The task has completed, send the completion
+                                // message
                                 if let Some(id) = state.ids.remove(&task.id) {
                                     state.running.remove(&id);
                                     state.usage.remove(&id);

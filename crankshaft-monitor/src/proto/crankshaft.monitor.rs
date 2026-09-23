@@ -286,10 +286,10 @@ pub struct TaskResourceUsageEvent {
     /// The id of the task.
     #[prost(uint64, tag = "1")]
     pub id: u64,
-    /// The maximum resident memory observed, in bytes.
+    /// The maximum memory usage observed, in bytes.
     #[prost(uint64, optional, tag = "2")]
     pub max_memory: ::core::option::Option<u64>,
-    /// The average resident memory observed, in bytes.
+    /// The average memory usage observed, in bytes.
     #[prost(uint64, optional, tag = "3")]
     pub avg_memory: ::core::option::Option<u64>,
     /// The total CPU time consumed, in milliseconds.

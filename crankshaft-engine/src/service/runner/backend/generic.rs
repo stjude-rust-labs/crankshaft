@@ -153,8 +153,8 @@ impl crate::Backend for Backend {
                     }
 
                     // TODO(clay): this will warn every time for now. We need to
-                    // change the model of how tasks are done internally to remove
-                    // this need.
+                    // change the model of how tasks are done internally to
+                    // remove this need.
                     warn!(
                         "generic backends do not support images; as such, the directive to use \
                          the images: `{:?}` will be ignored",
@@ -189,10 +189,12 @@ impl crate::Backend for Backend {
                         .resolve_submit(&substitutions)
                         .context("failed to resolve submit command")?;
 
-                    // TODO: just because we've submitted a job doesn't mean it is running
-                    // The generic backend needs finer-grained reporting for us to tell when a
-                    // execution is actually running and not just queued; for example, the monitor
-                    // script might be able to print out the status rather just a "job exists"
+                    // TODO: just because we've submitted a job doesn't mean it
+                    // is running The generic backend needs
+                    // finer-grained reporting for us to tell when a
+                    // execution is actually running and not just queued; for
+                    // example, the monitor script might be
+                    // able to print out the status rather just a "job exists"
                     // (queued/running/?) and "job doesn't exist" (finished)
                     send_event!(events, Event::TaskStarted { id: task_id });
 
@@ -269,8 +271,9 @@ impl crate::Backend for Backend {
                     }
                 }
 
-                // SAFETY: each task _must_ have at least one execution, so at least one
-                // execution result _must_ exist at this stage. Thus, this will always unwrap.
+                // SAFETY: each task _must_ have at least one execution, so at
+                // least one execution result _must_ exist at
+                // this stage. Thus, this will always unwrap.
                 Ok(NonEmpty::from_vec(results).unwrap())
             };
 

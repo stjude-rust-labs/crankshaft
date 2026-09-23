@@ -181,6 +181,27 @@ impl UsageFold {
     /// Folds a container statistics sample and returns the cumulative usage
     /// snapshot.
     fn observe(&mut self, stats: &bollard::models::ContainerStatsResponse) -> TaskResourceUsage {
+        let memory_usage = stats
+            .memory_stats
+            .as_ref()
+            .and_then(|memory| memory.usage)
+            .unwrap_or(0);
+        let cpu = stats
+            .cpu_stats
+            .as_ref()
+            .and_then(|cpu| cpu.cpu_usage.as_ref());
+        let has_cpu_usage = cpu.is_some_and(|cpu| {
+            cpu.total_usage.unwrap_or(0) > 0
+                || cpu.usage_in_usermode.unwrap_or(0) > 0
+                || cpu.usage_in_kernelmode.unwrap_or(0) > 0
+        });
+
+        // Docker omits the sample timestamp and resource values when a
+        // non-streaming stats request races with container exit.
+        if stats.read.is_none() && memory_usage == 0 && !has_cpu_usage {
+            return self.snapshot();
+        }
+
         if let Some(memory) = stats.memory_stats.as_ref()
             && let Some(usage) = memory.usage
         {
@@ -287,13 +308,13 @@ impl Backend {
             .context("failed to retrieve local Docker daemon information")?;
 
         // Check to see if the daemon is part of an active swarm or not
-        // If the daemon is part of a swarm, but the node is not active or a manager, we
-        // can't spawn tasks
+        // If the daemon is part of a swarm, but the node is not active or a
+        // manager, we can't spawn tasks
         let swarm = if let Some(swarm) = &info.swarm {
             match (&swarm.node_id, swarm.local_node_state) {
                 (Some(id), Some(LocalNodeState::ACTIVE)) if !id.is_empty() => {
-                    // Part of an active swarm, check to see if the node is a manager
-                    // Default is false as documented here: https://docs.docker.com/reference/api/engine/version/v1.47/#tag/System/operation/SystemInfo
+                    // Part of an active swarm, check to see if the node is a
+                    // manager Default is false as documented here: https://docs.docker.com/reference/api/engine/version/v1.47/#tag/System/operation/SystemInfo
                     if !swarm.control_available.unwrap_or(false) {
                         bail!(
                             "the local Docker daemon is part of a swarm but cannot be used to \
@@ -301,8 +322,8 @@ impl Backend {
                         );
                     }
 
-                    // Only look at active and ready nodes in the swarm that are reporting their
-                    // resources
+                    // Only look at active and ready nodes in the swarm that are
+                    // reporting their resources
                     let nodes = client
                         .nodes()
                         .await
@@ -896,8 +917,9 @@ async fn add_input_mounts(
 fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Mount>) -> Result<()> {
     for volume in volumes {
         // Create new temporary directory in the provided temporary directory
-        // The call to `into_path` will prevent the directory from being deleted on
-        // drop; instead, we're relying on the parent temporary directory to delete it
+        // The call to `into_path` will prevent the directory from being deleted
+        // on drop; instead, we're relying on the parent temporary
+        // directory to delete it
         let path = TempDir::new_in(tempdir)
             .with_context(|| {
                 format!(
@@ -1209,6 +1231,7 @@ mod usage_tests {
     /// cumulative CPU counters (nanoseconds).
     fn sample(memory: u64, total: u64, user: u64, system: u64) -> ContainerStatsResponse {
         ContainerStatsResponse {
+            read: Some(chrono::Utc::now().to_rfc3339()),
             memory_stats: Some(ContainerMemoryStats {
                 usage: Some(memory),
                 ..Default::default()
@@ -1275,14 +1298,39 @@ mod usage_tests {
     }
 
     #[test]
-    fn zero_valued_samples_do_not_reset_cpu_counters() {
+    fn timestamped_zero_memory_samples_are_retained() {
+        let mut fold = UsageFold::default();
+
+        let usage = fold.observe(&sample(0, 0, 0, 0));
+        assert_eq!(usage.max_memory, Some(0));
+        assert_eq!(usage.avg_memory, Some(0));
+    }
+
+    #[test]
+    fn untimestamped_nonzero_samples_are_retained() {
+        let mut fold = UsageFold::default();
+
+        let mut stats = sample(100, 5_000_000, 4_000_000, 1_000_000);
+        stats.read = None;
+        let usage = fold.observe(&stats);
+        assert_eq!(usage.max_memory, Some(100));
+        assert_eq!(usage.avg_memory, Some(100));
+        assert_eq!(usage.cpu_time_ms, Some(5));
+    }
+
+    #[test]
+    fn zero_valued_samples_do_not_reset_usage() {
         let mut fold = UsageFold::default();
 
         fold.observe(&sample(100, 5_000_000, 4_000_000, 1_000_000));
 
-        // Docker returns a successful, zero-valued stats object once a
-        // container has exited; such a sample must not reset the counters
-        let usage = fold.observe(&sample(0, 0, 0, 0));
+        // Docker returns an untimestamped, zero-valued stats object once a
+        // container has exited; such a response must not alter observed usage
+        let mut stopped = sample(0, 0, 0, 0);
+        stopped.read = None;
+        let usage = fold.observe(&stopped);
+        assert_eq!(usage.max_memory, Some(100));
+        assert_eq!(usage.avg_memory, Some(100));
         assert_eq!(usage.cpu_time_ms, Some(5));
         assert_eq!(usage.user_cpu_time_ms, Some(4));
         assert_eq!(usage.system_cpu_time_ms, Some(1));

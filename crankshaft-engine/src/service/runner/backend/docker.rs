@@ -190,17 +190,10 @@ impl UsageFold {
             // cache (`total_inactive_file` on cgroup v1, `inactive_file` on
             // cgroup v2). Ignore cache values greater than or equal to the
             // raw usage.
-            let cache = memory
-                .stats
-                .as_ref()
-                .and_then(|stats| {
-                    stats
-                        .get("total_inactive_file")
-                        .or_else(|| stats.get("inactive_file"))
-                })
-                .copied();
-            let usage = cache
-                .filter(|cache| *cache < usage)
+            let stats = memory.stats.as_ref();
+            let usage = ["total_inactive_file", "inactive_file"]
+                .into_iter()
+                .find_map(|key| stats?.get(key).copied().filter(|cache| *cache < usage))
                 .map_or(usage, |cache| usage - cache);
 
             self.max_memory = Some(self.max_memory.unwrap_or(0).max(usage));
@@ -1358,6 +1351,19 @@ mod usage_tests {
             .insert("total_inactive_file".to_string(), 250);
         let usage = fold.observe(&both);
         assert_eq!(usage.max_memory, Some(750));
+
+        // An invalid cgroup v1 value falls back to the valid cgroup v2 value
+        let mut fold = UsageFold::default();
+        let mut both = cached_sample(100, "inactive_file", 25);
+        both.memory_stats
+            .as_mut()
+            .expect("memory stats")
+            .stats
+            .as_mut()
+            .expect("memory stat values")
+            .insert("total_inactive_file".to_string(), 150);
+        let usage = fold.observe(&both);
+        assert_eq!(usage.max_memory, Some(75));
 
         // An invalid cache value does not reduce the raw usage
         let mut fold = UsageFold::default();

@@ -7,6 +7,11 @@ const sidebar: DefaultTheme.SidebarItem[] = sections.map((section) => ({
   items: pages.filter((p) => p.section === section).map((p) => ({ text: p.title, link: p.link })),
 }));
 
+const siteUrl = "https://stjude-rust-labs.github.io/crankshaft/";
+const ogImage = `${siteUrl}og.png`;
+const ogImageAlt =
+  "Crankshaft: task execution for workflow engines. A drawing of a crankshaft with three numbered throws for the Docker, TES, and Generic backends.";
+
 export default defineConfig({
   title: "Crankshaft",
   description:
@@ -19,7 +24,31 @@ export default defineConfig({
   head: [
     ["link", { rel: "icon", type: "image/svg+xml", href: "/crankshaft/favicon.svg" }],
     ["meta", { name: "theme-color", content: "#D11947" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "Crankshaft" }],
+    ["meta", { property: "og:locale", content: "en_US" }],
+    ["meta", { property: "og:image", content: ogImage }],
+    ["meta", { property: "og:image:type", content: "image/png" }],
+    ["meta", { property: "og:image:width", content: "2400" }],
+    ["meta", { property: "og:image:height", content: "1260" }],
+    ["meta", { property: "og:image:alt", content: ogImageAlt }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:image", content: ogImage }],
+    ["meta", { name: "twitter:image:alt", content: ogImageAlt }],
   ],
+  sitemap: { hostname: siteUrl },
+  transformHead({ pageData, title, description }) {
+    if (pageData.isNotFound) return [];
+    const url = siteUrl + pageData.relativePath.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "");
+    return [
+      ["link", { rel: "canonical", href: url }],
+      ["meta", { property: "og:url", content: url }],
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: description }],
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: description }],
+    ];
+  },
   markdown: {
     theme: { light: redlineLight, dark: redlineDark },
   },

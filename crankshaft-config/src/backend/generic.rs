@@ -42,8 +42,8 @@ static PLACEHOLDER_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 pub fn substitute(input: &str, replacements: &HashMap<Cow<'_, str>, Cow<'_, str>>) -> String {
     PLACEHOLDER_REGEX
         .replace_all(input, |captures: &Captures<'_>| {
-            // SAFETY: the `PLACEHOLDER_REGEX` above is hardcoded to ensure a group
-            // is included. This is tested statically below.
+            // SAFETY: the `PLACEHOLDER_REGEX` above is hardcoded to ensure a
+            // group is included. This is tested statically below.
             let key = &captures.get(1).unwrap();
 
             replacements

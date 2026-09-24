@@ -173,13 +173,13 @@ impl Backend {
             .context("failed to retrieve local Docker daemon information")?;
 
         // Check to see if the daemon is part of an active swarm or not
-        // If the daemon is part of a swarm, but the node is not active or a manager, we
-        // can't spawn tasks
+        // If the daemon is part of a swarm, but the node is not active or a
+        // manager, we can't spawn tasks
         let swarm = if let Some(swarm) = &info.swarm {
             match (&swarm.node_id, swarm.local_node_state) {
                 (Some(id), Some(LocalNodeState::ACTIVE)) if !id.is_empty() => {
-                    // Part of an active swarm, check to see if the node is a manager
-                    // Default is false as documented here: https://docs.docker.com/reference/api/engine/version/v1.47/#tag/System/operation/SystemInfo
+                    // Part of an active swarm, check to see if the node is a
+                    // manager Default is false as documented here: https://docs.docker.com/reference/api/engine/version/v1.47/#tag/System/operation/SystemInfo
                     if !swarm.control_available.unwrap_or(false) {
                         bail!(
                             "the local Docker daemon is part of a swarm but cannot be used to \
@@ -187,8 +187,8 @@ impl Backend {
                         );
                     }
 
-                    // Only look at active and ready nodes in the swarm that are reporting their
-                    // resources
+                    // Only look at active and ready nodes in the swarm that are
+                    // reporting their resources
                     let nodes = client
                         .nodes()
                         .await
@@ -694,8 +694,9 @@ async fn add_input_mounts(
 fn add_shared_mounts(volumes: Vec<String>, tempdir: &Path, mounts: &mut Vec<Mount>) -> Result<()> {
     for volume in volumes {
         // Create new temporary directory in the provided temporary directory
-        // The call to `into_path` will prevent the directory from being deleted on
-        // drop; instead, we're relying on the parent temporary directory to delete it
+        // The call to `into_path` will prevent the directory from being deleted
+        // on drop; instead, we're relying on the parent temporary
+        // directory to delete it
         let path = TempDir::new_in(tempdir)
             .with_context(|| {
                 format!(

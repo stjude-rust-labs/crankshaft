@@ -133,7 +133,8 @@ impl Service {
                 .map_err(Error::Docker)?;
 
             if tasks.is_empty() {
-                // A task hasn't been created for the service yet, query again after a delay
+                // A task hasn't been created for the service yet, query again
+                // after a delay
                 sleep(Duration::from_millis(100)).await;
                 continue;
             }
@@ -172,7 +173,8 @@ impl Service {
                     );
 
                     // Query again after a delay
-                    // TODO: make this a variable delay so as to lessen a thundering herd
+                    // TODO: make this a variable delay so as to lessen a
+                    // thundering herd
                     sleep(Duration::from_secs(1)).await;
                 }
                 Some(TaskState::RUNNING) | Some(TaskState::COMPLETE) | Some(TaskState::FAILED) => {

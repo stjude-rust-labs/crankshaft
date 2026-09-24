@@ -102,7 +102,8 @@ impl Contents {
             Self::Path(path) => return Ok(path.into()),
         };
 
-        // Write the contents to a temporary file within the given temporary directory
+        // Write the contents to a temporary file within the given temporary
+        // directory
         let mut file = tempfile::NamedTempFile::new_in(temp_dir).with_context(|| {
             format!(
                 "failed to create temporary input file in `{temp_dir}`",
@@ -117,7 +118,8 @@ impl Contents {
             )
         })?;
 
-        // Keep the file as the temporary directory itself will clean up the mounts
+        // Keep the file as the temporary directory itself will clean up the
+        // mounts
         let (_, path) = file.keep().context("failed to persist temporary file")?;
 
         Ok(path.into())

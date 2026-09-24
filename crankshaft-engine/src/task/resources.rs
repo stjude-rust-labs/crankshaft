@@ -227,8 +227,9 @@ impl From<&Resources> for HostConfig {
             );
         }
 
-        // The Docker `memory_reservation` setting acts as a soft limit and not as
-        // something informing a scheduler of minimum requirements for the container
+        // The Docker `memory_reservation` setting acts as a soft limit and not
+        // as something informing a scheduler of minimum requirements
+        // for the container
 
         if let Some(ram) = resources.ram_limit() {
             host_config.memory = Some((ram * 1024. * 1024. * 1024.) as i64);

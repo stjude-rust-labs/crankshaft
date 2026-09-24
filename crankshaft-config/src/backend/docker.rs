@@ -71,6 +71,7 @@ impl Config {
     /// Returns `None` when resource usage sampling is disabled.
     pub fn resource_usage_interval(&self) -> Option<u64> {
         self.resource_usage_interval
+            .filter(|interval| *interval > 0)
     }
 
     /// Gets the event configuration for the backend.
@@ -92,5 +93,17 @@ mod tests {
     #[test]
     fn test_default_unwraps() {
         Config::default();
+    }
+
+    #[test]
+    fn zero_resource_usage_interval_is_disabled() {
+        let config = Config::builder().resource_usage_interval(0).build();
+        assert_eq!(config.resource_usage_interval(), None);
+    }
+
+    #[test]
+    fn positive_resource_usage_interval_is_retained() {
+        let config = Config::builder().resource_usage_interval(5).build();
+        assert_eq!(config.resource_usage_interval(), Some(5));
     }
 }

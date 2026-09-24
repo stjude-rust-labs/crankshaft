@@ -64,7 +64,7 @@ tokio-metrics = "0.5.1"
 tokio-retry2 = { version = "0.9", features = ["jitter"] }
 tokio-stream = "0.1.19"
 tokio-test = "0.4.5"
-tokio-util = "0.7.19"
+tokio-util = { version = "0.7.19", features = ["rt"] }
 toml = "1.1.4"
 tonic = "0.14.6"
 tonic-prost = "0.14.6"

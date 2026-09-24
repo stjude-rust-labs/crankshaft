@@ -73,12 +73,20 @@ impl Config {
 
     /// Consumes `self` and returns the constituent, owned parts of the
     /// configuration.
-    pub fn into_parts(self) -> (Url, http::Config, Option<u64>, bool) {
-        (
-            self.url,
-            self.http,
-            self.interval,
-            self.resource_usage_metadata,
-        )
+    pub fn into_parts(self) -> (Url, http::Config, Option<u64>) {
+        (self.url, self.http, self.interval)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn into_parts_preserves_its_original_shape() {
+        let config = Config::builder()
+            .url("https://example.com".parse::<Url>().expect("valid URL"))
+            .build();
+        let _: (Url, http::Config, Option<u64>) = config.into_parts();
     }
 }

@@ -73,7 +73,7 @@ pub(crate) fn render_tasks(frame: &mut Frame<'_>, tasks_state: &mut TuiTasksStat
             Constraint::Max(20),
             Constraint::Max(20),
             Constraint::Max(10),
-            Constraint::Max(24),
+            Constraint::Max(32),
             Constraint::Max(30),
             Constraint::Fill(1),
         ],

@@ -33,6 +33,7 @@ use tempfile::TempDir;
 use tokio::select;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::AbortOnDropHandle;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -181,44 +182,26 @@ impl UsageFold {
     /// Folds a container statistics sample and returns the cumulative usage
     /// snapshot.
     fn observe(&mut self, stats: &bollard::models::ContainerStatsResponse) -> TaskResourceUsage {
-        let memory_usage = stats
-            .memory_stats
-            .as_ref()
-            .and_then(|memory| memory.usage)
-            .unwrap_or(0);
-        let cpu = stats
-            .cpu_stats
-            .as_ref()
-            .and_then(|cpu| cpu.cpu_usage.as_ref());
-        let has_cpu_usage = cpu.is_some_and(|cpu| {
-            cpu.total_usage.unwrap_or(0) > 0
-                || cpu.usage_in_usermode.unwrap_or(0) > 0
-                || cpu.usage_in_kernelmode.unwrap_or(0) > 0
-        });
-
-        // Docker omits the sample timestamp and resource values when a
-        // non-streaming stats request races with container exit.
-        if stats.read.is_none() && memory_usage == 0 && !has_cpu_usage {
-            return self.snapshot();
-        }
-
         if let Some(memory) = stats.memory_stats.as_ref()
             && let Some(usage) = memory.usage
         {
             // Docker's raw `usage` includes reclaimable page cache; follow
             // the Docker CLI's semantics by subtracting the inactive file
-            // cache (`inactive_file` on cgroup v2, `total_inactive_file` on
-            // cgroup v1) so that folded values reflect memory actually held
+            // cache (`total_inactive_file` on cgroup v1, `inactive_file` on
+            // cgroup v2). Ignore cache values greater than or equal to the
+            // raw usage.
             let cache = memory
                 .stats
                 .as_ref()
-                .and_then(|s| {
-                    s.get("inactive_file")
-                        .or_else(|| s.get("total_inactive_file"))
+                .and_then(|stats| {
+                    stats
+                        .get("total_inactive_file")
+                        .or_else(|| stats.get("inactive_file"))
                 })
-                .copied()
-                .unwrap_or(0);
-            let usage = usage.saturating_sub(cache);
+                .copied();
+            let usage = cache
+                .filter(|cache| *cache < usage)
+                .map_or(usage, |cache| usage - cache);
 
             self.max_memory = Some(self.max_memory.unwrap_or(0).max(usage));
             self.memory_sum += usage as u128;
@@ -447,12 +430,7 @@ impl Backend {
         // Resource usage sampling applies only to local container execution;
         // warn once (rather than silently ignore) when it is configured for a
         // Docker Swarm service
-        if resources.use_service()
-            && config
-                .resource_usage_interval()
-                .filter(|i| *i > 0)
-                .is_some()
-        {
+        if resources.use_service() && config.resource_usage_interval().is_some() {
             warn!(
                 "`resource-usage-interval` is not supported for Docker Swarm services; resource \
                  usage will not be sampled"
@@ -571,7 +549,7 @@ impl crate::Backend for Backend {
         let events_config = self.config.events();
         // A zero interval is normalized to disabled: Tokio's `interval`
         // panics on a zero duration
-        let resource_usage_interval = self.config.resource_usage_interval().filter(|i| *i > 0);
+        let resource_usage_interval = self.config.resource_usage_interval();
         let use_service = self.resources.use_service();
         let names = self.names.clone();
 
@@ -743,7 +721,7 @@ impl crate::Backend for Backend {
                             (Some(secs), Some(events)) => {
                                 let container = container.clone();
                                 let usage = usage.clone();
-                                Some(tokio::spawn(async move {
+                                Some(AbortOnDropHandle::new(tokio::spawn(async move {
                                     let mut interval = tokio::time::interval(
                                         std::time::Duration::from_secs(secs),
                                     );
@@ -785,7 +763,7 @@ impl crate::Backend for Backend {
                                             }
                                         }
                                     }
-                                }))
+                                })))
                             }
                             _ => None,
                         };
@@ -1324,10 +1302,11 @@ mod usage_tests {
 
         fold.observe(&sample(100, 5_000_000, 4_000_000, 1_000_000));
 
-        // Docker returns an untimestamped, zero-valued stats object once a
-        // container has exited; such a response must not alter observed usage
+        // Docker returns an empty stats object once a container has exited;
+        // such a response must not alter observed usage
         let mut stopped = sample(0, 0, 0, 0);
-        stopped.read = None;
+        stopped.read = Some("0001-01-01T00:00:00Z".to_string());
+        stopped.memory_stats = Some(ContainerMemoryStats::default());
         let usage = fold.observe(&stopped);
         assert_eq!(usage.max_memory, Some(100));
         assert_eq!(usage.avg_memory, Some(100));
@@ -1367,10 +1346,22 @@ mod usage_tests {
         let usage = fold.observe(&cached_sample(1000, "total_inactive_file", 250));
         assert_eq!(usage.max_memory, Some(750));
 
-        // A cache value larger than usage saturates to zero rather than
-        // wrapping
+        // cgroup v1 takes precedence when both keys are present
+        let mut fold = UsageFold::default();
+        let mut both = cached_sample(1000, "inactive_file", 300);
+        both.memory_stats
+            .as_mut()
+            .expect("memory stats")
+            .stats
+            .as_mut()
+            .expect("memory stat values")
+            .insert("total_inactive_file".to_string(), 250);
+        let usage = fold.observe(&both);
+        assert_eq!(usage.max_memory, Some(750));
+
+        // An invalid cache value does not reduce the raw usage
         let mut fold = UsageFold::default();
         let usage = fold.observe(&cached_sample(100, "inactive_file", 500));
-        assert_eq!(usage.max_memory, Some(0));
+        assert_eq!(usage.max_memory, Some(100));
     }
 }

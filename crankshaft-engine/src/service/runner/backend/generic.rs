@@ -190,12 +190,12 @@ impl crate::Backend for Backend {
                         .context("failed to resolve submit command")?;
 
                     // TODO: just because we've submitted a job doesn't mean it
-                    // is running The generic backend needs
-                    // finer-grained reporting for us to tell when a
-                    // execution is actually running and not just queued; for
-                    // example, the monitor script might be
-                    // able to print out the status rather just a "job exists"
-                    // (queued/running/?) and "job doesn't exist" (finished)
+                    // is running. The generic backend needs finer-grained
+                    // reporting for us to tell when an execution is actually
+                    // running and not just queued; for example, the monitor
+                    // script might be able to print out the status rather than
+                    // just a "job exists" (queued/running/?) and "job doesn't
+                    // exist" (finished).
                     send_event!(events, Event::TaskStarted { id: task_id });
 
                     let output = driver

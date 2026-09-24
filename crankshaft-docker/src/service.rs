@@ -174,7 +174,7 @@ impl Service {
 
                     // Query again after a delay
                     // TODO: make this a variable delay so as to lessen a
-                    // thundering herd
+                    // thundering herd.
                     sleep(Duration::from_secs(1)).await;
                 }
                 Some(TaskState::RUNNING) | Some(TaskState::COMPLETE) | Some(TaskState::FAILED) => {

@@ -81,9 +81,8 @@ fn parse_resource_usage_metadata(metadata: &serde_json::Value) -> TaskResourceUs
 /// * peak memory and disk used take the maximum across attempts;
 /// * CPU times sum across attempts (saturating);
 /// * average memory is the duration-weighted mean of the attempts' averages,
-///   weighted by each log's `start_time`/`end_time` span (an attempt still in
-///   flight is weighted by the time elapsed since its start); if any
-///   contributing log lacks timestamps, an unweighted mean is used instead.
+///   weighted by each log's `start_time`/`end_time` span; if any contributing
+///   log lacks either timestamp, an unweighted mean is used instead.
 ///
 /// Returns `None` if no log carries any usage.
 fn fold_task_log_usage(logs: &[tes::v1::types::responses::TaskLog]) -> Option<TaskResourceUsage> {
@@ -130,32 +129,59 @@ fn fold_task_log_usage(logs: &[tes::v1::types::responses::TaskLog]) -> Option<Ta
         }
 
         if let Some(avg) = parsed.avg_memory {
-            let weight = log.start_time.map(|start| {
-                let end = log.end_time.unwrap_or_else(chrono::Utc::now);
-                (end - start).num_milliseconds().max(0) as f64 / 1_000.0
-            });
+            let weight = log
+                .start_time
+                .zip(log.end_time)
+                .map(|(start, end)| (end - start).num_milliseconds().max(0) as f64);
             averages.push(Average { avg, weight });
         }
     }
 
     if !averages.is_empty() {
-        // Weight by duration only when every contributing attempt has one
-        let weighted = averages.iter().all(|a| a.weight.is_some());
-        let mut sum = 0.0;
-        let mut total_weight = 0.0;
-        for a in &averages {
-            let weight = if weighted {
-                a.weight.expect("checked above").max(f64::EPSILON)
-            } else {
-                1.0
-            };
-            sum += a.avg as f64 * weight;
-            total_weight += weight;
-        }
-        usage.avg_memory = Some((sum / total_weight) as u64);
+        usage.avg_memory = Some(if averages.len() == 1 {
+            averages[0].avg
+        } else {
+            // Weight by duration only when every contributing attempt has one
+            let weighted = averages.iter().all(|average| average.weight.is_some());
+            let mut sum = 0.0;
+            let mut total_weight = 0.0;
+            for average in &averages {
+                let weight = if weighted {
+                    average.weight.expect("checked above").max(f64::EPSILON)
+                } else {
+                    1.0
+                };
+                sum += average.avg as f64 * weight;
+                total_weight += weight;
+            }
+            (sum / total_weight).round() as u64
+        });
     }
 
     if any { Some(usage) } else { None }
+}
+
+/// Extracts the identifier, state, and resource usage from a TES task response.
+fn monitored_task_response(
+    task: tes::v1::types::responses::TaskResponse,
+) -> Result<(MonitoredTaskState, Option<TaskResourceUsage>)> {
+    let (id, state, usage) = match task {
+        tes::v1::types::responses::TaskResponse::Minimal(task) => (task.id, task.state, None),
+        task => {
+            let task = task.into_task().expect("task should be basic or full");
+            let id = task
+                .id
+                .context("TES server returned a task response without an id")?;
+            let usage = task
+                .logs
+                .as_deref()
+                .and_then(fold_task_log_usage)
+                .filter(|usage| !usage.is_empty());
+            (id, task.state, usage)
+        }
+    };
+
+    Ok((MonitoredTaskState { id, state }, usage))
 }
 
 /// Represents a monitored task.
@@ -366,39 +392,25 @@ impl TaskMonitor {
                     for task in tes_tasks {
                         // Extract the identifier, state, and any reported
                         // resource usage from whichever view was requested.
-                        let (task_id, task_state, usage) = match task {
-                            tes::v1::types::responses::TaskResponse::Minimal(t) => {
-                                (t.id, t.state, None)
-                            }
-                            t => {
-                                let t = t.into_task().expect("task should be basic");
-
+                        let (task, usage) = match monitored_task_response(task) {
+                            Ok(response) => response,
+                            Err(error) => {
                                 // A task response without an identifier
                                 // cannot be attributed to any monitored task;
                                 // if it were ignored, that task's terminal
                                 // state would never be observed and its
                                 // runner would wait forever. Fail the
                                 // monitored tasks explicitly instead.
-                                let Some(id) = t.id else {
-                                    state.running.clear();
-                                    state.ids.clear();
-                                    state.usage.clear();
-                                    for (_, task) in state.tasks.drain() {
-                                        let _ = task.completed.send(Err(anyhow!(
-                                            "TES server returned a task response without an id"
-                                        )));
-                                    }
-                                    break 'poll;
-                                };
-
-                                let usage = t
-                                    .logs
-                                    .as_deref()
-                                    .and_then(fold_task_log_usage)
-                                    .filter(|usage| !usage.is_empty());
-                                (id, t.state, usage)
+                                state.running.clear();
+                                state.ids.clear();
+                                state.usage.clear();
+                                for (_, task) in state.tasks.drain() {
+                                    let _ = task.completed.send(Err(anyhow!("{error:#}")));
+                                }
+                                break 'poll;
                             }
                         };
+                        let task_id = &task.id;
 
                         // Report any resource usage the server included; each
                         // report is a cumulative snapshot and the last one
@@ -407,7 +419,7 @@ impl TaskMonitor {
                         // changed since the last emission. The event is sent
                         // on the monitored task's own events channel.
                         if let Some(usage) = usage
-                            && let Some(id) = state.ids.get(&task_id).copied()
+                            && let Some(id) = state.ids.get(task_id).copied()
                             && state.usage.get(&id) != Some(&usage)
                             && let Some(task) = state.tasks.get(&id)
                         {
@@ -415,11 +427,6 @@ impl TaskMonitor {
                             state.usage.insert(id, usage.clone());
                             send_event!(events, Event::TaskResourceUsage { id, usage });
                         }
-
-                        let task = MonitoredTaskState {
-                            id: task_id,
-                            state: task_state,
-                        };
 
                         match task.state.unwrap_or_default() {
                             TesState::Running | TesState::Paused => {
@@ -511,6 +518,7 @@ impl TaskMonitor {
 #[cfg(test)]
 mod tests {
     use tes::v1::types::responses::TaskLog;
+    use tes::v1::types::responses::TaskResponse;
 
     use super::*;
 
@@ -525,6 +533,20 @@ mod tests {
             outputs: Vec::new(),
             system_logs: None,
         }
+    }
+
+    #[test]
+    fn basic_task_responses_require_an_id() {
+        let response = TaskResponse::Basic(Default::default());
+
+        let error = monitored_task_response(response)
+            .err()
+            .expect("a BASIC response without an id should fail");
+
+        assert_eq!(
+            error.to_string(),
+            "TES server returned a task response without an id"
+        );
     }
 
     #[test]
@@ -583,6 +605,56 @@ mod tests {
     }
 
     #[test]
+    fn averages_fall_back_to_unweighted_without_end_time() {
+        let logs = [
+            task_log(
+                serde_json::json!({ "avg_memory_bytes": "800" }),
+                Some("2026-08-26T00:00:00Z"),
+                Some("2026-08-26T00:00:30Z"),
+            ),
+            task_log(
+                serde_json::json!({ "avg_memory_bytes": "200" }),
+                Some("2026-08-26T00:01:00Z"),
+                None,
+            ),
+        ];
+
+        let usage = fold_task_log_usage(&logs).expect("should have usage");
+        assert_eq!(usage.avg_memory, Some(500));
+    }
+
+    #[test]
+    fn a_single_average_is_returned_exactly() {
+        let logs = [task_log(
+            serde_json::json!({ "avg_memory_bytes": "9007199254740991" }),
+            Some("2026-08-26T00:00:00Z"),
+            Some("2026-08-26T00:00:00.001Z"),
+        )];
+
+        let usage = fold_task_log_usage(&logs).expect("should have usage");
+        assert_eq!(usage.avg_memory, Some(9_007_199_254_740_991));
+    }
+
+    #[test]
+    fn weighted_averages_are_rounded() {
+        let logs = [
+            task_log(
+                serde_json::json!({ "avg_memory_bytes": "1" }),
+                Some("2026-08-26T00:00:00Z"),
+                Some("2026-08-26T00:00:01Z"),
+            ),
+            task_log(
+                serde_json::json!({ "avg_memory_bytes": "2" }),
+                Some("2026-08-26T00:01:00Z"),
+                Some("2026-08-26T00:01:02Z"),
+            ),
+        ];
+
+        let usage = fold_task_log_usage(&logs).expect("should have usage");
+        assert_eq!(usage.avg_memory, Some(2));
+    }
+
+    #[test]
     fn logs_without_usage_fold_to_none() {
         let logs = [task_log(serde_json::json!({}), None, None)];
         assert!(fold_task_log_usage(&logs).is_none());
@@ -616,7 +688,9 @@ mod tests {
     fn unparseable_and_missing_metadata_is_ignored() {
         let metadata = serde_json::json!({
             "peak_memory_bytes": "not a number",
-            "cpu_time_ms": true,
+            "cpu_time_ms": -1,
+            "user_cpu_time_ms": "-2",
+            "system_cpu_time_ms": true,
         });
 
         let usage = parse_resource_usage_metadata(&metadata);

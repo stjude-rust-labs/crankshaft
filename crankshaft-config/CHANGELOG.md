@@ -17,11 +17,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   configuration, which enables reading task resource usage from the
   documented `TaskLog.metadata` keys ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 
-### Changed
-
-* `tes::Config::into_parts` now also returns the `resource-usage-metadata`
-  flag ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
-
 ## 0.7.0 - 08-25-2026
 
 ### Dependencies

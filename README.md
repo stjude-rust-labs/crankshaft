@@ -95,6 +95,10 @@ Sampling requires an event channel and is unavailable for Docker Swarm
 services. Memory measurements follow Docker CLI semantics by subtracting
 inactive file cache from the container's reported usage. The average is the
 arithmetic mean of successful polling samples, not a time-weighted value.
+Sampling is best effort. Containers that finish before the first interval may
+emit no resource-usage event, cumulative CPU time may be undercounted by up to
+one interval, and `max_memory` is the largest observed sample rather than the
+container's true lifetime peak.
 
 TES metadata reporting is also disabled by default. Enable
 `resource-usage-metadata` to poll with the TES `BASIC` view and read supported

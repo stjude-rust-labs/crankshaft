@@ -117,9 +117,13 @@ body {
   background-color: var(--line) !important;
 }
 
-.VPNavBar.has-sidebar .title,
-.VPNavBar .title {
-  border-bottom-color: var(--line) !important;
+/* One rule runs the full width of the bar instead of a separate rule under the logo. */
+.VPNavBar .divider {
+  padding-left: 0 !important;
+}
+
+.VPNavBarTitle .title {
+  border-bottom-color: transparent !important;
 }
 
 .VPNavBarTitle .title {
@@ -159,14 +163,27 @@ body {
   }
 }
 
-.VPNavBarSearch .DocSearch-Button {
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  background: var(--paper);
-}
+/* Below 768px VitePress shows search as a bare icon, so only box the full field. */
+@media (min-width: 768px) {
+  .VPNavBarSearch .DocSearch-Button {
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--paper);
+  }
 
-.VPNavBarSearch .DocSearch-Button:hover {
-  border-color: var(--line-2);
+  .VPNavBarSearch .DocSearch-Button:hover {
+    border-color: var(--line-2);
+  }
+
+  html:not(.dark) .VPNavBarSearch .DocSearch-Button {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  html:not(.dark) .VPNavBarSearch .DocSearch-Button:hover {
+    border-color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+  }
 }
 
 .VPLocalNav {
@@ -203,10 +220,6 @@ html:not(.dark) .VPNavBar .divider {
   background-color: transparent !important;
 }
 
-html:not(.dark) .VPNavBar .title {
-  border-bottom-color: transparent !important;
-}
-
 html:not(.dark) .VPNavBarMenuLink {
   color: rgba(255, 255, 255, 0.9) !important;
 }
@@ -214,16 +227,6 @@ html:not(.dark) .VPNavBarMenuLink {
 html:not(.dark) .VPNavBarMenuLink:hover,
 html:not(.dark) .VPNavBarMenuLink.active {
   color: #fff !important;
-}
-
-html:not(.dark) .VPNavBarSearch .DocSearch-Button {
-  border-color: rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.12);
-}
-
-html:not(.dark) .VPNavBarSearch .DocSearch-Button:hover {
-  border-color: #fff;
-  background: rgba(255, 255, 255, 0.2);
 }
 
 html:not(.dark) .VPNavBarSearch .DocSearch-Button .DocSearch-Search-Icon,
@@ -628,7 +631,7 @@ html:not(.dark) .vp-doc .custom-block.danger :is(.custom-block-title, a) {
   line-height: 1.6;
 }
 
-.button {
+.cta-button {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -643,12 +646,12 @@ html:not(.dark) .vp-doc .custom-block.danger :is(.custom-block-title, a) {
   transition: background-color 0.2s var(--ease-out);
 }
 
-.button:hover {
+.cta-button:hover {
   background: var(--red);
   color: #ffffff !important;
 }
 
-.dark .button:hover {
+.dark .cta-button:hover {
   color: #16070b !important;
 }
 

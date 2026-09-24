@@ -102,7 +102,7 @@ const pose = computed(() => {
         concurrent tasks, but it can be used for any kind of work.
       </p>
       <div class="hero__actions">
-        <a class="button" :href="withBase('/guide/getting-started')">Get started <span aria-hidden="true">→</span></a>
+        <a class="cta-button" :href="withBase('/guide/getting-started')">Get started <span aria-hidden="true">→</span></a>
         <CopyCommand command="cargo add crankshaft" />
       </div>
       <p class="hero__meta">

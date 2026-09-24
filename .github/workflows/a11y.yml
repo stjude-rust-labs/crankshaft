@@ -1,10 +1,8 @@
 name: Accessibility
 
+# Called by docs.yml, which only builds and deploys the site once this passes.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:

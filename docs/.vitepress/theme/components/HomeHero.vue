@@ -24,9 +24,9 @@ type Throw = {
 };
 
 const throws: Record<number, Throw> = {
-  1: { webs: [74, 148], pinX: 96, up: true, leadTail: "L122 58 L150 34 H196", balloon: [150, 34], label: [172, 30] },
-  2: { webs: [222, 296], pinX: 244, up: false, leadTail: "L270 280 L296 300 H330", balloon: [296, 300], label: [318, 296] },
-  3: { webs: [370, 444], pinX: 392, up: true, leadTail: "L418 58 L440 34 H486", balloon: [440, 34], label: [462, 30] },
+  1: { webs: [74, 148], pinX: 96, up: true, leadTail: "L122 58 L150 34 H168", balloon: [150, 34], label: [172, 30] },
+  2: { webs: [222, 296], pinX: 244, up: false, leadTail: "L270 280 L296 300 H314", balloon: [296, 300], label: [318, 296] },
+  3: { webs: [370, 444], pinX: 392, up: true, leadTail: "L418 58 L440 34 H458", balloon: [440, 34], label: [462, 30] },
 };
 
 const figure = ref<HTMLElement>();

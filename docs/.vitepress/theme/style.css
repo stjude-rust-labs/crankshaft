@@ -1,0 +1,1372 @@
+/* Crankshaft docs: Redline. Ink linework on cool paper, St. Jude Red for marks. */
+
+:root {
+  --red: #d11947;
+  --red-press: #a31438;
+  --red-wash: rgba(209, 25, 71, 0.07);
+  --ink: #1c1f24;
+  --ink-2: #474c55;
+  --ink-3: #6a707a;
+  --paper: #f5f6f7;
+  --sheet: #ffffff;
+  --line: #d3d7dc;
+  --line-2: #aab0b8;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --font-head: "Barlow Semi Condensed", "Barlow", ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-base: "Barlow", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --vp-c-bg: var(--paper);
+  --vp-c-bg-alt: var(--sheet);
+  --vp-c-bg-soft: #eceef0;
+  --vp-c-bg-elv: var(--sheet);
+  --vp-c-text-1: var(--ink);
+  --vp-c-text-2: var(--ink-2);
+  --vp-c-text-3: var(--ink-3);
+  --vp-c-divider: var(--line);
+  --vp-c-gutter: var(--line);
+  --vp-c-border: var(--line-2);
+  --vp-c-default-soft: #eceef0;
+
+  --vp-c-brand-1: var(--red);
+  --vp-c-brand-2: var(--red-press);
+  --vp-c-brand-3: var(--red);
+  --vp-c-brand-soft: var(--red-wash);
+
+  --vp-nav-bg-color: var(--sheet);
+  --vp-nav-height: 60px;
+  --vp-sidebar-bg-color: #eceef0;
+
+  --vp-code-block-bg: var(--sheet);
+  --vp-code-block-color: var(--ink);
+  --vp-code-line-highlight-color: var(--red-wash);
+  --vp-code-copy-code-bg: var(--paper);
+  --vp-code-copy-code-hover-bg: #eceef0;
+  --vp-code-copy-code-border-color: var(--line);
+  --vp-code-copy-code-active-text: var(--red);
+  --vp-code-lang-color: var(--ink-3);
+  --vp-code-bg: var(--sheet);
+  --vp-code-color: var(--ink);
+
+  --vp-button-brand-bg: var(--ink);
+  --vp-button-brand-text: var(--sheet);
+  --vp-button-brand-hover-bg: var(--red);
+  --vp-button-brand-hover-text: #ffffff;
+
+  --vp-local-search-highlight-bg: var(--red-wash);
+  --vp-local-search-highlight-text: var(--ink);
+}
+
+.dark {
+  --red: #ff6286;
+  --red-press: #ff86a1;
+  --red-wash: rgba(255, 98, 134, 0.1);
+  --ink: #e7e9ec;
+  --ink-2: #b3b8c0;
+  --ink-3: #8a909a;
+  --paper: #14161a;
+  --sheet: #1a1d22;
+  --line: #2d3138;
+  --line-2: #4a505a;
+
+  --vp-c-bg-soft: #22262c;
+  --vp-c-default-soft: #22262c;
+  --vp-code-copy-code-hover-bg: #22262c;
+  --vp-button-brand-hover-text: #16070b;
+  --vp-sidebar-bg-color: var(--sheet);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--red);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Nav ───────────────────────────────────────────────────────── */
+
+.VPNavBar,
+.VPNavBar .content-body,
+.VPNavBar.has-sidebar .content-body,
+.VPNavBar:not(.home) .content-body,
+.VPNavBar.has-sidebar .title {
+  background-color: var(--sheet) !important;
+}
+
+.VPNavBar .divider-line {
+  background-color: var(--line) !important;
+}
+
+.VPNavBar.has-sidebar .title,
+.VPNavBar .title {
+  border-bottom-color: var(--line) !important;
+}
+
+.VPNavBarTitle .title {
+  gap: 12px;
+  font-family: var(--font-head);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.VPNavBarTitle .logo {
+  width: auto;
+  height: 30px;
+  margin-right: 0;
+}
+
+.VPNavBarMenuLink {
+  position: relative;
+  font-size: 15.5px !important;
+  font-weight: 500 !important;
+  color: var(--ink-2) !important;
+}
+
+.VPNavBarMenuLink:hover {
+  color: var(--ink) !important;
+}
+
+.VPNavBarMenuLink.active {
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+}
+
+/* Five menu items only just fit between the hamburger breakpoint and 1024px. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .VPNavBarMenuLink {
+    padding: 0 6px !important;
+    font-size: 14.5px !important;
+  }
+}
+
+.VPNavBarSearch .DocSearch-Button {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--paper);
+}
+
+.VPNavBarSearch .DocSearch-Button:hover {
+  border-color: var(--line-2);
+}
+
+.VPLocalNav {
+  background-color: var(--sheet) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+
+/* Light mode: the top bar is solid St. Jude Red with white text and marks. */
+html:not(.dark) .VPNavBar {
+  --vp-c-text-1: #fff;
+  --vp-c-text-2: rgba(255, 255, 255, 0.9);
+  --vp-c-brand-1: #fff;
+  --vp-c-brand-2: #fff;
+  --vp-c-divider: rgba(255, 255, 255, 0.3);
+  --vp-c-gutter: rgba(255, 255, 255, 0.3);
+  --vp-c-border: rgba(255, 255, 255, 0.45);
+  --vp-c-default-soft: rgba(255, 255, 255, 0.16);
+  --vp-c-bg: var(--red);
+  --vp-c-bg-alt: var(--red);
+  --vp-c-bg-elv: var(--red);
+  --vp-local-search-bg: rgba(255, 255, 255, 0.12);
+}
+
+html:not(.dark) .VPNavBar,
+html:not(.dark) .VPNavBar .content-body,
+html:not(.dark) .VPNavBar.has-sidebar .content-body,
+html:not(.dark) .VPNavBar:not(.home) .content-body,
+html:not(.dark) .VPNavBar.has-sidebar .title {
+  background-color: var(--red) !important;
+}
+
+html:not(.dark) .VPNavBar .divider-line,
+html:not(.dark) .VPNavBar .divider {
+  background-color: transparent !important;
+}
+
+html:not(.dark) .VPNavBar .title {
+  border-bottom-color: transparent !important;
+}
+
+html:not(.dark) .VPNavBarMenuLink {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+html:not(.dark) .VPNavBarMenuLink:hover,
+html:not(.dark) .VPNavBarMenuLink.active {
+  color: #fff !important;
+}
+
+html:not(.dark) .VPNavBarSearch .DocSearch-Button {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+html:not(.dark) .VPNavBarSearch .DocSearch-Button:hover {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+html:not(.dark) .VPNavBarSearch .DocSearch-Button .DocSearch-Search-Icon,
+html:not(.dark) .VPNavBarSearch .DocSearch-Button-Placeholder,
+html:not(.dark) .VPNavBarSearch .DocSearch-Button-Key {
+  color: #fff !important;
+}
+
+html:not(.dark) .VPNavBarSearch .DocSearch-Button-Key {
+  border-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+html:not(.dark) .VPNavBar :focus-visible {
+  outline-color: #fff;
+}
+
+html:not(.dark) .VPNavBar .VPSwitch {
+  border-color: rgba(255, 255, 255, 0.45);
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+html:not(.dark) .VPNavBar .VPSwitch:hover {
+  border-color: #fff;
+}
+
+html:not(.dark) .VPNavBar .VPSwitch .check {
+  background-color: #fff;
+}
+
+html:not(.dark) .VPNavBar .VPSwitch .icon [class^="vpi-"] {
+  color: var(--red);
+}
+
+/* Dropdown panels opened from the bar keep the normal sheet colors. */
+html:not(.dark) .VPNavBar .VPMenu {
+  --vp-c-text-1: var(--ink);
+  --vp-c-text-2: var(--ink-2);
+  --vp-c-brand-1: var(--red);
+  --vp-c-brand-2: var(--red-press);
+  --vp-c-divider: var(--line);
+  --vp-c-gutter: var(--line);
+  --vp-c-border: var(--line-2);
+  --vp-c-default-soft: #eceef0;
+  --vp-c-bg: var(--sheet);
+  --vp-c-bg-alt: var(--paper);
+  --vp-c-bg-elv: var(--sheet);
+}
+
+/* ─── Sidebar ───────────────────────────────────────────────────── */
+
+.VPSidebar {
+  border-right: 1px solid var(--line);
+}
+
+/* Keeps the section labels above 4.5:1 on the light-mode gray sidebar. */
+html:not(.dark) .VPSidebar {
+  --ink-3: #5f6570;
+}
+
+.VPSidebar .group + .group {
+  border-top: 0 !important;
+  padding-top: 6px !important;
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.VPSidebarItem.level-1 .item {
+  padding-left: 0 !important;
+}
+
+.VPSidebarItem.level-1 .indicator {
+  display: none;
+}
+
+.VPSidebarItem.level-1 > .item > .link {
+  border-left: 1px solid var(--line);
+  padding-left: 14px;
+  transition: border-color 0.2s var(--ease-out);
+}
+
+.VPSidebarItem.level-1 > .item > .link > .text {
+  padding: 5px 0;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.VPSidebarItem.level-1 > .item > .link:hover {
+  border-left-color: var(--line-2);
+}
+
+.VPSidebarItem.level-1 > .item > .link:hover > .text {
+  color: var(--ink);
+}
+
+.VPSidebarItem.level-1.is-active > .item > .link {
+  border-left: 1.5px solid var(--red);
+  padding-left: 13.5px;
+}
+
+.VPSidebarItem.level-1.is-active > .item > .link > .text {
+  color: var(--red) !important;
+  font-weight: 500;
+}
+
+/* ─── Doc typography ────────────────────────────────────────────── */
+
+.vp-doc {
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-family: var(--font-head);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.vp-doc h1 {
+  font-size: 44px;
+  line-height: 1.05;
+}
+
+.vp-doc h2 {
+  margin: 52px 0 14px;
+  padding-top: 0;
+  border-top: 0;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.vp-doc h3 {
+  margin: 36px 0 10px;
+  font-size: 21px;
+}
+
+.vp-doc .header-anchor {
+  color: var(--red);
+}
+
+/* VitePress offsets h2 anchors for its 24px top padding, which this theme removes. */
+.vp-doc h2 .header-anchor {
+  top: 0;
+}
+
+.vp-doc p.lede,
+.vp-doc .lede {
+  font-size: 19.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.vp-doc a {
+  color: var(--red);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.vp-doc a:hover {
+  color: var(--red-press);
+}
+
+.vp-doc :not(pre) > code {
+  font-size: 0.84em;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--sheet);
+}
+
+.vp-doc a > code {
+  color: inherit;
+}
+
+.vp-doc div[class*="language-"] {
+  border: 1px solid var(--line);
+  border-radius: 2px !important;
+  margin: 20px 0;
+}
+
+.vp-doc [class*="language-"] > span.lang {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  top: 6px;
+}
+
+.vp-doc [class*="language-"] code {
+  font-size: 13.5px;
+}
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+}
+
+.vp-doc tr {
+  background: transparent !important;
+  border-top: 1px solid var(--line);
+}
+
+.vp-doc th {
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.vp-doc td,
+.vp-doc th {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+  vertical-align: top;
+}
+
+/* ─── Custom blocks: notes on the drawing ───────────────────────── */
+
+.vp-doc .custom-block {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--sheet);
+  color: var(--ink);
+  padding: 14px 20px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.vp-doc .custom-block .custom-block-title {
+  font-family: var(--font-head);
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+/* A warning is a redline cloud: rounded red outline around the note. */
+.vp-doc .custom-block.warning,
+.vp-doc .custom-block.danger {
+  border: 1.2px solid var(--red);
+  border-radius: 14px;
+  background: var(--red-wash);
+  color: var(--ink);
+}
+
+.vp-doc .custom-block.warning .custom-block-title,
+.vp-doc .custom-block.danger .custom-block-title {
+  color: var(--red);
+}
+
+.vp-doc .custom-block.danger {
+  border-width: 2px;
+}
+
+/* Red on the light-mode wash is only 4.4:1, so use the darker red there. */
+html:not(.dark) .vp-doc .custom-block.warning :is(.custom-block-title, a),
+html:not(.dark) .vp-doc .custom-block.danger :is(.custom-block-title, a) {
+  color: var(--red-press);
+}
+
+.vp-doc .custom-block a {
+  color: var(--red);
+}
+
+.vp-doc .custom-block code {
+  background: var(--sheet);
+}
+
+.vp-doc .custom-block div[class*="language-"] {
+  margin: 12px 0 4px;
+}
+
+.vp-doc .custom-block.details {
+  background: var(--sheet);
+}
+
+/* ─── Pager, outline, footer ────────────────────────────────────── */
+
+.VPDocFooter .pager-link {
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+  background: var(--sheet);
+  transition: border-color 0.2s var(--ease-out);
+}
+
+.VPDocFooter .pager-link:hover {
+  border-color: var(--red) !important;
+}
+
+.VPDocFooter .pager-link .desc {
+  color: var(--ink-3) !important;
+  font-size: 13px !important;
+}
+
+.VPDocFooter .pager-link .title {
+  color: var(--ink) !important;
+  font-family: var(--font-head);
+  font-size: 19px !important;
+  font-weight: 600 !important;
+}
+
+.VPDocFooter .pager-link:hover .title {
+  color: var(--red) !important;
+}
+
+.VPDocFooter .edit-link-button {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.VPDocAsideOutline .outline-marker {
+  background-color: var(--red);
+  width: 1.5px;
+  border-radius: 0;
+}
+
+.VPDocAsideOutline .outline-link.active {
+  color: var(--red) !important;
+}
+
+.VPDocAsideOutline .outline-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.VPFooter {
+  background: var(--sheet) !important;
+  border-top: 1px solid var(--line) !important;
+}
+
+/* ─── Home: shared ──────────────────────────────────────────────── */
+
+.home-page {
+  --home-max: 1200px;
+  --home-pad: clamp(20px, 4vw, 32px);
+}
+
+.home-page .VPPage {
+  padding: 0;
+}
+
+.home-page h1,
+.home-page h2 {
+  font-family: var(--font-head);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.home-page a {
+  color: var(--red);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.home-page a:hover {
+  color: var(--red-press);
+}
+
+.home-page :not(pre) > code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.84em;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--sheet);
+}
+
+.home-block {
+  padding: 64px var(--home-pad);
+  border-top: 1px solid var(--line);
+}
+
+.home-block__inner {
+  max-width: var(--home-max);
+  margin: 0 auto;
+}
+
+.home-block__title {
+  margin: 0 0 12px;
+  font-size: 32px;
+  line-height: 1.1;
+}
+
+.home-block__intro {
+  max-width: 44em;
+  margin: 0 0 28px;
+  color: var(--ink-2);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--sheet) !important;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s var(--ease-out);
+}
+
+.button:hover {
+  background: var(--red);
+  color: #ffffff !important;
+}
+
+.dark .button:hover {
+  color: #16070b !important;
+}
+
+/* ─── Copy command ──────────────────────────────────────────────── */
+
+.copy-command {
+  display: inline-flex;
+  align-items: center;
+  height: 46px;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  background: var(--sheet);
+}
+
+.copy-command .copy-command__text {
+  padding: 0 22px 0 24px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 14px;
+  color: var(--ink);
+  border: 0 !important;
+  background: none !important;
+}
+
+.copy-command__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 16px;
+  border-left: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s var(--ease-out);
+}
+
+.copy-command__button:hover {
+  color: var(--ink);
+}
+
+.copy-command[data-status="copied"] .copy-command__button {
+  color: var(--red);
+}
+
+.copy-command__button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ─── Home: hero ────────────────────────────────────────────────── */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 48px;
+  align-items: center;
+  max-width: var(--home-max);
+  margin: 0 auto;
+  padding: 64px var(--home-pad) 56px;
+  box-sizing: content-box;
+}
+
+.hero__title {
+  margin: 0 0 22px;
+  font-size: clamp(38px, 4.6vw, 58px);
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.hero__lede {
+  max-width: 34em;
+  margin: 0 0 30px;
+  color: var(--ink-2);
+  font-size: 19px;
+  line-height: 1.55;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hero__lede a,
+.hero__meta a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.hero__lede a:hover,
+.hero__meta a:hover {
+  color: var(--red-press);
+}
+
+.hero__meta {
+  margin: 26px 0 0;
+  color: var(--ink-3);
+  font-size: 14.5px;
+}
+
+.drawing {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--sheet);
+}
+
+.drawing svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.drawing__cl {
+  stroke: var(--ink-3);
+  stroke-width: 0.8;
+  stroke-dasharray: 14 3 2 3;
+}
+
+.drawing__part rect,
+.drawing__pin {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+}
+
+.drawing__pin {
+  transition: fill 0.4s var(--ease-out);
+}
+
+.drawing__lead {
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 1.2;
+  transition: stroke-width 0.3s var(--ease-out);
+}
+
+.drawing__balloon {
+  fill: var(--sheet);
+  stroke: var(--red);
+  stroke-width: 1.2;
+  transition: fill 0.3s var(--ease-out);
+}
+
+.drawing__num {
+  fill: var(--red);
+  font: 600 13px var(--font-head);
+  text-anchor: middle;
+  dominant-baseline: central;
+  transition: fill 0.3s var(--ease-out);
+}
+
+.drawing__label {
+  fill: var(--ink);
+  font: 600 15px var(--font-head);
+  transition: fill 0.2s var(--ease-out);
+}
+
+.drawing__sub,
+.drawing__note {
+  fill: var(--ink-3);
+  font: 400 12px var(--vp-font-family-base);
+}
+
+.drawing__throw:hover .drawing__label {
+  fill: var(--red);
+}
+
+.drawing__throw:focus-visible {
+  outline: none;
+}
+
+.drawing__throw:focus-visible .drawing__balloon {
+  stroke-width: 2.6;
+}
+
+.drawing__throw:focus-visible .drawing__label {
+  text-decoration: underline;
+}
+
+/* The throw whose backend just emitted an event: filled balloon, shaded pin. */
+.drawing__throw.is-active .drawing__balloon {
+  fill: var(--red);
+}
+
+.drawing__throw.is-active .drawing__num {
+  fill: var(--sheet);
+}
+
+.drawing__throw.is-active .drawing__pin {
+  fill: var(--red-wash);
+}
+
+.drawing__throw.is-active .drawing__lead {
+  stroke-width: 1.8;
+}
+
+.drawing__pulse {
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 1.2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: balloon-pulse 1.2s var(--ease-out) both;
+}
+
+@keyframes balloon-pulse {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+.drawing__caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 6px;
+  padding: 10px 6px 2px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.drawing__toggle {
+  flex: none;
+  margin: -4px 0 0;
+}
+
+.drawing__live {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+}
+
+.drawing__live-text {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  animation: live-in 0.5s var(--ease-out) both;
+}
+
+@keyframes live-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ─── Home: backends ────────────────────────────────────────────── */
+
+.bom {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  background: var(--sheet);
+}
+
+.bom__item {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 24px 20px;
+}
+
+.bom__item + .bom__item {
+  border-left: 1px solid var(--line);
+}
+
+.bom__name {
+  margin: 0 0 8px;
+  font-family: var(--font-head);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.bom__name a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.bom__name a:hover {
+  color: var(--red);
+}
+
+.bom__summary {
+  margin: 0 0 20px;
+  color: var(--ink-2);
+  font-size: 15.5px;
+  line-height: 1.55;
+}
+
+.bom__specs {
+  margin: 0 0 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.bom__specs dt {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.bom__specs dd {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.bom__go {
+  margin-top: auto;
+  color: var(--red);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.bom__go:hover {
+  text-decoration: underline;
+}
+
+/* ─── Home: steps ───────────────────────────────────────────────── */
+
+.steps__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 56px;
+  align-items: start;
+}
+
+.steps__list {
+  margin: 0 0 20px;
+  padding: 0 0 0 1.3em;
+}
+
+.steps__list li {
+  padding: 6px 0 10px;
+  color: var(--ink-2);
+}
+
+.steps__list li::marker {
+  color: var(--red);
+  font-family: var(--font-head);
+  font-weight: 600;
+}
+
+.steps__list li b {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.steps__deps {
+  color: var(--ink-3);
+  font-size: 14.5px;
+}
+
+.steps__code div[class*="language-"] {
+  margin: 0;
+}
+
+/* ─── Home: live event stream ───────────────────────────────────── */
+
+.stream__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 56px;
+  align-items: start;
+}
+
+.stream__links {
+  font-weight: 500;
+}
+
+.stream__panel {
+  border: 1px solid var(--line);
+  background: var(--sheet);
+}
+
+.stream__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.stream__call {
+  font-size: 13px !important;
+  color: var(--ink);
+  border: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+}
+
+.stream__note {
+  margin-right: auto;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.stream__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease-out);
+}
+
+.stream__toggle:hover {
+  border-color: var(--line-2);
+  color: var(--ink);
+}
+
+.stream__toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.stream__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+}
+
+.stream__table th {
+  padding: 8px 10px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.stream__table th:nth-child(1) {
+  width: 34px;
+}
+
+.stream__table th:nth-child(2) {
+  width: 80px;
+}
+
+.stream__table th:nth-child(3) {
+  width: 178px;
+}
+
+.stream__table th:nth-child(4) {
+  width: 118px;
+}
+
+.stream__table th:nth-child(5) {
+  width: 72px;
+}
+
+.stream__table td {
+  height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+
+.stream__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.stream__mark {
+  padding-left: 18px !important;
+}
+
+.stream__mark span {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border: 1.2px solid var(--ink-3);
+  border-radius: 50%;
+}
+
+tr[data-tone="done"] .stream__mark span {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+
+tr[data-tone="problem"] .stream__mark span {
+  border-color: var(--red);
+  background: var(--red);
+}
+
+.stream__time,
+.stream__event,
+.stream__backend,
+.stream__col-task,
+.stream__col-detail {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12.5px;
+}
+
+.stream__time {
+  color: var(--ink-3) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.stream__event {
+  color: var(--ink) !important;
+  font-weight: 500;
+}
+
+tr[data-tone="problem"] .stream__event {
+  color: var(--red) !important;
+}
+
+.stream__col-detail {
+  color: var(--ink-3) !important;
+}
+
+.stream-row-enter-active {
+  transition:
+    opacity 0.5s var(--ease-out),
+    transform 0.5s var(--ease-out),
+    background-color 1.6s var(--ease-out);
+}
+
+.stream-row-enter-from {
+  opacity: 0;
+  transform: translateY(-10px);
+  background-color: var(--red-wash);
+}
+
+.stream-row-leave-active {
+  display: none;
+}
+
+.stream-row-move {
+  transition: transform 0.45s var(--ease-out);
+}
+
+/* ─── Home: Sprocket ────────────────────────────────────────────── */
+
+.sprocket {
+  padding: 36px var(--home-pad) 56px;
+  border-top: 1px solid var(--line);
+}
+
+.sprocket__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: var(--home-max);
+  margin: 0 auto;
+}
+
+.sprocket p {
+  margin: 0;
+  max-width: 48em;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.sprocket__link {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ─── Responsive ────────────────────────────────────────────────── */
+
+/* The six-column stream needs the full width before the hero does. */
+@media (max-width: 1240px) {
+  .stream__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
+@media (max-width: 960px) {
+  .hero,
+  .steps__inner,
+  .stream__inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .hero {
+    padding-top: 40px;
+  }
+
+  .bom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bom__item + .bom__item {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .sprocket__inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .vp-doc table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .stream__col-task,
+  .stream__col-detail,
+  .stream__note {
+    display: none;
+  }
+
+  .stream__table th:nth-child(3) {
+    width: auto;
+  }
+
+  .drawing__caption {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .drawing__live {
+    text-align: left;
+  }
+
+  .drawing__toggle {
+    align-self: flex-start;
+    margin-top: 4px;
+  }
+
+  .copy-command__text {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawing__pulse,
+  .drawing__live-text {
+    animation: none;
+  }
+
+  .stream-row-enter-active,
+  .stream-row-move {
+    transition: none;
+  }
+}
+
+/* ─── TES servers table ─────────────────────────────────────────── */
+
+.tes-servers__stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  color: var(--ink-3) !important;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-decoration: none !important;
+  vertical-align: middle;
+  position: relative;
+  top: -2px;
+}
+
+.tes-servers__stars:hover {
+  color: var(--red) !important;
+}
+
+.tes-servers__stars svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  flex: none;
+  fill: #eac54f;
+}
+
+.dark .tes-servers__stars svg {
+  fill: #e3b341;
+}
+
+.tes-servers__note {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}

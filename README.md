@@ -13,10 +13,10 @@
       style="margin-inline-start: 2px; margin-inline-end: 2px; text-decoration: none;">
       <img alt="crates.io version" src="https://img.shields.io/crates/v/crankshaft">
     </a>
-    <a href="https://rustseq.zulipchat.com"
+    <a href="https://join.slack.com/t/openwdl/shared_invite/zt-ctmj4mhf-cFBNxIiZYs6SY9HgM9UAVw"
        target="_blank"
        style="margin-inline-start: 2px; margin-inline-end: 2px; text-decoration: none;">
-      <img alt="CI: Status" src="https://img.shields.io/badge/chat-%23workflows--lib--crankshaft-blue?logo=zulip&logoColor=f6f6f6" />
+      <img alt="Chat: #sprocket on the OpenWDL Slack" src="https://img.shields.io/badge/chat-%23sprocket-blue?logo=slack&logoColor=f6f6f6" />
     </a>
     <img alt="crates.io downloads"
          src="https://img.shields.io/crates/d/crankshaft"
@@ -73,8 +73,10 @@ installed, you can create a new project and add the latest version of
 cargo add crankshaft
 ```
 
-Once you've added `crankshaft` to your dependencies, you should head over to the
-[`examples`] to see how you can use the library in your projects.
+Once you've added `crankshaft` to your dependencies, the
+[documentation site](https://stjude-rust-labs.github.io/crankshaft/) walks through
+your first task, the core concepts, and each backend. The [`examples`] show
+complete programs, and the API reference is on [docs.rs](https://docs.rs/crankshaft).
 
 ## 🖥️ Development
 

@@ -1,0 +1,35 @@
+name: Accessibility
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pa11y:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
+        with:
+          package_json_file: docs/package.json
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run docs:build
+      - name: Check every page with pa11y-ci
+        run: pnpm run docs:a11y
+        env:
+          # pnpm skips Puppeteer's browser download, so use the runner's Chrome.
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome

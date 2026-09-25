@@ -37,6 +37,7 @@ use crate::proto::TaskCreatedEvent;
 use crate::proto::TaskEvents;
 use crate::proto::TaskFailedEvent;
 use crate::proto::TaskPreemptedEvent;
+use crate::proto::TaskResourceUsageEvent;
 use crate::proto::TaskStartedEvent;
 use crate::proto::TaskStderrEvent;
 use crate::proto::TaskStdoutEvent;
@@ -128,6 +129,17 @@ impl IntoProtobuf<EventKind> for CrankshaftEvent {
             CrankshaftEvent::ImagePullFinished { id, name } => {
                 EventKind::ImagePullFinished(ImagePullFinishedEvent { id, name })
             }
+            CrankshaftEvent::TaskResourceUsage { id, usage } => {
+                EventKind::ResourceUsage(TaskResourceUsageEvent {
+                    id,
+                    max_memory: usage.max_memory,
+                    avg_memory: usage.avg_memory,
+                    cpu_time_ms: usage.cpu_time_ms,
+                    user_cpu_time_ms: usage.user_cpu_time_ms,
+                    system_cpu_time_ms: usage.system_cpu_time_ms,
+                    disk_used: usage.disk_used,
+                })
+            }
         }
     }
 }
@@ -193,7 +205,8 @@ impl MonitorService {
                             | CrankshaftEvent::TaskContainerCreated { id, .. }
                             | CrankshaftEvent::TaskContainerExited { id, .. }
                             | CrankshaftEvent::TaskStdout { id, .. }
-                            | CrankshaftEvent::TaskStderr { id, .. } => (id, false),
+                            | CrankshaftEvent::TaskStderr { id, .. }
+                            | CrankshaftEvent::TaskResourceUsage { id, .. } => (id, false),
                             CrankshaftEvent::TaskCompleted { id, .. }
                             | CrankshaftEvent::TaskFailed { id, .. }
                             | CrankshaftEvent::TaskCanceled { id }
@@ -214,6 +227,23 @@ impl MonitorService {
                             let event: Event = event.into_protobuf();
                             let mut state = state.write().await;
                             if let Some(task) = state.tasks.get_mut(&id) {
+                                // Resource usage events are cumulative
+                                // snapshots where only the latest is
+                                // authoritative; replace the previously
+                                // retained snapshot instead of growing the
+                                // task's history once per sampling interval
+                                if matches!(
+                                    event.event_kind,
+                                    Some(EventKind::ResourceUsage(_))
+                                ) {
+                                    task.events.retain(|e| {
+                                        !matches!(
+                                            e.event_kind,
+                                            Some(EventKind::ResourceUsage(_))
+                                        )
+                                    });
+                                }
+
                                 task.events.push(event);
                             }
                         }

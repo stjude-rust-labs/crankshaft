@@ -14,6 +14,7 @@ use crankshaft_monitor::proto::TaskCreatedEvent;
 use crankshaft_monitor::proto::TaskEvents;
 use crankshaft_monitor::proto::TaskFailedEvent;
 use crankshaft_monitor::proto::TaskPreemptedEvent;
+use crankshaft_monitor::proto::TaskResourceUsageEvent;
 use crankshaft_monitor::proto::TaskStartedEvent;
 use crankshaft_monitor::proto::TaskStderrEvent;
 use crankshaft_monitor::proto::TaskStdoutEvent;
@@ -46,12 +47,20 @@ impl TuiTasksState {
             | Some(EventKind::Completed(TaskCompletedEvent { id, .. }))
             | Some(EventKind::Failed(TaskFailedEvent { id, .. }))
             | Some(EventKind::Canceled(TaskCanceledEvent { id, .. }))
-            | Some(EventKind::Preempted(TaskPreemptedEvent { id, .. })) => *id,
+            | Some(EventKind::Preempted(TaskPreemptedEvent { id, .. }))
+            | Some(EventKind::ResourceUsage(TaskResourceUsageEvent { id, .. })) => *id,
             None => return,
         };
 
         if let Some(task) = self.tasks.get_mut(&id) {
-            task.events.push(event);
+            // Keep the latest resource usage separately so that periodic
+            // snapshots do not hide lifecycle events or regress the task's
+            // display state
+            if let Some(EventKind::ResourceUsage(usage)) = event.event_kind {
+                task.usage = Some(usage);
+            } else {
+                task.events.push(event);
+            }
         } else {
             // Insert the task if this is a creation event
             // Otherwise, we missed the creation event, ignore the task.
@@ -132,7 +141,12 @@ pub struct Task {
     /// This is `Some` only for tasks from the TES backend.
     tes_id: Option<String>,
     /// The events of the task.
+    ///
+    /// Resource usage events are kept separately in `usage` so that they do
+    /// not affect the task's display state.
     events: Vec<Event>,
+    /// The latest resource usage reported for the task.
+    usage: Option<TaskResourceUsageEvent>,
 }
 
 impl Task {
@@ -150,6 +164,7 @@ impl Task {
             name,
             tes_id,
             events: vec![event],
+            usage: None,
         })
     }
 
@@ -163,11 +178,14 @@ impl Task {
             _ => return None,
         };
 
+        let (events, usage) = split_usage(events.events);
+
         Some(Self {
             id,
             name,
             tes_id,
-            events: events.events,
+            events,
+            usage,
         })
     }
 
@@ -200,6 +218,9 @@ impl Task {
             | Some(EventKind::ContainerExited(_))
             | Some(EventKind::Stdout(_))
             | Some(EventKind::Stderr(_)) => "Running",
+            // Resource usage events are stored separately and never appear
+            // in the event list
+            Some(EventKind::ResourceUsage(_)) => "Running",
             Some(EventKind::Completed(_)) => "Completed",
             Some(EventKind::Failed(_) | EventKind::ImagePullFailed(_)) => "Failed",
             Some(EventKind::Canceled(_)) => "Canceled",
@@ -271,8 +292,16 @@ impl Task {
             Some(EventKind::Preempted(_)) => {
                 format!("task `{name}` has been preempted", name = self.name)
             }
+            // Resource usage events are stored separately and never appear
+            // in the event list
+            Some(EventKind::ResourceUsage(_)) => Default::default(),
             None => Default::default(),
         }
+    }
+
+    /// Gets the latest resource usage reported for the task, if any.
+    pub fn usage(&self) -> Option<&TaskResourceUsageEvent> {
+        self.usage.as_ref()
     }
 
     /// Gets the last event of the task.
@@ -285,4 +314,21 @@ impl Task {
             .last()
             .expect("there should always be at least one event")
     }
+}
+
+/// Splits resource usage events out of an event list, returning the remaining
+/// events and the latest resource usage, if any.
+fn split_usage(events: Vec<Event>) -> (Vec<Event>, Option<TaskResourceUsageEvent>) {
+    let mut usage = None;
+    let events = events
+        .into_iter()
+        .filter_map(|event| match event.event_kind {
+            Some(EventKind::ResourceUsage(u)) => {
+                usage = Some(u);
+                None
+            }
+            _ => Some(event),
+        })
+        .collect();
+    (events, usage)
 }

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+* Added the `TaskResourceUsageEvent` protobuf message and forwarding of the
+  `TaskResourceUsage` event ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
+
 ## 0.3.0 - 08-25-2026
 
 ### Added

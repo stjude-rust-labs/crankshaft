@@ -197,6 +197,32 @@ impl Container {
         &self.name
     }
 
+    /// Samples the container's current resource usage statistics.
+    ///
+    /// Returns a single (one-shot) statistics sample from the Docker daemon,
+    /// or `None` if the daemon returned no sample (e.g. the container has
+    /// already exited).
+    pub async fn stats(&self) -> Result<Option<bollard::models::ContainerStatsResponse>> {
+        let mut stream = self.client.stats(
+            &self.name,
+            Some(
+                bollard::query_parameters::StatsOptionsBuilder::default()
+                    .stream(false)
+                    .one_shot(true)
+                    .build(),
+            ),
+        );
+
+        match stream.next().await {
+            Some(Ok(stats)) => Ok(Some(stats)),
+            Some(Err(e)) => Err(Error::Message(format!(
+                "failed to sample stats for container `{name}`: {e}",
+                name = self.name
+            ))),
+            None => Ok(None),
+        }
+    }
+
     /// Runs a container and waits for the execution to end.
     pub async fn run(
         &self,

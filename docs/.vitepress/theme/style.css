@@ -675,6 +675,12 @@ html:not(.dark) .vp-doc .custom-block.danger :is(.custom-block-title, a) {
   background: none !important;
 }
 
+.copy-command__prompt {
+  margin-right: 1ch;
+  color: var(--red);
+  user-select: none;
+}
+
 .copy-command__button {
   display: inline-flex;
   align-items: center;

@@ -1,0 +1,4 @@
+allowBuilds:
+  esbuild: true
+  # CI uses the runner's Chrome, so skip Puppeteer's browser download.
+  puppeteer: false

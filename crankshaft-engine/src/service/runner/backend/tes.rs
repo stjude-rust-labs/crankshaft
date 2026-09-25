@@ -221,8 +221,8 @@ impl Backend {
                 }
 
                 // There may be multiple task logs due to internal retries by
-                // the TES server. Therefore, we're only interested in the last
-                // log.
+                // the TES server Therefore, we're only
+                // interested in the last log
                 let logs = task.logs.unwrap_or_default();
                 let task_log = logs.last().context(
                     "invalid response from TES server: completed task is missing task logs",

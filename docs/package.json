@@ -7,12 +7,19 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "docs:dev": "vitepress dev",
     "docs:build": "vitepress build",
-    "docs:preview": "vitepress preview"
+    "docs:preview": "vitepress preview",
+    "docs:a11y": "node scripts/a11y.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-semi-condensed": "^5.3.0",
+    "pa11y-ci": "^4.1.1",
     "vitepress": "^1.6.3"
-  }
+  },
+  "private": true,
+  "packageManager": "pnpm@12.5.1"
 }

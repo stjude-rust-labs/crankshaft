@@ -70,7 +70,7 @@ async fn run(args: Args, token: CancellationToken) -> Result<()> {
     let password = std::env::var(PASSWORD_ENV).ok();
 
     if username.is_none() && password.is_some() {
-        bail!("both username and password must be provided for authentication");
+        bail!("username must be provided for authentication");
     }
 
     let mut http_config = http::Config::default();

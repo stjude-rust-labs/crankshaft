@@ -147,8 +147,9 @@ impl Backend {
 
     /// Creates a new TES [`Backend`] with the given TES client.
     ///
-    /// The given client's endpoint and authorizer are used instead of `config.url` and
-    /// `config.http.auth`. Other HTTP settings are still read from `config`.
+    /// The given client's endpoint and authorizer are used instead of
+    /// `config.url` and `config.http.auth`. Other HTTP settings are still
+    /// read from `config`.
     pub async fn initialize_with_client(
         config: Config,
         client: Client,

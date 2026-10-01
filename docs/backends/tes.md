@@ -35,7 +35,7 @@ auth = { type = "bearer", token = "…" }
 | `interval` | `1` | Seconds between status polls. |
 | `http.retries` | `0` | Retries for each HTTP request. |
 | `http.max-concurrency` | `10` | How many HTTP requests the backend makes at once. |
-| `http.auth` | none | `{ type = "basic", username, password }` or `{ type = "bearer", token }`. |
+| `http.auth` | none | `{ type = "basic", username, password (optional) }` or `{ type = "bearer", token }`. |
 
 `max-tasks` and `http.max-concurrency` limit different things. `max-tasks` caps how many of your tasks exist on the server at once. `max-concurrency` caps how many requests are in flight, which protects the server when thousands of tasks poll at once.
 

@@ -18,6 +18,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use crankshaft_config::backend::tes::Config;
+use crankshaft_config::backend::tes::http::HttpAuthConfig;
 use crankshaft_events::Event;
 use crankshaft_events::TaskId;
 use crankshaft_events::next_task_id;
@@ -25,6 +26,8 @@ use crankshaft_events::send_event;
 use futures::FutureExt as _;
 use futures::future::BoxFuture;
 use nonempty::NonEmpty;
+use tes::auth::BasicAuthorizer;
+use tes::auth::BearerTokenAuthorizer;
 use tes::v1::Client;
 use tes::v1::client::strategy::ExponentialFactorBackoff;
 use tes::v1::types::requests::GetTaskParams;
@@ -125,17 +128,38 @@ impl Backend {
         config: Config,
         names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
     ) -> Self {
-        let resource_usage_metadata = config.resource_usage_metadata();
-        let (url, http, interval) = config.into_parts();
-        let mut builder = Client::builder().url(url);
+        let client = Client::builder().url(config.url().clone());
 
-        if let Some(auth) = &http.auth {
-            builder = builder.insert_header("Authorization", auth.header_value());
-        }
+        let client = match &config.http().auth {
+            Some(HttpAuthConfig::Basic { username, password }) => {
+                client.authorizer(BasicAuthorizer::new(username, password.clone()))
+            }
+            Some(HttpAuthConfig::Bearer { token }) => {
+                client.authorizer(BearerTokenAuthorizer::new(token))
+            }
+            None => client,
+        };
+
+        // SAFETY: the only required field of `builder` is the `url`, which we
+        // provided earlier.
+        Self::initialize_with_client(config, client.try_build().unwrap(), names).await
+    }
+
+    /// Creates a new TES [`Backend`] with the given TES client.
+    ///
+    /// The given client's endpoint and authorizer are used instead of
+    /// `config.url` and `config.http.auth`. Other HTTP settings are still
+    /// read from `config`.
+    pub async fn initialize_with_client(
+        config: Config,
+        client: Client,
+        names: Arc<Mutex<GeneratorIterator<UniqueAlphanumeric>>>,
+    ) -> Self {
+        let resource_usage_metadata = config.resource_usage_metadata();
+        let (_, http, interval) = config.into_parts();
 
         let state = Arc::new(BackendState {
-            // SAFETY: the only required field of `builder` is the `url`, which we provided earlier.
-            client: builder.try_build().expect("client to build"),
+            client,
             interval: interval
                 .map(Duration::from_secs)
                 .unwrap_or(DEFAULT_INTERVAL),

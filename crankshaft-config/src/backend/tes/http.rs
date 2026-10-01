@@ -1,7 +1,5 @@
 //! Configuration related to HTTP within the TES execution backend.
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -14,26 +12,14 @@ pub enum HttpAuthConfig {
         /// The username for the authentication.
         username: String,
         /// The password for the authentication.
-        password: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password: Option<String>,
     },
     /// Use bearer token authentication.
     Bearer {
         /// The bearer token for authentication.
         token: String,
     },
-}
-
-impl HttpAuthConfig {
-    /// Gets the `Authorization` header value based on the config.
-    pub fn header_value(&self) -> String {
-        match self {
-            Self::Basic { username, password } => format!(
-                "Basic {encoded}",
-                encoded = STANDARD.encode(format!("{username}:{password}"))
-            ),
-            Self::Bearer { token } => format!("Bearer {token}"),
-        }
-    }
 }
 
 /// A configuration object for HTTP settings within the TES execution backend.

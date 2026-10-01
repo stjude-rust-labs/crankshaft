@@ -17,6 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   configuration, which enables reading task resource usage from the
   documented `TaskLog.metadata` keys ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
 
+### Changed
+
+* The `password` field of `HttpAuthConfig::Basic` is now optional ([#89](https://github.com/stjude-rust-labs/crankshaft/pull/89)).
+
 ## 0.7.0 - 08-25-2026
 
 ### Dependencies

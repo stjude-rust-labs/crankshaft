@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+* Added `initialize_with_client` constructor to the TES backend for passing the
+  TES client to use ([#89](https://github.com/stjude-rust-labs/crankshaft/pull/89)).
+
 * The Docker backend can now sample a running container's resource usage and
   emit `TaskResourceUsage` events, gated by the new `resource-usage-interval`
   configuration; usage folds across a task's executions (memory maximum and
@@ -18,6 +21,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `TaskLog.metadata` keys and emit `TaskResourceUsage` events, gated by the
   new `resource-usage-metadata` configuration; when enabled, tasks are polled
   with the `BASIC` view ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).
+
+### Changed
+
+* The TES backend now uses the native authorization of the `tes` crate ([#89](https://github.com/stjude-rust-labs/crankshaft/pull/89)).
 
 ## 0.11.0 - 08-25-2026
 

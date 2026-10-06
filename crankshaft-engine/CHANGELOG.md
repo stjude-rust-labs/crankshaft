@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.12.0 - 10-06-2026
+
 ### Added
 
 * Added `initialize_with_client` constructor to the TES backend for passing the

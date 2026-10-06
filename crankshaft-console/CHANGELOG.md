@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.2.0 - 10-06-2026
+
 ### Added
 
 * Added handling for the task resource usage event ([#86](https://github.com/stjude-rust-labs/crankshaft/pull/86)).

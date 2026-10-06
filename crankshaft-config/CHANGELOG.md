@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.8.0 - 10-06-2026
+
 ### Added
 
 * Added the `resource-usage-interval` option to the Docker backend

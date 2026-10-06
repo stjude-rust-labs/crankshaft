@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.7.0 - 10-06-2026
+
 ### Added
 
 * Added `Container::stats` for sampling a container's current resource usage

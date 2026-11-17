@@ -426,7 +426,8 @@ impl Backend {
                         let status = ExitStatus::from_raw(executor.exit_code as u32);
 
                         ExecutionResult {
-                            // Realistically, the executor for any given log should always exist
+                            // Realistically, the executor for any given log
+                            // should always exist
                             image: task.executors.get(idx).map(|e| e.image.clone()),
                             status,
                         }

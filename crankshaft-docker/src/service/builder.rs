@@ -182,8 +182,9 @@ impl Builder {
                             dir: self.work_dir,
                             env: Some(self.env.iter().map(|(k, v)| format!("{k}={v}")).collect()),
                             mounts: Some(self.mounts),
-                            // Ensure the caller's group id is added so that the container can
-                            // access the mounts and working directory
+                            // Ensure the caller's group id is added so that the
+                            // container can access the mounts and working
+                            // directory
                             #[cfg(unix)]
                             groups: Some(vec![nix::unistd::Gid::effective().to_string()]),
                             ..Default::default()

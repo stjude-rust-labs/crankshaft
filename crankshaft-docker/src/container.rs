@@ -332,7 +332,8 @@ impl Container {
         let mut exit_code = None;
         if let Some(result) = wait_stream.next().await {
             match result {
-                // Bollard turns non-zero exit codes into wait errors, so check for both
+                // Bollard turns non-zero exit codes into wait errors, so check
+                // for both
                 Ok(ContainerWaitResponse {
                     status_code: code, ..
                 })

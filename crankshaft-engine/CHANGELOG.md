@@ -8,13 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added `attach` to the TES backend. It waits for a TES task that an earlier
+  `run` created, possibly in another process, and returns its results the same
+  way `run` does. The task must have Crankshaft's group tag ([#91](https://github.com/stjude-rust-labs/crankshaft/pull/91)).
+
 ## 0.12.0 - 10-06-2026
 
 ### Added
 
 * Added `initialize_with_client` constructor to the TES backend for passing the
   TES client to use ([#89](https://github.com/stjude-rust-labs/crankshaft/pull/89)).
-
 * The Docker backend can now sample a running container's resource usage and
   emit `TaskResourceUsage` events, gated by the new `resource-usage-interval`
   configuration; usage folds across a task's executions (memory maximum and

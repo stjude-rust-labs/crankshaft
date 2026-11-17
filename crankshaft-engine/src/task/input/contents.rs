@@ -90,7 +90,8 @@ impl Contents {
                         })?;
                         return Ok(path.into());
                     }
-                    // TODO: remotely fetched contents should be cached somewhere
+                    // TODO: remotely fetched contents should be cached
+                    // somewhere
                     "http" | "https" => bail!("support for HTTP URLs is not yet implemented"),
                     "s3" => bail!("support for S3 URLs is not yet implemented"),
                     "az" => bail!("support for Azure Storage URLs is not yet implemented"),

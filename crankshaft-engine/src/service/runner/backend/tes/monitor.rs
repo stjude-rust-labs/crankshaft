@@ -1,5 +1,6 @@
 //! Implements the TES task monitor.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -193,6 +194,8 @@ struct Task {
     ///
     /// This is `None` until the task is created on the TES server.
     tes_id: Option<String>,
+    /// The group tag of the TES task.
+    tag: String,
     /// The events sender for the task.
     events: Option<broadcast::Sender<Event>>,
     /// The sender for the "completed" notification.
@@ -223,11 +226,11 @@ struct TaskMonitorState {
 /// The monitor uses a current "tag" that is used to associate newly created TES
 /// tasks with the monitor.
 ///
-/// When the monitor queries for task state, it selects only the tasks with the
-/// current tag.
+/// When the monitor queries for task state, it lists the tasks for each tag
+/// in use. Attached tasks keep the tag they were created with.
 ///
-/// The tag changes when the monitor is not monitoring any tasks and a task is
-/// added for monitoring.
+/// The current tag changes when a task is added and no monitored task uses
+/// the current tag.
 #[derive(Debug, Clone)]
 pub struct TaskMonitor {
     /// The base name used by the task monitor for formatting tags.
@@ -268,9 +271,12 @@ impl TaskMonitor {
     ) -> String {
         let mut state = self.state.lock().expect("failed to lock TES monitor state");
 
-        // If there are no monitored tasks, create a new tag
         if state.tasks.is_empty() {
             state.running.clear();
+        }
+
+        // If no monitored task uses the current tag, create a new one
+        if !state.tasks.values().any(|t| t.tag == state.tag) {
             state.tag = format!(
                 "{name}-{timestamp}-{id}",
                 name = self.name,
@@ -281,16 +287,47 @@ impl TaskMonitor {
             );
         }
 
+        let tag = state.tag.clone();
         state.tasks.insert(
             id,
             Task {
                 name,
                 events,
                 tes_id: None,
+                tag: tag.clone(),
                 completed,
             },
         );
-        state.tag.clone()
+        tag
+    }
+
+    /// Adds an existing TES task to the monitor.
+    ///
+    /// The `tag` is the group tag the TES task was created with.
+    ///
+    /// The given completed channel is sent `Ok(_)` when the task has been
+    /// completed or `Err(_)` if there was an error monitoring the task.
+    pub async fn attach_task(
+        &self,
+        id: TaskId,
+        name: String,
+        tes_id: String,
+        tag: String,
+        events: Option<broadcast::Sender<Event>>,
+        completed: oneshot::Sender<Result<()>>,
+    ) {
+        let mut state = self.state.lock().expect("failed to lock TES monitor state");
+        state.ids.insert(tes_id.clone(), id);
+        state.tasks.insert(
+            id,
+            Task {
+                name,
+                events,
+                tes_id: Some(tes_id),
+                tag,
+                completed,
+            },
+        );
     }
 
     /// Associates a TES task id with a Crankshaft task id.
@@ -325,25 +362,39 @@ impl TaskMonitor {
         state: &Arc<Mutex<TaskMonitorState>>,
         backend_state: &super::BackendState,
     ) {
+        // Get the tags of the monitored tasks
+        let tags: BTreeSet<String> = {
+            let state = state.lock().expect("failed to TES lock monitor state");
+            state.tasks.values().map(|t| t.tag.clone()).collect()
+        };
+
+        for tag in tags {
+            Self::update_tagged_tasks(state, backend_state, tag).await;
+        }
+    }
+
+    /// Updates the tasks with the given tag.
+    ///
+    /// Returns early if monitoring failed; the monitored tasks are then
+    /// completed with an error.
+    async fn update_tagged_tasks(
+        state: &Arc<Mutex<TaskMonitorState>>,
+        backend_state: &super::BackendState,
+        tag: String,
+    ) {
         let mut page_token = None;
-        'poll: loop {
-            // Get the current tag from the state
-            let tag = {
+        loop {
+            {
                 let state = state.lock().expect("failed to TES lock monitor state");
                 if state.tasks.is_empty() {
                     return;
                 }
+            }
 
-                assert!(!state.tag.is_empty(), "should have a current tag");
-
-                debug!(
-                    "querying for the state of TES tasks with tag `{tag}` and page token \
-                     `{page_token:?}`",
-                    tag = state.tag
-                );
-
-                state.tag.clone()
-            };
+            debug!(
+                "querying for the state of TES tasks with tag `{tag}` and page token \
+                 `{page_token:?}`"
+            );
 
             let list = async {
                 let permit = backend_state
@@ -357,7 +408,7 @@ impl TaskMonitor {
                     .list_tasks(
                         Some(&ListTasksParams {
                             tag_keys: Some(vec![CRANKSHAFT_GROUP_TAG_NAME.to_string()]),
-                            tag_values: Some(vec![tag]),
+                            tag_values: Some(vec![tag.clone()]),
                             page_size: Some(MAX_PAGE_SIZE - 1),
                             page_token,
                             view: Some(if backend_state.resource_usage_metadata {
@@ -407,7 +458,7 @@ impl TaskMonitor {
                                 for (_, task) in state.tasks.drain() {
                                     let _ = task.completed.send(Err(anyhow!("{error:#}")));
                                 }
-                                break 'poll;
+                                return;
                             }
                         };
                         let task_id = &task.id;
@@ -483,7 +534,7 @@ impl TaskMonitor {
                             .completed
                             .send(Err(anyhow!("failed to monitor TES tasks: {e:#}")));
                     }
-                    break;
+                    return;
                 }
             }
         }

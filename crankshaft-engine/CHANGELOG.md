@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+* Added `attach` to the TES backend. It waits for a TES task that an earlier
+  `run` created, possibly in another process, and returns its results the same
+  way `run` does. The task must have Crankshaft's group tag.
+
 ## 0.12.0 - 10-06-2026
 
 ### Added
